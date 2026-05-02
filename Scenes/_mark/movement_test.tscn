@@ -37,7 +37,6 @@ run_speed = 2.0
 player_model = NodePath("suit_male")
 enable_bhop = false
 enable_surf = false
-default_camera_mode = 0
 
 [node name="NavigationRegion3D" type="NavigationRegion3D" parent="." unique_id=1163398085]
 navigation_mesh = SubResource("NavigationMesh_pnnlu")
