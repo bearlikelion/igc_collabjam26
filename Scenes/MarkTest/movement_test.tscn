@@ -28,14 +28,15 @@ environment = SubResource("Environment_ddw0b")
 
 [node name="Player" parent="." unique_id=759156532 instance=ExtResource("1_inr7l")]
 run_speed = 2.0
-default_camera_mode = 1
 
-[node name="CSGBox3D" type="CSGBox3D" parent="." unique_id=424918646]
+[node name="Hallway1" type="Node3D" parent="." unique_id=32998348]
+
+[node name="Floor" type="CSGBox3D" parent="Hallway1" unique_id=4606373]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, -22)
 use_collision = true
 size = Vector3(3, 1, 50)
 
-[node name="CSGBox3D2" type="CSGBox3D" parent="." unique_id=1665335519]
+[node name="Walls" type="CSGBox3D" parent="Hallway1" unique_id=1087559906]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, -22)
 use_collision = true
 flip_faces = true
