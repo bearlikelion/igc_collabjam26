@@ -1,4 +1,3 @@
-@tool
 class_name SUCC extends CharacterBody3D
 
 # SurfsUp Character Controller.

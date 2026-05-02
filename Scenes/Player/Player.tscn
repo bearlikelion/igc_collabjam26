@@ -1,0 +1,27 @@
+[gd_scene format=3 uid="uid://24xx8rg8c7jb"]
+
+[ext_resource type="Script" uid="uid://dvjvdkbrutgub" path="res://Scenes/Player/player.gd" id="1_h54ih"]
+[ext_resource type="Script" uid="uid://cie81viouwiyw" path="res://addons/SUCC/scripts/succ_camera.gd" id="3_rcfhv"]
+[ext_resource type="PackedScene" uid="uid://d0xqrivp0c4i7" path="res://Assets/Models/Characters/character-male-d.glb" id="4_ude3g"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_1"]
+size = Vector3(0.813, 1.5, 0.813)
+
+[node name="Player" type="CharacterBody3D" unique_id=759156532]
+script = ExtResource("1_h54ih")
+
+[node name="Collision" type="CollisionShape3D" parent="." unique_id=1635607958]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.75, 0)
+shape = SubResource("BoxShape3D_1")
+
+[node name="CameraRig" type="SpringArm3D" parent="." unique_id=1876563887]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.91099995, 0)
+spring_length = 0.0
+script = ExtResource("3_rcfhv")
+
+[node name="Camera3D" type="Camera3D" parent="CameraRig" unique_id=1482788189]
+current = true
+fov = 90.0
+
+[node name="suit_male" parent="." unique_id=2082475865 instance=ExtResource("4_ude3g")]
+transform = Transform3D(-2, 0, 3.019916e-07, 0, 2, 0, -3.019916e-07, 0, -2, 0, 0, 0)
