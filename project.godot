@@ -34,3 +34,4 @@ folder_colors={
 
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
+environment/defaults/default_clear_color=Color(0.12955844, 0.1295585, 0.12955841, 1)

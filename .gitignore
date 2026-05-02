@@ -21,3 +21,4 @@ buildwebindex.*
 
 # Local env — copy .env.example and fill in values
 .env
+excalidraw.log
