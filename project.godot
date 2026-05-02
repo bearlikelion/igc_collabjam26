@@ -12,6 +12,7 @@ config_version=5
 
 config/name="COLLAB JAM '26"
 config/description="Mark + Arran = MARRAN"
+run/main_scene="uid://b4u2i5j05ytvq"
 config/features=PackedStringArray("4.6")
 boot_splash/bg_color=Color(0.11764706, 0.5647059, 1, 1)
 boot_splash/stretch_mode=0

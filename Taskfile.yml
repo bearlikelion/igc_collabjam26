@@ -1,0 +1,30 @@
+version: '3'
+
+dotenv: ['.env']
+
+vars:
+  GODOT: godot
+
+tasks:
+  run:
+    desc: Open project in Godot
+    cmds:
+      - '{{.GODOT}} --path .'
+
+  edit:
+    desc: Open Godot editor
+    cmds:
+      - '{{.GODOT}} --editor --path .'
+
+  build:
+    desc: Export Web build
+    cmds:
+      - rm -rf build/web
+      - mkdir -p build/web
+      - '{{.GODOT}} --headless --export-release "Web" build/web/index.html'
+
+  deploy:
+    desc: Build and push to itch.io via butler
+    deps: [build]
+    cmds:
+      - butler push build/web smitner/igc-cj-26:html5
