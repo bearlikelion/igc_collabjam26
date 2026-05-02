@@ -9,45 +9,49 @@ extends Node3D
 # Camera yaw tracks the PATH segment direction only — never the lateral
 # lane-change offset — so switching lanes never moves the camera.
 
-@onready var _player: Player = $Player
-@onready var _finish: Marker3D = $Finish
+@onready var _player: Player = %Player
+@onready var _finish: Marker3D = %Finish
+@onready var _nav_region: NavigationRegion3D = $NavigationRegion3D
 
-var _agent: NavigationAgent3D
 # The path-segment forward direction, updated only when the nav path changes.
 var _path_forward: Vector3 = Vector3(0.0, 0.0, -1.0)
+var _nav_ready: bool = false
 
 
 func _ready() -> void:
-	_agent = _player.navigation_agent
-	_agent.path_desired_distance = 0.4
-	_agent.target_desired_distance = 0.8
-	_agent.avoidance_enabled = false
-	_agent.debug_enabled = true
-	_agent.debug_use_custom = false
+	_player.navigation_agent.navigation_finished.connect(_on_navigation_finished)
+	_wait_for_nav.call_deferred()
 
-	_agent.velocity_computed.connect(_on_velocity_computed)
-	_agent.navigation_finished.connect(_on_navigation_finished)
 
+func _wait_for_nav() -> void:
+	# Poll until the navigation map has polygons — the pre-baked mesh loads
+	# asynchronously and bake_finished never fires for saved meshes.
+	var map: RID = _nav_region.get_navigation_map()
+	while NavigationServer3D.map_get_iteration_id(map) == 0:
+		await get_tree().physics_frame
+	_player.navigation_agent.target_position = _finish.global_position
 	await get_tree().physics_frame
-	_agent.target_position = _finish.global_position
+	_nav_ready = true
+	print("Nav ready. Path size: %s" % _player.navigation_agent.get_current_navigation_path().size())
 
 
 func _physics_process(delta: float) -> void:
-	if _agent.is_navigation_finished():
+	if not _nav_ready or _player.navigation_agent.is_navigation_finished():
 		return
 
 	# Update the lane-offset target every frame so the nav path reflects
 	# which side of the corridor the player is currently running in.
 	var right: Vector3 = _path_forward.cross(Vector3.UP).normalized()
 	var lane_offset: float = _lane_to_offset(_player._current_lane)
-	_agent.target_position = _finish.global_position + right * lane_offset
+	_player.navigation_agent.target_position = _finish.global_position + right * lane_offset
 
 	# Derive path forward purely from the nav path points, not player→waypoint.
 	# This means lane changes (X movement) never affect the yaw.
-	var path: PackedVector3Array = _agent.get_current_navigation_path()
+	var path: PackedVector3Array = _player.navigation_agent.get_current_navigation_path()
 	var path_seg_forward: Vector3 = _get_path_segment_forward(path)
 	if path_seg_forward != Vector3.ZERO:
 		_path_forward = path_seg_forward
+		print("Next Segment: %s" % _path_forward)
 
 	# Rotate body yaw toward path forward direction only.
 	var target_yaw: float = atan2(-_path_forward.x, -_path_forward.z)
@@ -83,10 +87,6 @@ func _get_path_segment_forward(path: PackedVector3Array) -> Vector3:
 			best_dir = seg.normalized()
 
 	return best_dir
-
-
-func _on_velocity_computed(_safe_velocity: Vector3) -> void:
-	pass
 
 
 func _on_navigation_finished() -> void:

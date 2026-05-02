@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://cwu5cf7a0awcd" path="res://addons/func_godot/src/map/func_godot_map.gd" id="1_dorj5"]
 [ext_resource type="Resource" uid="uid://bkhxcqsquw1yg" path="res://addons/func_godot/func_godot_default_map_settings.tres" id="2_rnym6"]
-[ext_resource type="Material" uid="uid://b8au3oupoq85m" path="res://Assets/textures/dev/tiles036.tres" id="3_dorj5"]
+[ext_resource type="Material" uid="uid://b8au3oupoq85m" path="res://Assets/Textures/dev/tiles036.tres" id="3_dorj5"]
 [ext_resource type="Texture2D" uid="uid://dd5uw7rnh3174" path="res://Assets/textures/dev/wall.png" id="4_rnym6"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_wrd4j"]
