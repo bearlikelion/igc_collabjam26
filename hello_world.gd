@@ -21,7 +21,7 @@ func _bounce() -> void:
 
 	var tween := create_tween()
 	tween.tween_method(
-		func(c: Color): add_theme_color_override("font_color", c),
+		func(c: Color) -> void: add_theme_color_override(&"font_color", c),
 		Color.WHITE, next_color, 0.1
 	)
 
