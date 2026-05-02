@@ -1,103 +1,309 @@
 class_name MovementTest
 extends Node3D
 
-# Wires the Player to a NavigationAgent3D that pathfinds to Finish.
-# The player's current lane shifts the lateral offset perpendicular to the
-# path direction, so outer-lane players commit to a corner later than
-# inner-lane players — matching real racing-line geometry.
+# Drives the player parametrically along nav path segments.
 #
-# Camera yaw tracks the PATH segment direction only — never the lateral
-# lane-change offset — so switching lanes never moves the camera.
+# Each segment has: start point, end point, forward direction, length.
+# Player position = segment.start + forward * distance + right * lane_offset
+# Distance increments at run_speed each frame.
+# When distance >= segment length (adjusted for lane), advance to next segment.
+#
+# Lane is a fixed perpendicular offset:
+#   Lane 0 (left)   = -1.0 perpendicular
+#   Lane 1 (center) =  0.0
+#   Lane 2 (right)  = +1.0 perpendicular
+#
+# Segment length per lane:
+#   The end of a segment is the corner point. To reach the L tile (outer),
+#   the left lane needs to travel longer along the incoming straight, then
+#   takes a shorter outgoing segment. We compute per-lane segment lengths
+#   so each lane reaches the center of its L/M/R tile before turning.
+
+const LANE_OFFSETS: Array[float] = [-1.0, 0.0, 1.0]
+const CORNER_ANGLE_THRESHOLD: float = 0.95
+
+# Debug visualization
+@export var debug_show_corners: bool = true
+@export var debug_corner_color: Color = Color(1.0, 0.2, 0.2, 0.7)
+@export var debug_lane_color: Color = Color(0.2, 1.0, 0.2, 0.5)
+@export var debug_corner_radius: float = 0.5
 
 @onready var _player: Player = %Player
 @onready var _finish: Marker3D = %Finish
-@onready var _nav_region: NavigationRegion3D = $NavigationRegion3D
 
-# The path-segment forward direction, updated only when the nav path changes.
-var _path_forward: Vector3 = Vector3(0.0, 0.0, -1.0)
-var _nav_ready: bool = false
+var _ready_state: bool = false
+var _corners: Array[Vector3] = []
+var _segment_index: int = 0
+var _distance_along: float = 0.0
 
 
 func _ready() -> void:
-	_player.navigation_agent.navigation_finished.connect(_on_navigation_finished)
+	_player.lane_changed.connect(_on_lane_changed)
 	_wait_for_nav.call_deferred()
 
 
 func _wait_for_nav() -> void:
-	# Poll until the navigation map has polygons — the pre-baked mesh loads
-	# asynchronously and bake_finished never fires for saved meshes.
-	var map: RID = _nav_region.get_navigation_map()
-	while NavigationServer3D.map_get_iteration_id(map) == 0:
+	print("Wait for nav")
+	var params: NavigationPathQueryParameters3D = NavigationPathQueryParameters3D.new()
+	var result: NavigationPathQueryResult3D = NavigationPathQueryResult3D.new()
+	while true:
 		await get_tree().physics_frame
-	_player.navigation_agent.target_position = _finish.global_position
-	await get_tree().physics_frame
-	_nav_ready = true
-	print("Nav ready. Path size: %s" % _player.navigation_agent.get_current_navigation_path().size())
+		params.map = get_world_3d().navigation_map
+		params.start_position = _player.global_position
+		params.target_position = _finish.global_position
+		NavigationServer3D.query_path(params, result)
+		if result.path.size() >= 2:
+			break
+	_corners = _simplify_path(result.path)
+	_corners = _snap_to_axes(_corners)
+	_corners = _collapse_short_segments(_corners)
+	print("=== CORNERS (%s) ===" % _corners.size())
+	for i: int in range(_corners.size()):
+		print("  [%s] %s" % [i, _corners[i]])
+	if debug_show_corners:
+		_spawn_debug_markers()
+	_ready_state = true
+
+
+# Spawn visible markers at each corner and along each lane path.
+# Lives under a "_DebugMarkers" child node, easy to delete.
+func _spawn_debug_markers() -> void:
+	var root: Node3D = Node3D.new()
+	root.name = "_DebugMarkers"
+	add_child(root)
+
+	# Sphere mesh and material reused for all corner markers.
+	var corner_mat: StandardMaterial3D = StandardMaterial3D.new()
+	corner_mat.albedo_color = debug_corner_color
+	corner_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	corner_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	corner_mat.no_depth_test = true
+
+	var sphere: SphereMesh = SphereMesh.new()
+	sphere.radius = debug_corner_radius
+	sphere.height = debug_corner_radius * 2.0
+	sphere.material = corner_mat
+
+	for i: int in range(_corners.size()):
+		var marker: MeshInstance3D = MeshInstance3D.new()
+		marker.mesh = sphere
+		marker.global_position = _corners[i]
+		marker.name = "Corner_%s" % i
+		root.add_child(marker)
+
+	# Draw the path lines between corners using ImmediateMesh-style line meshes.
+	for i: int in range(_corners.size() - 1):
+		var line: MeshInstance3D = _make_line(_corners[i], _corners[i + 1], debug_corner_color)
+		line.name = "Path_%s" % i
+		root.add_child(line)
+
+	# Per-lane path lines offset perpendicular.
+	for lane: int in range(LANE_OFFSETS.size()):
+		var lane_color: Color = debug_lane_color
+		lane_color.a = 0.6
+		for i: int in range(_corners.size() - 1):
+			var seg_start: Vector3 = _corners[i]
+			var seg_end: Vector3 = _corners[i + 1]
+			var seg_dir: Vector3 = (seg_end - seg_start)
+			seg_dir.y = 0.0
+			seg_dir = seg_dir.normalized()
+			var right: Vector3 = seg_dir.cross(Vector3.UP).normalized()
+			var offset: Vector3 = right * LANE_OFFSETS[lane]
+			var lane_line: MeshInstance3D = _make_line(seg_start + offset, seg_end + offset, lane_color)
+			lane_line.name = "Lane_%s_Path_%s" % [lane, i]
+			root.add_child(lane_line)
+
+
+func _make_line(from: Vector3, to: Vector3, color: Color) -> MeshInstance3D:
+	var im: ImmediateMesh = ImmediateMesh.new()
+	var mat: StandardMaterial3D = StandardMaterial3D.new()
+	mat.albedo_color = color
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.no_depth_test = true
+	im.surface_begin(Mesh.PRIMITIVE_LINES, mat)
+	im.surface_add_vertex(from)
+	im.surface_add_vertex(to)
+	im.surface_end()
+	var mi: MeshInstance3D = MeshInstance3D.new()
+	mi.mesh = im
+	return mi
+
+
+# Snap corner positions so each segment is perfectly axis-aligned (X or Z only).
+# When a raw segment changes BOTH X and Z significantly, it's an L-bend the nav
+# took diagonally — we insert an intermediate corner to make two axis-aligned
+# segments instead.
+func _snap_to_axes(corners: Array[Vector3]) -> Array[Vector3]:
+	if corners.size() < 2:
+		return corners
+	var result: Array[Vector3] = []
+	result.append(corners[0])
+	const AXIS_TOLERANCE: float = 0.5
+
+	for i: int in range(1, corners.size()):
+		var prev: Vector3 = result[result.size() - 1]
+		var curr: Vector3 = corners[i]
+		var dx: float = abs(curr.x - prev.x)
+		var dz: float = abs(curr.z - prev.z)
+
+		if dx > AXIS_TOLERANCE and dz > AXIS_TOLERANCE:
+			# Diagonal segment — insert an L-bend corner.
+			# Choose the dominant axis to travel first along.
+			var bend: Vector3
+			if dz > dx:
+				# Travel along Z first, then X.
+				bend = Vector3(prev.x, prev.y, curr.z)
+			else:
+				# Travel along X first, then Z.
+				bend = Vector3(curr.x, prev.y, prev.z)
+			result.append(bend)
+			# Only add the curr point if it's meaningfully past the bend.
+			if (curr - bend).length() > AXIS_TOLERANCE:
+				result.append(curr)
+		elif dx > dz:
+			# Pure X segment — snap Z to previous.
+			result.append(Vector3(curr.x, curr.y, prev.z))
+		else:
+			# Pure Z segment — snap X to previous.
+			result.append(Vector3(prev.x, curr.y, curr.z))
+	return result
+
+
+func _simplify_path(path: PackedVector3Array) -> Array[Vector3]:
+	var result: Array[Vector3] = []
+	result.append(path[0])
+	for i: int in range(1, path.size() - 1):
+		var prev_dir: Vector3 = (path[i] - path[i - 1])
+		var next_dir: Vector3 = (path[i + 1] - path[i])
+		prev_dir.y = 0.0
+		next_dir.y = 0.0
+		if prev_dir.length_squared() < 0.001 or next_dir.length_squared() < 0.001:
+			continue
+		if prev_dir.normalized().dot(next_dir.normalized()) < CORNER_ANGLE_THRESHOLD:
+			result.append(path[i])
+	result.append(path[path.size() - 1])
+	return result
+
+
+# Drop intermediate corners where two consecutive segments are very short or
+# nearly collinear after axis snapping.
+func _collapse_short_segments(corners: Array[Vector3]) -> Array[Vector3]:
+	if corners.size() < 3:
+		return corners
+	const MIN_SEG: float = 2.0
+	var result: Array[Vector3] = [corners[0]]
+	for i: int in range(1, corners.size() - 1):
+		var prev: Vector3 = result[result.size() - 1]
+		var curr: Vector3 = corners[i]
+		var nxt: Vector3 = corners[i + 1]
+		var seg_len: float = (curr - prev).length()
+		# Skip this corner if the segment leading into it is too short.
+		if seg_len < MIN_SEG:
+			continue
+		# Skip if removing it leaves a pure axis-aligned segment to the next.
+		var after: Vector3 = nxt - curr
+		var before: Vector3 = curr - prev
+		before.y = 0.0
+		after.y = 0.0
+		if before.length_squared() > 0.001 and after.length_squared() > 0.001:
+			if before.normalized().dot(after.normalized()) > 0.99:
+				continue
+		result.append(curr)
+	result.append(corners[corners.size() - 1])
+	return result
+
+
+func _on_lane_changed() -> void:
+	# When the lane changes, snap player position immediately to the new lane
+	# at the same distance along the current segment.
+	_apply_position()
 
 
 func _physics_process(delta: float) -> void:
-	if not _nav_ready or _player.navigation_agent.is_navigation_finished():
+	if not _ready_state:
+		return
+	if _segment_index >= _corners.size() - 1:
 		return
 
-	# Update the lane-offset target every frame so the nav path reflects
-	# which side of the corridor the player is currently running in.
-	var right: Vector3 = _path_forward.cross(Vector3.UP).normalized()
-	var lane_offset: float = _lane_to_offset(_player._current_lane)
-	_player.navigation_agent.target_position = _finish.global_position + right * lane_offset
+	# Advance distance along current segment.
+	_distance_along += _player.run_speed * delta
 
-	# Derive path forward purely from the nav path points, not player→waypoint.
-	# This means lane changes (X movement) never affect the yaw.
-	var path: PackedVector3Array = _player.navigation_agent.get_current_navigation_path()
-	var path_seg_forward: Vector3 = _get_path_segment_forward(path)
-	if path_seg_forward != Vector3.ZERO:
-		_path_forward = path_seg_forward
-		print("Next Segment: %s" % _path_forward)
+	var seg_length: float = _get_segment_length()
+	if _distance_along >= seg_length:
+		# Reached the end of this segment — advance to the next one.
+		_segment_index += 1
+		_distance_along = 0.0
+		print("ADVANCE to segment %s" % _segment_index)
+		if _segment_index >= _corners.size() - 1:
+			print("REACHED DESTINATION at %s" % _player.global_position)
+			return
 
-	# Rotate body yaw toward path forward direction only.
-	var target_yaw: float = atan2(-_path_forward.x, -_path_forward.z)
-	var turn_weight: float = clamp(6.0 * delta, 0.0, 1.0)
+	_apply_position()
+	_apply_yaw(delta)
+
+
+# Compute the player's current position from segment + distance + lane.
+func _apply_position() -> void:
+	if _segment_index >= _corners.size() - 1:
+		return
+	var seg_start: Vector3 = _corners[_segment_index]
+	var seg_end: Vector3 = _corners[_segment_index + 1]
+	var seg_dir: Vector3 = (seg_end - seg_start)
+	seg_dir.y = 0.0
+	seg_dir = seg_dir.normalized()
+	var right: Vector3 = seg_dir.cross(Vector3.UP).normalized()
+	var lane_offset: float = LANE_OFFSETS[_player._current_lane]
+
+	var pos: Vector3 = seg_start + seg_dir * _distance_along + right * lane_offset
+	pos.y = _player.global_position.y
+	_player.global_position = pos
+
+
+# Compute the per-lane segment length so each lane reaches its L/M/R tile.
+# The corner point is shared; the lane offset shifts when we cross the corner,
+# so the effective travel for the outer lane along the incoming segment is
+# longer by abs(lane_offset).
+func _get_segment_length() -> float:
+	var seg_start: Vector3 = _corners[_segment_index]
+	var seg_end: Vector3 = _corners[_segment_index + 1]
+	var seg: Vector3 = seg_end - seg_start
+	seg.y = 0.0
+	var base_length: float = seg.length()
+
+	# If this is the last segment, just use base length (lane offset already applied at start).
+	if _segment_index >= _corners.size() - 2:
+		return base_length
+
+	# Otherwise, adjust for the next segment's turn direction.
+	# The outer lane (relative to the turn) needs to travel further.
+	var seg_dir: Vector3 = seg.normalized()
+	var next_start: Vector3 = _corners[_segment_index + 1]
+	var next_end: Vector3 = _corners[_segment_index + 2]
+	var next_dir: Vector3 = next_end - next_start
+	next_dir.y = 0.0
+	next_dir = next_dir.normalized()
+
+	# Right axis of CURRENT segment.
+	var right: Vector3 = seg_dir.cross(Vector3.UP).normalized()
+	# Sign of the turn: positive if next_dir is to the right of current, negative if left.
+	var turn_sign: float = sign(right.dot(next_dir))
+
+	var lane_offset: float = LANE_OFFSETS[_player._current_lane]
+	# Outer lane (opposite sign from turn) extends segment length by |offset|.
+	# Inner lane (same sign as turn) shortens segment length by |offset|.
+	var length_adjust: float = -lane_offset * turn_sign
+	return base_length + length_adjust
+
+
+func _apply_yaw(delta: float) -> void:
+	var seg_start: Vector3 = _corners[_segment_index]
+	var seg_end: Vector3 = _corners[_segment_index + 1]
+	var fwd: Vector3 = seg_end - seg_start
+	fwd.y = 0.0
+	if fwd.length_squared() < 0.001:
+		return
+	fwd = fwd.normalized()
+	var target_yaw: float = atan2(-fwd.x, -fwd.z)
+	var turn_weight: float = clamp(10.0 * delta, 0.0, 1.0)
 	_player.rotation.y = lerp_angle(_player.rotation.y, target_yaw, turn_weight)
-
-
-# Walk the path points to find the forward direction of the segment the
-# player is currently on, ignoring any lateral offset.
-func _get_path_segment_forward(path: PackedVector3Array) -> Vector3:
-	if path.size() < 2:
-		return Vector3.ZERO
-
-	var player_pos: Vector3 = _player.global_position
-	var closest_dist: float = INF
-	var best_dir: Vector3 = Vector3.ZERO
-
-	for i: int in range(path.size() - 1):
-		var a: Vector3 = path[i]
-		var b: Vector3 = path[i + 1]
-		a.y = 0.0
-		b.y = 0.0
-		var seg: Vector3 = b - a
-		if seg.length_squared() < 0.001:
-			continue
-		# Project player onto segment to find closest point.
-		var flat_pos: Vector3 = Vector3(player_pos.x, 0.0, player_pos.z)
-		var t: float = clamp((flat_pos - a).dot(seg.normalized()) / seg.length(), 0.0, 1.0)
-		var closest: Vector3 = a + seg.normalized() * t * seg.length()
-		var dist: float = (flat_pos - closest).length()
-		if dist < closest_dist:
-			closest_dist = dist
-			best_dir = seg.normalized()
-
-	return best_dir
-
-
-func _on_navigation_finished() -> void:
-	print("REACHED DESTINATION")
-
-
-func _lane_to_offset(lane: int) -> float:
-	match lane:
-		0:
-			return -1.0
-		2:
-			return 1.0
-		_:
-			return 0.0

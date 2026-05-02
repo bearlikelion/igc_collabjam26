@@ -1,33 +1,29 @@
 class_name Player
 extends SUCC
 
-# Auto-runner player controller. Moves forward automatically at a fixed speed,
-# left/right inputs snap instantly between 3 lanes. Mouse look is pitch-only;
-# yaw is locked so the camera always faces straight ahead.
+# Auto-runner. The level script drives position directly via parametric movement
+# along path segments. Lane = perpendicular offset; forward = distance along segment.
+# Player.gd just handles input and exposes _current_lane.
 
 const LANE_COUNT: int = 3
-const LANE_OFFSETS: Array[float] = [-1.5, -0.5, 0.5]
 
 @export var run_speed: float = 10.0
 @export var player_model: Node3D
 
+signal lane_changed
+
 var _current_lane: int = 1
-var _target_x: float = 0.0
 
 @onready var navigation_agent: NavigationAgent3D = $NavigationAgent3D
 
 
 func _ready() -> void:
 	super()
-	_target_x = LANE_OFFSETS[_current_lane]
-
 	if camera_mode == CameraMode.FIRST_PERSON:
 		player_model.hide()
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if Engine.is_editor_hint() or not is_multiplayer_authority():
-		return
 	if _can_look() and camera_rig and event is InputEventMouseMotion:
 		_handle_pitch_only(event as InputEventMouseMotion)
 	if event.is_action_pressed("ui_cancel"):
@@ -35,44 +31,23 @@ func _unhandled_input(event: InputEvent) -> void:
 				else Input.MOUSE_MODE_CAPTURED
 
 
-func _physics_process(delta: float) -> void:
-	if Engine.is_editor_hint() or not is_multiplayer_authority():
-		return
+func _physics_process(_delta: float) -> void:
+	# Movement is driven externally by the level script via set_position.
+	# Just handle input here.
 	if game_state == GameState.DISABLED or not _can_move():
-		velocity = Vector3.ZERO
-		move_and_slide()
 		return
-
 	_handle_lane_input()
-	_apply_gravity(delta)
-
-	# Lateral: move toward target lane at run_speed, stop exactly on arrival.
-	var diff: float = _target_x - global_position.x
-	var step: float = run_speed * delta
-	if abs(diff) <= step:
-		velocity.x = diff / delta if delta > 0.0 else 0.0
-	else:
-		velocity.x = sign(diff) * run_speed
-
-	# Forward speed is constant and set last so nothing can change it.
-	velocity.z = -run_speed
-
-	move_and_slide()
-
-	# Re-lock forward speed after move_and_slide in case a collision deflected it.
-	velocity.z = -run_speed
-	velocity.x = clamp(velocity.x, -run_speed, run_speed)
-
-	_update_movement_state()
 
 
 func _handle_lane_input() -> void:
-	if Input.is_action_just_pressed("left"):
-		_current_lane = max(0, _current_lane - 1)
-		_target_x = LANE_OFFSETS[_current_lane]
-	elif Input.is_action_just_pressed("right"):
-		_current_lane = min(LANE_COUNT - 1, _current_lane + 1)
-		_target_x = LANE_OFFSETS[_current_lane]
+	if Input.is_action_just_pressed("left") and _current_lane > 0:
+		_current_lane -= 1
+		lane_changed.emit()
+		print("LANE CHANGE LEFT -> lane %s" % _current_lane)
+	elif Input.is_action_just_pressed("right") and _current_lane < LANE_COUNT - 1:
+		_current_lane += 1
+		lane_changed.emit()
+		print("LANE CHANGE RIGHT -> lane %s" % _current_lane)
 
 
 func _gather_movement_input() -> void:

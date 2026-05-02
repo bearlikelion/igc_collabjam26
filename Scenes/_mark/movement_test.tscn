@@ -17,7 +17,7 @@ sky = SubResource("Sky_w3std")
 tonemap_mode = 2
 
 [sub_resource type="NavigationMesh" id="NavigationMesh_pnnlu"]
-vertices = PackedVector3Array(46.5, 0.5, -20.5, 46.5, 0.5, -22.25, 24.5, 0.5, -22.5, 22.75, 0.5, -20.5, 0.75, 0.5, -51.5, 22.75, 0.5, -51.25, 24.5, 0.5, -53.25, -1.25, 0.5, -53.25, -1.25, 0.5, -0.5, 0.5, 0.5, -0.5)
+vertices = PackedVector3Array(46.5, 0.5, -20.5, 46.5, 0.5, -22.25, 24.5, 0.5, -22.5, 22.75, 0.5, -20.5, 0.75, 0.5, -51.5, 22.75, 0.5, -51.25, 24.5, 0.5, -53.25, -1.25, 0.5, -53.25, -1.25, 0.5, -2, 0.5, 0.5, -1.75)
 polygons = [PackedInt32Array(1, 0, 2), PackedInt32Array(2, 0, 3), PackedInt32Array(5, 4, 6), PackedInt32Array(6, 4, 7), PackedInt32Array(6, 2, 5), PackedInt32Array(5, 2, 3), PackedInt32Array(9, 8, 4), PackedInt32Array(4, 8, 7)]
 geometry_parsed_geometry_type = 0
 
@@ -36,14 +36,36 @@ navigation_mesh = SubResource("NavigationMesh_pnnlu")
 
 [node name="FuncGodotMap" parent="NavigationRegion3D" unique_id=402080530 instance=ExtResource("2_acgmq")]
 
-[node name="Player" parent="NavigationRegion3D" unique_id=759156532 node_paths=PackedStringArray("player_model") instance=ExtResource("1_pnnlu")]
+[node name="Player" parent="NavigationRegion3D" unique_id=759156532 instance=ExtResource("1_pnnlu")]
 unique_name_in_owner = true
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0, -1)
-run_speed = 20.0
-player_model = NodePath("suit_male")
+run_speed = 2.0
 enable_bhop = false
 enable_surf = false
+default_camera_mode = 1
 
 [node name="Finish" type="Marker3D" parent="NavigationRegion3D" unique_id=299558328]
 unique_name_in_owner = true
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 45.5, 1, -21.5)
+
+[node name="L" type="Label3D" parent="." unique_id=1268959272]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 2, -53.5)
+billboard = 1
+modulate = Color(0, 0, 0, 1)
+text = "L"
+font_size = 128
+
+[node name="M" type="Label3D" parent="." unique_id=1400778705]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 2, -52.5)
+billboard = 1
+modulate = Color(0, 0, 0, 1)
+text = "M"
+font_size = 128
+
+[node name="R" type="Label3D" parent="." unique_id=1456816028]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, 2, -51.5)
+billboard = 1
+modulate = Color(0, 0, 0, 1)
+text = "R
+"
+font_size = 128
