@@ -9,6 +9,7 @@ const LANE_COUNT: int = 3
 const LANE_OFFSETS: Array[float] = [-2.0, 0.0, 2.0]
 
 @export var run_speed: float = 10.0
+@export var player_model: Node3D
 
 var _current_lane: int = 1
 var _target_x: float = 0.0
@@ -17,6 +18,10 @@ var _target_x: float = 0.0
 func _ready() -> void:
 	super()
 	_target_x = LANE_OFFSETS[_current_lane]
+
+	if camera_mode == CameraMode.FIRST_PERSON:
+		player_model.hide()
+
 
 
 func _unhandled_input(event: InputEvent) -> void:

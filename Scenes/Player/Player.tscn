@@ -7,8 +7,11 @@
 [sub_resource type="BoxShape3D" id="BoxShape3D_1"]
 size = Vector3(0.813, 1.5, 0.813)
 
-[node name="Player" type="CharacterBody3D" unique_id=759156532]
+[node name="Player" type="CharacterBody3D" unique_id=759156532 node_paths=PackedStringArray("player_model")]
 script = ExtResource("1_h54ih")
+player_model = NodePath("suit_male")
+enable_bhop = false
+enable_surf = false
 
 [node name="Collision" type="CollisionShape3D" parent="." unique_id=1635607958]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.75, 0)
