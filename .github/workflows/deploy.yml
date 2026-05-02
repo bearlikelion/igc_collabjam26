@@ -9,6 +9,7 @@ env:
   GODOT_VERSION: "4.6"
   ITCH_USERNAME: smitner
   ITCH_GAME_ID: igc-cj-26
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   deploy:
