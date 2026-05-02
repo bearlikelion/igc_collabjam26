@@ -6,7 +6,7 @@ extends SUCC
 # yaw is locked so the camera always faces straight ahead.
 
 const LANE_COUNT: int = 3
-const LANE_OFFSETS: Array[float] = [-1.0, 0.0, 1.0]
+const LANE_OFFSETS: Array[float] = [-1.5, -0.5, 0.5]
 
 @export var run_speed: float = 10.0
 @export var player_model: Node3D
