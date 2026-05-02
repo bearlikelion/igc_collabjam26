@@ -12,12 +12,23 @@ config_version=5
 
 config/name="COLLAB JAM '26"
 config/description="Mark + Arran = MARRAN"
+run/main_scene="uid://b4u2i5j05ytvq"
 config/features=PackedStringArray("4.6")
 boot_splash/bg_color=Color(0.11764706, 0.5647059, 1, 1)
 boot_splash/stretch_mode=0
 boot_splash/use_filter=false
 boot_splash/image="uid://dopyes8t2c23a"
 config/icon="uid://dopyes8t2c23a"
+
+[debug]
+
+gdscript/warnings/untyped_declaration=2
+gdscript/warnings/inferred_declaration=1
+gdscript/warnings/unsafe_property_access=2
+gdscript/warnings/unsafe_method_access=2
+gdscript/warnings/unsafe_cast=2
+gdscript/warnings/unsafe_call_argument=2
+gdscript/warnings/unsafe_void_return=2
 
 [file_customization]
 
@@ -34,3 +45,4 @@ folder_colors={
 
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
+environment/defaults/default_clear_color=Color(0.80049086, 0.80049074, 0.80049074, 1)
