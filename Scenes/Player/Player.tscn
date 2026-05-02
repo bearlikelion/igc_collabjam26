@@ -9,6 +9,10 @@ size = Vector3(0.813, 1.5, 0.813)
 
 [node name="Player" type="CharacterBody3D" unique_id=759156532]
 script = ExtResource("1_h54ih")
+run_speed = null
+enable_bhop = null
+enable_surf = null
+default_camera_mode = null
 
 [node name="Collision" type="CollisionShape3D" parent="." unique_id=1635607958]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.75, 0)
@@ -25,3 +29,7 @@ fov = 90.0
 
 [node name="suit_male" parent="." unique_id=2082475865 instance=ExtResource("4_ude3g")]
 transform = Transform3D(-2, 0, 3.019916e-07, 0, 2, 0, -3.019916e-07, 0, -2, 0, 0, 0)
+
+[node name="NavigationAgent3D" type="NavigationAgent3D" parent="." unique_id=899641710]
+debug_enabled = true
+debug_path_custom_color = Color(0, 0, 1, 1)

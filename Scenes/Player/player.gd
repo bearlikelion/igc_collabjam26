@@ -14,6 +14,8 @@ const LANE_OFFSETS: Array[float] = [-1.5, -0.5, 0.5]
 var _current_lane: int = 1
 var _target_x: float = 0.0
 
+@onready var navigation_agent: NavigationAgent3D = $NavigationAgent3D
+
 
 func _ready() -> void:
 	super()
