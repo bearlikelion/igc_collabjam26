@@ -9,3 +9,8 @@
 
 [resource]
 script = ExtResource("2_ns6ah")
+game_name = "IGC CollabJam 26"
+icon = ExtResource("6_tex5j")
+palette_path = ""
+fgd_file = ExtResource("1_8u1vq")
+brushface_tags = Array[Resource]([ExtResource("1_rsp20"), ExtResource("2_166i2"), ExtResource("3_stisi")])
