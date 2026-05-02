@@ -1,0 +1,68 @@
+name: Export & Deploy to itch.io
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: "4.6"
+  ITCH_USERNAME: smitner
+  ITCH_GAME_ID: igc-cj-26
+
+jobs:
+  deploy:
+    name: Export and Deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Cache Godot binary
+        id: cache-godot
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/bin/godot
+          key: godot-${{ env.GODOT_VERSION }}
+
+      - name: Install Godot ${{ env.GODOT_VERSION }}
+        if: steps.cache-godot.outputs.cache-hit != 'true'
+        run: |
+          GODOT_URL="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
+          wget -q "${GODOT_URL}/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip" -O godot.zip
+          unzip -q godot.zip
+          chmod +x "Godot_v${GODOT_VERSION}-stable_linux.x86_64"
+          sudo mv "Godot_v${GODOT_VERSION}-stable_linux.x86_64" /usr/local/bin/godot
+
+      - name: Cache export templates
+        id: cache-templates
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/godot/export_templates
+          key: godot-templates-${{ env.GODOT_VERSION }}
+
+      - name: Install export templates
+        if: steps.cache-templates.outputs.cache-hit != 'true'
+        run: |
+          GODOT_URL="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
+          TEMPLATES_DIR="${HOME}/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          mkdir -p "${TEMPLATES_DIR}"
+          wget -q "${GODOT_URL}/Godot_v${GODOT_VERSION}-stable_export_templates.tpz" -O templates.tpz
+          unzip -q templates.tpz -d /tmp/templates_extracted
+          mv /tmp/templates_extracted/templates/* "${TEMPLATES_DIR}/"
+
+      - name: Export (Web)
+        run: |
+          rm -rf build/web
+          mkdir -p build/web
+          godot --headless --export-release "Web" build/web/index.html
+
+      - name: Deploy to itch.io
+        uses: KikimoraGames/itch-publish@v0.0.3
+        with:
+          butlerApiKey: ${{ secrets.BUTLER_API_KEY }}
+          gameData: ./build/web
+          itchUsername: ${{ env.ITCH_USERNAME }}
+          itchGameId: ${{ env.ITCH_GAME_ID }}
+          buildChannel: html5
