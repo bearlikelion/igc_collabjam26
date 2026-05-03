@@ -51,10 +51,6 @@ transform = Transform3D(-2, 0, 3.019916e-07, 0, 2, 0, -3.019916e-07, 0, -2, 0, 0
 
 [node name="suit_male" parent="ModelRoot" unique_id=1874892762 instance=ExtResource("2_model")]
 
-[node name="Skeleton3D" parent="ModelRoot/suit_male/character-male-d" parent_id_path=PackedInt32Array(1874892762, 1922565222) index="0" unique_id=839396347]
-bones/4/rotation = Quaternion(0, 0, -0.3826835, 0.92387956)
-bones/5/rotation = Quaternion(0, 0, 0.3826835, 0.92387956)
-
 [node name="AnimationTree" type="AnimationTree" parent="." unique_id=10839786]
 root_node = NodePath("../ModelRoot/suit_male")
 tree_root = SubResource("AnimationNodeStateMachine_character")

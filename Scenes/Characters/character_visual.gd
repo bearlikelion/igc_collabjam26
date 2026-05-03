@@ -35,11 +35,17 @@ var _state: int = MotionState.WALK
 var _torso_bone_index: int = -1
 var _current_torso_lean: float = 0.0
 var _state_lock_time: float = 0.0
+var _locked_state: int = -1
+var _torso_lean_direction: int = 0
 
 
 # Build the reusable animation state machine after child nodes are ready.
 func _ready() -> void:
-	_torso_bone_index = skeleton.find_bone("torso")
+	process_priority = 100
+	if skeleton != null:
+		_torso_bone_index = skeleton.find_bone("torso")
+	if _torso_bone_index < 0:
+		push_warning("CharacterVisual could not find torso bone for lean.")
 	_configure_animation_tree()
 	play_walk()
 
@@ -52,7 +58,7 @@ func _process(delta: float) -> void:
 
 # Set locomotion animation from current movement speed.
 func set_move_speed(speed: float) -> void:
-	if _state_lock_time > 0.0 or _state == MotionState.DIE or _state == MotionState.RECOVER:
+	if _state_lock_time > 0.0 or _state == MotionState.DIE:
 		return
 	if speed >= walk_speed_threshold:
 		play_sprint()
@@ -62,34 +68,64 @@ func set_move_speed(speed: float) -> void:
 
 # Play the normal forward walking state.
 func play_walk() -> void:
+	if _is_recovery_state_locked():
+		return
+	_torso_lean_direction = 0
 	_travel(MotionState.WALK)
 
 
 # Play the faster locomotion state.
 func play_sprint() -> void:
+	if _is_recovery_state_locked():
+		return
+	_torso_lean_direction = 0
 	_travel(MotionState.SPRINT)
 
 
 # Play a left-side interaction dodge/shuffle animation.
 func play_interact_left() -> void:
+	if _is_recovery_state_locked():
+		return
+	_torso_lean_direction = -1
 	_travel(MotionState.INTERACT_LEFT)
 	_lock_state_for_animation(MotionState.INTERACT_LEFT)
 
 
 # Play a right-side interaction dodge/shuffle animation.
 func play_interact_right() -> void:
+	if _is_recovery_state_locked():
+		return
+	_torso_lean_direction = 1
 	_travel(MotionState.INTERACT_RIGHT)
 	_lock_state_for_animation(MotionState.INTERACT_RIGHT)
 
 
 # Play the death animation.
 func play_die() -> void:
+	if _state == MotionState.DIE and _is_recovery_state_locked():
+		return
+	_torso_lean_direction = 0
 	_travel(MotionState.DIE)
+	_lock_state_for_animation(MotionState.DIE)
 
 
 # Play the collision recovery animation.
 func play_recover() -> void:
+	if _is_recovery_state_locked():
+		return
+	_torso_lean_direction = 0
 	_travel(MotionState.RECOVER)
+	_lock_state_for_animation(MotionState.RECOVER)
+
+
+# Return whether the recover animation can start now.
+func can_start_recover() -> bool:
+	return not _is_recovery_state_locked()
+
+
+# Return whether die or recover is still owning animation playback.
+func is_recovery_locked() -> bool:
+	return _is_recovery_state_locked()
 
 
 # Configure an AnimationTree state machine using local clips.
@@ -123,8 +159,8 @@ func _create_animation_state_machine() -> AnimationNodeStateMachine:
 func _travel(state: int) -> void:
 	var animation_name: String = _get_animation_name(state)
 	if not animation_player.has_animation(animation_name):
-		animation_name = "RESET"
-	if _playback != null:
+		animation_name = ""
+	if _playback != null and animation_name != "":
 		_playback.travel(animation_name)
 	elif animation_player.has_animation(animation_name):
 		animation_player.play(animation_name)
@@ -136,20 +172,26 @@ func _lock_state_for_animation(state: int) -> void:
 	var animation_name: String = _get_animation_name(state)
 	if animation_player.has_animation(animation_name):
 		_state_lock_time = animation_player.get_animation(animation_name).length
+		_locked_state = state
+
+
+# Return whether die or recover animation playback should ignore state changes.
+func _is_recovery_state_locked() -> bool:
+	if _state_lock_time <= 0.0:
+		_locked_state = -1
+		return false
+	return _locked_state == MotionState.DIE or _locked_state == MotionState.RECOVER
 
 
 # Apply a directional torso lean for side interactions.
 func _update_torso_lean(delta: float) -> void:
-	if _torso_bone_index < 0:
+	if skeleton == null or _torso_bone_index < 0:
 		return
 
-	var target_lean: float = 0.0
-	if _state == MotionState.INTERACT_LEFT:
-		target_lean = -torso_lean_amount
-	elif _state == MotionState.INTERACT_RIGHT:
-		target_lean = torso_lean_amount
+	var target_lean: float = torso_lean_amount * float(_torso_lean_direction)
 
-	var weight: float = clamp(torso_lean_speed * delta, 0.0, 1.0)
+	var lean_delta: float = delta / maxf(Engine.time_scale, 0.001)
+	var weight: float = clamp(torso_lean_speed * lean_delta, 0.0, 1.0)
 	_current_torso_lean = lerp(_current_torso_lean, target_lean, weight)
 	if abs(_current_torso_lean) < 0.001 and is_zero_approx(target_lean):
 		_current_torso_lean = 0.0
