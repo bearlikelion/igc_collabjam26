@@ -65,8 +65,6 @@ navigation_mesh = SubResource("NavigationMesh_pnnlu")
 [node name="Player" parent="NavigationRegion3D" unique_id=759156532 instance=ExtResource("7_1u2wa")]
 unique_name_in_owner = true
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0, -1)
-start_speed = 0.5
-max_speed = 3.0
 enable_bhop = false
 enable_surf = false
 

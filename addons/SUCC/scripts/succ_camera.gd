@@ -16,6 +16,8 @@ signal mode_changed(mode: int)
 
 
 var _accumulated: Vector2 = Vector2.ZERO
+var _step_offset: float = 0.0
+var _headbob_offset: float = 0.0
 
 
 # Optional Camera3D child of this SpringArm3D. When present, SUCC applies a
@@ -23,6 +25,7 @@ var _accumulated: Vector2 = Vector2.ZERO
 @onready var camera: Camera3D = _find_camera()
 
 
+# Find the child Camera3D controlled by this rig.
 func _find_camera() -> Camera3D:
 	for child: Node in get_children():
 		if child is Camera3D:
@@ -33,11 +36,25 @@ func _find_camera() -> Camera3D:
 	return null
 
 
+# Set the vertical smoothing offset from step-up/down movement.
 func set_step_offset(offset: float) -> void:
+	_step_offset = offset
+	_apply_camera_offset()
+
+
+# Set the vertical camera bob offset from player movement.
+func set_headbob_offset(offset: float) -> void:
+	_headbob_offset = offset
+	_apply_camera_offset()
+
+
+# Apply additive camera offsets without losing either source.
+func _apply_camera_offset() -> void:
 	if camera:
-		camera.position.y = offset
+		camera.position.y = _step_offset + _headbob_offset
 
 
+# Rotate the camera rig from mouse input.
 func handle_input(event: InputEvent, config: SUCCConfig) -> void:
 	if not (event is InputEventMouseMotion):
 		return
@@ -51,6 +68,7 @@ func handle_input(event: InputEvent, config: SUCCConfig) -> void:
 	_apply_rotation()
 
 
+# Apply accumulated yaw and pitch rotation.
 func _apply_rotation() -> void:
 	var parent: Node3D = get_parent() as Node3D
 	if parent == null:
@@ -65,6 +83,7 @@ func _apply_rotation() -> void:
 	_accumulated = Vector2.ZERO
 
 
+# Switch between first-person and third-person camera distances.
 func apply_mode(mode: int, config: SUCCConfig) -> void:
 	match mode:
 		SUCC.CameraMode.FIRST_PERSON:

@@ -13,10 +13,18 @@ const LANE_COUNT: int = 3
 @export var acceleration_time: float = 5.0
 @export var player_model: Node3D
 
+@export_group("Headbob")
+@export var enable_headbob: bool = true
+@export_range(0.0, 0.2, 0.001, "suffix:m") var headbob_amplitude: float = 0.025
+@export_range(0.0, 6.0, 0.05, "suffix:steps/m") var headbob_steps_per_meter: float = 0.65
+@export_range(0.0, 30.0, 0.1) var headbob_smoothing: float = 12.0
+
 signal lane_changed
 
 var _current_lane: int = 1
 var run_speed: float = 0.0
+var _headbob_phase: float = 0.0
+var _headbob_offset: float = 0.0
 
 
 # Initialize speed and visual state.
@@ -25,6 +33,12 @@ func _ready() -> void:
 	run_speed = start_speed
 	if camera_mode == CameraMode.FIRST_PERSON and player_model != null:
 		player_model.hide()
+
+
+# Update camera effects after inherited camera smoothing.
+func _process(delta: float) -> void:
+	super(delta)
+	_update_headbob(delta)
 
 
 # Handle look and mouse capture input.
@@ -56,6 +70,23 @@ func _update_run_speed(delta: float) -> void:
 	if run_speed < max_speed and acceleration_time > 0.0:
 		var rate: float = (max_speed - start_speed) / acceleration_time
 		run_speed = min(max_speed, run_speed + rate * delta)
+
+
+# Apply speed-scaled vertical camera headbob.
+func _update_headbob(delta: float) -> void:
+	if camera_rig == null:
+		return
+
+	var target_offset: float = 0.0
+	if enable_headbob and game_state == GameState.ACTIVE and _can_move() and run_speed > 0.01:
+		_headbob_phase = fmod(_headbob_phase + run_speed * headbob_steps_per_meter * TAU * delta, TAU)
+		target_offset = sin(_headbob_phase) * headbob_amplitude
+
+	var t: float = 1.0 if headbob_smoothing <= 0.0 else clamp(headbob_smoothing * delta, 0.0, 1.0)
+	_headbob_offset = lerp(_headbob_offset, target_offset, t)
+	if abs(_headbob_offset) < 0.0001 and is_zero_approx(target_offset):
+		_headbob_offset = 0.0
+	camera_rig.set_headbob_offset(_headbob_offset)
 
 
 # Apply lane input.
