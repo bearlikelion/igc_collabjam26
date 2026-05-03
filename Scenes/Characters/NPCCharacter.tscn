@@ -15,5 +15,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.75, 0)
 shape = SubResource("BoxShape3D_npc")
 
 [node name="CharacterVisual" parent="." unique_id=876488184 instance=ExtResource("2_visual")]
+playback_fade_time = 0.3
+torso_lean_amount = 0.5
 
 [node name="NavigationAgent3D" type="NavigationAgent3D" parent="." unique_id=1838137378]
