@@ -23,7 +23,7 @@ const MOTION_STATES: Array[int] = [
 @export var walk_speed_threshold: float = 2.5
 @export var playback_fade_time: float = 0.15
 @export var torso_lean_amount: float = 0.15
-@export var torso_lean_speed: float = 12.0
+@export var torso_lean_speed: float = 3.0
 @export var skeleton: Skeleton3D
 
 @onready var animation_player: AnimationPlayer = $ModelRoot/suit_male/AnimationPlayer
@@ -190,8 +190,7 @@ func _update_torso_lean(delta: float) -> void:
 
 	var target_lean: float = torso_lean_amount * float(_torso_lean_direction)
 
-	var lean_delta: float = delta / maxf(Engine.time_scale, 0.001)
-	var weight: float = clamp(torso_lean_speed * lean_delta, 0.0, 1.0)
+	var weight: float = clamp(torso_lean_speed * delta, 0.0, 1.0)
 	_current_torso_lean = lerp(_current_torso_lean, target_lean, weight)
 	if abs(_current_torso_lean) < 0.001 and is_zero_approx(target_lean):
 		_current_torso_lean = 0.0

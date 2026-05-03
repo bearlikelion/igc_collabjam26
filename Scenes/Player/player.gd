@@ -51,6 +51,7 @@ var _shuffle_was_knocked_down: bool = false
 var _shuffle_debug_label: Label3D
 var _shuffle_fail_reason: String = ""
 var _shuffle_recover_started: bool = false
+var _movement_blocked: bool = false
 
 @onready var shuffle_cast: RayCast3D = $ShuffleCast
 
@@ -123,6 +124,13 @@ func get_current_lane() -> int:
 	return _current_lane
 
 
+# Allow the level controller to flag the runner as blocked by an obstacle.
+func set_movement_blocked(blocked: bool) -> void:
+	if blocked and not _movement_blocked:
+		run_speed = start_speed
+	_movement_blocked = blocked
+
+
 # Return whether the route controller should pause forward travel.
 func is_runner_paused() -> bool:
 	return _shuffle_active or _recovery_time_left > 0.0 or not _can_move()
@@ -161,6 +169,9 @@ func die() -> void:
 
 # Accelerate toward max speed.
 func _update_run_speed(delta: float) -> void:
+	if _movement_blocked:
+		run_speed = start_speed
+		return
 	if run_speed < max_speed and acceleration_time > 0.0:
 		var rate: float = (max_speed - start_speed) / acceleration_time
 		run_speed = min(max_speed, run_speed + rate * delta)
@@ -172,7 +183,7 @@ func _update_headbob(delta: float) -> void:
 		return
 
 	var target_offset: float = 0.0
-	if enable_headbob and game_state == GameState.ACTIVE and _can_move() and run_speed > 0.01:
+	if enable_headbob and game_state == GameState.ACTIVE and _can_move() and run_speed > 0.01 and not _movement_blocked:
 		_headbob_phase = fmod(_headbob_phase + run_speed * headbob_steps_per_meter * TAU * delta, TAU)
 		target_offset = sin(_headbob_phase) * headbob_amplitude
 

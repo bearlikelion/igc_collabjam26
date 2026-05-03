@@ -32,6 +32,8 @@ const CENTER_WALK_STEP: float = 0.1
 const CENTER_MAX_WALK: float = 8.0
 const CENTER_TOLERANCE: float = 0.05
 const TURN_WEIGHT: float = 10.0
+const OBSTACLE_STOP_DISTANCE: float = 0.75
+const OBSTACLE_RAY_HEIGHT: float = 0.6
 
 # Debug visualization
 @export var debug_show_corners: bool = true
@@ -470,6 +472,11 @@ func _physics_process(delta: float) -> void:
 	if _segment_index >= _corners.size() - 1:
 		return
 	if _player.is_runner_paused():
+		_player.set_movement_blocked(false)
+		return
+	var blocked: bool = _is_lane_blocked_by_obstacle()
+	_player.set_movement_blocked(blocked)
+	if blocked:
 		return
 
 	_distance_along += _player.run_speed * delta
@@ -505,6 +512,32 @@ func _apply_position() -> void:
 	var pos: Vector3 = seg_start + seg_dir * distance
 	pos.y = _player.global_position.y
 	_player.global_position = pos
+
+
+# Cast a short ray forward along the active lane to detect obstacle bodies.
+func _is_lane_blocked_by_obstacle() -> bool:
+	var lane: int = _player.get_current_lane()
+	var seg_start: Vector3 = _get_lane_segment_start(_segment_index, lane)
+	var seg_end: Vector3 = _get_lane_segment_end(_segment_index, lane)
+	var seg_dir: Vector3 = seg_end - seg_start
+	seg_dir.y = 0.0
+	if seg_dir.length_squared() < 0.001:
+		return false
+	seg_dir = seg_dir.normalized()
+
+	var space_state: PhysicsDirectSpaceState3D = _player.get_world_3d().direct_space_state
+	var origin: Vector3 = _player.global_position + Vector3.UP * OBSTACLE_RAY_HEIGHT
+	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(
+		origin,
+		origin + seg_dir * OBSTACLE_STOP_DISTANCE
+	)
+	query.exclude = [_player.get_rid()]
+	query.collide_with_bodies = true
+	var result: Dictionary = space_state.intersect_ray(query)
+	if result.is_empty():
+		return false
+	var collider: Object = result.get("collider")
+	return collider != null and collider is Node and (collider as Node).is_in_group("obstacle")
 
 
 # Compute the active lane segment length from its lane-specific endpoints.
