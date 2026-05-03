@@ -10,6 +10,8 @@ extends CharacterBody3D
 @export var arrival_distance: float = 0.5
 @export var waypoint_skip_distance: float = 0.15
 @export var shuffle_debug_enabled: bool = true
+@export var shuffle_lane_distance: float = 1.0
+@export var shuffle_lane_move_time: float = 0.25
 
 var desired_direction: Vector3 = Vector3.ZERO
 var wants_sprint: bool = false
@@ -25,6 +27,10 @@ var _recovery_time_left: float = 0.0
 var _get_up_time: float = 0.9
 var _recover_started: bool = false
 var _knockdown_active: bool = false
+var _shuffle_lane_move_active: bool = false
+var _shuffle_lane_start_position: Vector3 = Vector3.ZERO
+var _shuffle_lane_target_position: Vector3 = Vector3.ZERO
+var _shuffle_lane_elapsed: float = 0.0
 
 @onready var navigation_agent: NavigationAgent3D = $NavigationAgent3D
 
@@ -45,6 +51,7 @@ func _physics_process(delta: float) -> void:
 		return
 
 	if _shuffle_paused:
+		_update_shuffle_lane_move(delta)
 		_stop_moving()
 		return
 
@@ -104,10 +111,15 @@ func begin_subway_shuffle() -> int:
 
 # Resume navigation after a successful shuffle.
 func end_subway_shuffle() -> void:
+	_start_shuffle_lane_move(_shuffle_direction)
+	_finish_shuffle_lane_move()
 	_shuffle_paused = false
 	_shuffle_direction = 0
 	if visual != null:
 		visual.play_walk()
+	if _has_target:
+		navigation_agent.target_position = route_target_position
+		_cache_navigation_path()
 	_set_debug_text("MOVE")
 	_debug_shuffle("RESUME")
 
@@ -116,6 +128,7 @@ func end_subway_shuffle() -> void:
 func stop_subway_shuffle() -> void:
 	_shuffle_paused = true
 	_shuffle_direction = 0
+	_shuffle_lane_move_active = false
 	_stop_moving()
 	_set_debug_text("STOP")
 	_debug_shuffle("STOP")
@@ -125,6 +138,7 @@ func stop_subway_shuffle() -> void:
 func knock_down_from_shuffle(player_position: Vector3, recovery_time: float, get_up_time: float, knockback_distance: float) -> void:
 	_shuffle_paused = true
 	_shuffle_direction = 0
+	_shuffle_lane_move_active = false
 	_recovery_time_left = maxf(recovery_time, get_up_time)
 	_get_up_time = get_up_time
 	_recover_started = false
@@ -290,6 +304,43 @@ func _apply_knockback_from(player_position: Vector3, knockback_distance: float) 
 		direction = Vector3.BACK
 	direction = direction.normalized()
 	global_position += direction * knockback_distance
+
+
+# Start moving the NPC toward the side it chose for the shuffle.
+func _start_shuffle_lane_move(direction: int) -> void:
+	var lane_direction: Vector3 = global_transform.basis.x * float(direction)
+	lane_direction.y = 0.0
+	if lane_direction.length_squared() <= 0.001 or is_zero_approx(shuffle_lane_distance):
+		_shuffle_lane_move_active = false
+		return
+	_shuffle_lane_start_position = global_position
+	_shuffle_lane_target_position = global_position + lane_direction.normalized() * shuffle_lane_distance
+	_shuffle_lane_elapsed = 0.0
+	_shuffle_lane_move_active = true
+
+
+# Move across to the selected shuffle lane using real-time duration.
+func _update_shuffle_lane_move(delta: float) -> void:
+	if not _shuffle_lane_move_active:
+		return
+	var scaled_delta: float = delta / maxf(Engine.time_scale, 0.001)
+	_shuffle_lane_elapsed += scaled_delta
+	var duration: float = maxf(shuffle_lane_move_time, 0.001)
+	var weight: float = clampf(_shuffle_lane_elapsed / duration, 0.0, 1.0)
+	var next_position: Vector3 = _shuffle_lane_start_position.lerp(_shuffle_lane_target_position, weight)
+	next_position.y = global_position.y
+	global_position = next_position
+	if weight >= 1.0:
+		_shuffle_lane_move_active = false
+
+
+# Finish the selected lane move before returning to navigation.
+func _finish_shuffle_lane_move() -> void:
+	if not _shuffle_lane_move_active:
+		return
+	_shuffle_lane_move_active = false
+	_shuffle_lane_target_position.y = global_position.y
+	global_position = _shuffle_lane_target_position
 
 
 # Stop horizontal movement.

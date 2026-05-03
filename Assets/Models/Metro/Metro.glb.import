@@ -1,0 +1,756 @@
+[remap]
+
+importer="scene"
+importer_version=1
+type="PackedScene"
+uid="uid://bptaj7uat1gcj"
+path="res://.godot/imported/Metro.glb-0fbbe25d3b20fe0773f175e0f33080bf.scn"
+
+[deps]
+
+source_file="res://Assets/Models/Metro/Metro.glb"
+dest_files=["res://.godot/imported/Metro.glb-0fbbe25d3b20fe0773f175e0f33080bf.scn"]
+
+[params]
+
+nodes/root_type=""
+nodes/root_name=""
+nodes/root_script=null
+nodes/apply_root_scale=true
+nodes/root_scale=1.0
+nodes/import_as_skeleton_bones=false
+nodes/use_name_suffixes=true
+nodes/use_node_type_suffixes=true
+meshes/ensure_tangents=true
+meshes/generate_lods=true
+meshes/create_shadow_meshes=true
+meshes/light_baking=1
+meshes/lightmap_texel_size=0.2
+meshes/force_disable_compression=false
+skins/use_named_skins=true
+animation/import=true
+animation/fps=30
+animation/trimming=false
+animation/remove_immutable_tracks=true
+animation/import_rest_as_RESET=false
+import_script/path=""
+materials/extract=0
+materials/extract_format=0
+materials/extract_path=""
+_subresources={
+"meshes": {
+"Metro_Chair": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Chair.res",
+"save_to_file/path": "uid://d02lk5n2xvtrx"
+},
+"Metro_Column": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Column.res",
+"save_to_file/path": "uid://dowb45ynb430v"
+},
+"Metro_Door": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Door.res",
+"save_to_file/path": "uid://dgl86me0o6ejl"
+},
+"Metro_Door_002": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Door_002.res",
+"save_to_file/path": "uid://bwv3ofxomuknq"
+},
+"Metro_Door_003": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Door_003.res",
+"save_to_file/path": "uid://cglxi2tp4bkv4"
+},
+"Metro_Door_004": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Door_004.res",
+"save_to_file/path": "uid://ddvl3u8sobs0"
+},
+"Metro_Door_005": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Door_005.res",
+"save_to_file/path": "uid://bsah2l78p1jh5"
+},
+"Metro_Door_006": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Door_006.res",
+"save_to_file/path": "uid://fjdlgpwcsosv"
+},
+"Metro_Door_007": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Door_007.res",
+"save_to_file/path": "uid://bu7uj4nemflp3"
+},
+"Metro_Door_008": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Door_008.res",
+"save_to_file/path": "uid://6r4ynl6mi0ix"
+},
+"Metro_Door_009": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Door_009.res",
+"save_to_file/path": "uid://ba84klj2cidtd"
+},
+"Metro_Door_010": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Door_010.res",
+"save_to_file/path": "uid://cwl8t41hun2gd"
+},
+"Metro_Door_011": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Door_011.res",
+"save_to_file/path": "uid://cfidtyge6jei4"
+},
+"Metro_Door_012": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Door_012.res",
+"save_to_file/path": "uid://cqy5lguo833n2"
+},
+"Metro_Door_013": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Door_013.res",
+"save_to_file/path": "uid://b8dwdvjurxoof"
+},
+"Metro_Door_014": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Door_014.res",
+"save_to_file/path": "uid://cnntnes5sx462"
+},
+"Metro_Door_015": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Door_015.res",
+"save_to_file/path": "uid://cwfaevnwrxn06"
+},
+"Metro_Door_016": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Door_016.res",
+"save_to_file/path": "uid://bwb0rkviscahr"
+},
+"Metro_Door_A": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Door_A.res",
+"save_to_file/path": "uid://1e82i0khdpj2"
+},
+"Metro_Door_A_01": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Door_A_01.res",
+"save_to_file/path": "uid://bsbxg1vrj2q7f"
+},
+"Metro_Estruc": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Estruc.res",
+"save_to_file/path": "uid://5hvhqunlgeb7"
+},
+"Metro_Estruc_001": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Estruc_001.res",
+"save_to_file/path": "uid://bdcrkf5o8m7bu"
+},
+"Metro_Frame": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Frame.res",
+"save_to_file/path": "uid://b3kwqmcu1bsjv"
+},
+"Metro_Frame_01": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Frame_01.res",
+"save_to_file/path": "uid://6arjpxpldd5y"
+},
+"Metro_Glass": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Glass.res",
+"save_to_file/path": "uid://d4g06gfkblfrp"
+},
+"Metro_Glass_001": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Glass_001.res",
+"save_to_file/path": "uid://ccc6f7wr6sgq7"
+},
+"Metro_Glass_002": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Glass_002.res",
+"save_to_file/path": "uid://cp7gtp4wyvrbs"
+},
+"Metro_Glass_003": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Glass_003.res",
+"save_to_file/path": "uid://b3vc7cu1u1ksb"
+},
+"Metro_Glass_004": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Glass_004.res",
+"save_to_file/path": "uid://bx04wmxahkuj6"
+},
+"Metro_Glass_005": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Glass_005.res",
+"save_to_file/path": "uid://c04454a6oto2k"
+},
+"Metro_Glass_006": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Glass_006.res",
+"save_to_file/path": "uid://dtu0mjxidfdfg"
+},
+"Metro_Glass_007": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Glass_007.res",
+"save_to_file/path": "uid://rs4cs2r1ufi8"
+},
+"Metro_Glass_008": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Glass_008.res",
+"save_to_file/path": "uid://j64mi4s4indm"
+},
+"Metro_Glass_009": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Glass_009.res",
+"save_to_file/path": "uid://c04qa18dgcnq1"
+},
+"Metro_Glass_01": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Glass_01.res",
+"save_to_file/path": "uid://c7d8y5uk1ute7"
+},
+"Metro_Glass_010": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Glass_010.res",
+"save_to_file/path": "uid://bgkjpctus3cax"
+},
+"Metro_Glass_011": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Glass_011.res",
+"save_to_file/path": "uid://deaymde1ic8fy"
+},
+"Metro_Glass_012": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Glass_012.res",
+"save_to_file/path": "uid://dtno5hgjwc8pj"
+},
+"Metro_Poster_01": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Poster_01.res",
+"save_to_file/path": "uid://ukjax878iqfg"
+},
+"Metro_Poster_02": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Poster_02.res",
+"save_to_file/path": "uid://cwxtebpn5y3rv"
+},
+"Metro_Poster_03": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Poster_03.res",
+"save_to_file/path": "uid://b115ba2r1qd67"
+},
+"Metro_Poster_04": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Poster_04.res",
+"save_to_file/path": "uid://cvqegmgqr7wru"
+},
+"Metro_Poster_05": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Poster_05.res",
+"save_to_file/path": "uid://ctbu6scimueey"
+},
+"Metro_Poster_06": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Poster_06.res",
+"save_to_file/path": "uid://txvaryesdld7"
+},
+"Metro_Poster_07": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Poster_07.res",
+"save_to_file/path": "uid://dgwu327njum34"
+},
+"Metro_Poster_08": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Poster_08.res",
+"save_to_file/path": "uid://c6tpl4bwc306v"
+},
+"Metro_Railing": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Railing.res",
+"save_to_file/path": "uid://ibn3wg8mrd37"
+},
+"Metro_Railing_V": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Railing_V.res",
+"save_to_file/path": "uid://ddlxcw81pnbxg"
+},
+"Metro_Railing_V_001": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Railing_V_001.res",
+"save_to_file/path": "uid://cwdp3mq6257em"
+},
+"Metro_Railing_V_002": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Railing_V_002.res",
+"save_to_file/path": "uid://bgnjetshku8vc"
+},
+"Metro_Railing_V_003": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Railing_V_003.res",
+"save_to_file/path": "uid://ch1yndp7bbdc2"
+},
+"Metro_Railing_V_004": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Railing_V_004.res",
+"save_to_file/path": "uid://c17vgyfbc5bte"
+},
+"Metro_Railing_V_005": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Railing_V_005.res",
+"save_to_file/path": "uid://ch48hd31xcmr6"
+},
+"Metro_Railing_V_006": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Railing_V_006.res",
+"save_to_file/path": "uid://p3njrqjxueiy"
+},
+"Metro_Railing_V_007": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Railing_V_007.res",
+"save_to_file/path": "uid://d21viofjjcy0w"
+},
+"Metro_Railing_V_008": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Railing_V_008.res",
+"save_to_file/path": "uid://cqrra7pv6box4"
+},
+"Metro_Railing_V_009": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Railing_V_009.res",
+"save_to_file/path": "uid://c68148mdqmv6a"
+},
+"Metro_St": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_St.res",
+"save_to_file/path": "uid://bgiyxm4pf5kr0"
+},
+"Metro_St_01": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_St_01.res",
+"save_to_file/path": "uid://deoxtk8ggp3rh"
+},
+"Metro_St_02": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_St_02.res",
+"save_to_file/path": "uid://krjb8i5gawwb"
+},
+"Metro_St_03": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_St_03.res",
+"save_to_file/path": "uid://b2peudrkul2ay"
+},
+"Metro_Stairs": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Stairs.res",
+"save_to_file/path": "uid://cqsotadps7ksl"
+},
+"Metro_Stairs_01": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Stairs_01.res",
+"save_to_file/path": "uid://cuq2yk5te56io"
+},
+"Metro_Vending_machine": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_Vending_machine.res",
+"save_to_file/path": "uid://dhf8h58l71hox"
+},
+"Metro_automatic_ticket_gate": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_automatic_ticket_gate.res",
+"save_to_file/path": "uid://brlhjf43fvl8x"
+},
+"Metro_automatic_ticket_gate_D": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_automatic_ticket_gate_D.res",
+"save_to_file/path": "uid://gqx2qylt0400"
+},
+"Metro_light": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_light.res",
+"save_to_file/path": "uid://crkrak5yedkiy"
+},
+"Metro_metro_map": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_metro_map.res",
+"save_to_file/path": "uid://d2bv1kqwsk8ll"
+},
+"Metro_seats": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_seats.res",
+"save_to_file/path": "uid://cd1fx6lverkeq"
+},
+"Metro_seats_001": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_seats_001.res",
+"save_to_file/path": "uid://dj5tfmrwfab27"
+},
+"Metro_seats_002": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_seats_002.res",
+"save_to_file/path": "uid://b8nwdh7tt7ljv"
+},
+"Metro_seats_003": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_seats_003.res",
+"save_to_file/path": "uid://2fey6x8w7654"
+},
+"Metro_seats_004": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_seats_004.res",
+"save_to_file/path": "uid://b0f0q46vj6qiw"
+},
+"Metro_seats_005": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_seats_005.res",
+"save_to_file/path": "uid://dntt6xgywut6a"
+},
+"Metro_seats_006": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_seats_006.res",
+"save_to_file/path": "uid://bvso821k8ccl6"
+},
+"Metro_seats_007": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_seats_007.res",
+"save_to_file/path": "uid://cn7f4fa6i6rc2"
+},
+"Metro_subway_car": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_subway_car.res",
+"save_to_file/path": "uid://dgtirktt1xuok"
+},
+"Metro_ticket_machine": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_ticket_machine.res",
+"save_to_file/path": "uid://66511elx0sg"
+},
+"Metro_trash_can": {
+"generate/lightmap_uv": 0,
+"generate/lods": 0,
+"generate/shadow_meshes": 0,
+"lods/normal_merge_angle": 20.0,
+"save_to_file/enabled": true,
+"save_to_file/fallback_path": "res://Assets/Models/Metro/Meshes/Metro_trash_can.res",
+"save_to_file/path": "uid://bhgt7nwfhfo48"
+}
+}
+}
+gltf/naming_version=2
+gltf/embedded_image_handling=2

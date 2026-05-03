@@ -1,5 +1,8 @@
 # CREDITS
 
+## 3D Assets
+[Metro by Elbolilloduro](https://elbolilloduro.itch.io/metro)
+
 ## Audio
 [ambience, city, metro, preobrazhenskaya ploshad, subway, Moscow](https://freesound.org/people/AlexanderChe/sounds/727842/)
 [ambience, metro, wagon, train, interior, city, Moscow](https://freesound.org/people/AlexanderChe/sounds/363737/)
