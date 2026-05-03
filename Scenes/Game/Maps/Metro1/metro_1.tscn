@@ -8,10 +8,10 @@
 [ext_resource type="Script" uid="uid://cwu5cf7a0awcd" path="res://addons/func_godot/src/map/func_godot_map.gd" id="6_b3fhr"]
 [ext_resource type="PackedScene" uid="uid://24xx8rg8c7jb" path="res://Scenes/Player/Player.tscn" id="7_1u2wa"]
 [ext_resource type="Resource" uid="uid://bkhxcqsquw1yg" path="res://addons/func_godot/func_godot_default_map_settings.tres" id="7_cyw2y"]
-[ext_resource type="Material" uid="uid://c0nfc87pvu6h0" path="res://Assets/textures/dev/floor.tres" id="8_cyw2y"]
+[ext_resource type="Material" uid="uid://c0nfc87pvu6h0" path="res://Assets/Textures/dev/floor.tres" id="8_cyw2y"]
 [ext_resource type="PackedScene" uid="uid://dwb2s0dmhbkis" path="res://Scenes/Characters/NPCCharacter.tscn" id="8_svs80"]
 [ext_resource type="ArrayMesh" uid="uid://dgtirktt1xuok" path="res://Assets/Models/Metro/Meshes/Metro_subway_car.res" id="9_rrdri"]
-[ext_resource type="Material" uid="uid://c02p7shc1fy7o" path="res://Assets/textures/dev/wall.tres" id="9_tckt1"]
+[ext_resource type="Material" uid="uid://c02p7shc1fy7o" path="res://Assets/Textures/dev/wall.tres" id="9_tckt1"]
 [ext_resource type="Texture2D" uid="uid://cyg2snr1w5xw5" path="res://addons/func_godot/textures/default_texture.png" id="9_vvu7a"]
 [ext_resource type="PackedScene" uid="uid://v4iekc8b5cgx" path="res://Scenes/Game/Props/three_chair_bench.tscn" id="10_cfpln"]
 [ext_resource type="AudioStream" uid="uid://bpi1lxlloups3" path="res://Assets/Audio/Music/Los Del Rios - Macarena (8 Bit Raxlen Slice Chiptune Remix).mp3" id="10_sryx3"]
@@ -47,10 +47,11 @@ adjustment_contrast = 1.05
 adjustment_saturation = 0.9
 
 [sub_resource type="NavigationMesh" id="NavigationMesh_pnnlu"]
-vertices = PackedVector3Array(-1.5, 0.5, -49.25, 0.5, 0.5, -49.25, 0.75, 0.5, -51.5, -1.5, 0.5, -53.5, 22.25, 0.5, -51.5, 24.5, 0.5, -53.5, 22.5, 0.5, -49.25, 24.5, 0.5, -49.25, -1.5, 0.5, -0.5, 0.5, 0.5, -0.5, 22.5, 0.5, -24.75, 24.5, 0.5, -24.75, 47.5, 0.5, -22.75, 45.25, 0.5, -22.5, 45.25, 0.5, -20.5, 49.5, 0.5, -20.5, 49.5, 0.5, -46.5, 47.5, 0.5, -46.5, 24.75, 0.5, -22.5, 22.5, 0.5, -20.5)
-polygons = [PackedInt32Array(1, 0, 2), PackedInt32Array(2, 0, 3), PackedInt32Array(2, 3, 4), PackedInt32Array(4, 3, 5), PackedInt32Array(6, 4, 7), PackedInt32Array(7, 4, 5), PackedInt32Array(9, 8, 1), PackedInt32Array(1, 8, 0), PackedInt32Array(6, 7, 10), PackedInt32Array(10, 7, 11), PackedInt32Array(13, 12, 14), PackedInt32Array(14, 12, 15), PackedInt32Array(17, 16, 12), PackedInt32Array(12, 16, 15), PackedInt32Array(11, 18, 10), PackedInt32Array(10, 18, 19), PackedInt32Array(13, 14, 18), PackedInt32Array(18, 14, 19)]
+vertices = PackedVector3Array(-2, 0.5, -49, 1, 0.5, -49, 1, 0.5, -51, -2, 0.5, -54, 20, 0.5, -51, 20, 0.5, -54, 22, 0.5, -51, 25, 0.5, -54, 22, 0.5, -25, 25, 0.5, -25, 0.25, 0.5, -42.25, 1, 0.5, -42.5, -1.5, 0.5, -20.5, -2, 0.5, -20.5, -2, 0.5, 0, 0.25, 0.5, -41.75, -2, 0.5, -21.5, 1, 0.5, 0, -1.25, 0.5, -21.25, 1, 0.5, -41.5, 47, 0.5, -23, 45, 0.5, -23, 45, 0.5, -20, 50, 0.5, -20, 50, 0.5, -47, 47, 0.5, -47, 25, 0.5, -23, 22, 0.5, -20)
+polygons = [PackedInt32Array(1, 0, 2), PackedInt32Array(2, 0, 3), PackedInt32Array(4, 2, 5), PackedInt32Array(5, 2, 3), PackedInt32Array(4, 5, 6), PackedInt32Array(6, 5, 7), PackedInt32Array(8, 6, 9), PackedInt32Array(9, 6, 7), PackedInt32Array(11, 10, 1), PackedInt32Array(1, 10, 0), PackedInt32Array(14, 13, 12), PackedInt32Array(10, 15, 0), PackedInt32Array(0, 15, 16), PackedInt32Array(12, 18, 14), PackedInt32Array(14, 18, 17), PackedInt32Array(18, 16, 19), PackedInt32Array(19, 16, 15), PackedInt32Array(18, 19, 17), PackedInt32Array(21, 20, 22), PackedInt32Array(22, 20, 23), PackedInt32Array(25, 24, 20), PackedInt32Array(20, 24, 23), PackedInt32Array(9, 26, 8), PackedInt32Array(8, 26, 27), PackedInt32Array(21, 22, 26), PackedInt32Array(26, 22, 27)]
 geometry_parsed_geometry_type = 1
 geometry_collision_mask = 2
+agent_radius = 0.0
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_cyw2y"]
 albedo_texture = ExtResource("9_vvu7a")
