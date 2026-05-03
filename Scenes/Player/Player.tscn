@@ -9,6 +9,9 @@ size = Vector3(0.813, 1.5, 0.813)
 
 [node name="Player" type="CharacterBody3D" unique_id=759156532 node_paths=PackedStringArray("player_model")]
 script = ExtResource("1_h54ih")
+start_speed = 1.5
+max_speed = 5.0
+acceleration_time = 15.0
 player_model = NodePath("suit_male")
 
 [node name="Collision" type="CollisionShape3D" parent="." unique_id=1635607958]

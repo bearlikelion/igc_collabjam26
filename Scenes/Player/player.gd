@@ -7,18 +7,23 @@ extends SUCC
 
 const LANE_COUNT: int = 3
 
-@export var run_speed: float = 10.0
+@export var start_speed: float = 2.0
+@export var max_speed: float = 6.0
+## Time in seconds to accelerate from start_speed to max_speed.
+@export var acceleration_time: float = 5.0
 @export var player_model: Node3D
 
 signal lane_changed
 
 var _current_lane: int = 1
+var run_speed: float = 0.0
 
 @onready var navigation_agent: NavigationAgent3D = $NavigationAgent3D
 
 
 func _ready() -> void:
 	super()
+	run_speed = start_speed
 	if camera_mode == CameraMode.FIRST_PERSON:
 		player_model.hide()
 
@@ -31,12 +36,15 @@ func _unhandled_input(event: InputEvent) -> void:
 				else Input.MOUSE_MODE_CAPTURED
 
 
-func _physics_process(_delta: float) -> void:
+func _physics_process(delta: float) -> void:
 	# Movement is driven externally by the level script via set_position.
-	# Just handle input here.
+	# Here we only handle input and accelerate run_speed toward max_speed.
 	if game_state == GameState.DISABLED or not _can_move():
 		return
 	_handle_lane_input()
+	if run_speed < max_speed and acceleration_time > 0.0:
+		var rate: float = (max_speed - start_speed) / acceleration_time
+		run_speed = min(max_speed, run_speed + rate * delta)
 
 
 func _handle_lane_input() -> void:
