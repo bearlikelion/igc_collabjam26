@@ -7,6 +7,10 @@ extends SUCC
 
 const LANE_COUNT: int = 3
 
+signal lane_changed
+signal subway_shuffle_failed
+signal subway_shuffle_completed(direction: int)
+
 @export var start_speed: float = 2.0
 @export var max_speed: float = 6.0
 ## Time in seconds to accelerate from start_speed to max_speed.
@@ -19,9 +23,10 @@ const LANE_COUNT: int = 3
 @export_range(0.0, 6.0, 0.05, "suffix:steps/m") var headbob_steps_per_meter: float = 0.65
 @export_range(0.0, 30.0, 0.1) var headbob_smoothing: float = 12.0
 
-signal lane_changed
-signal subway_shuffle_failed
-signal subway_shuffle_completed(direction: int)
+@export_group("Subway Shuffle")
+@export var shuffle_choice_time: float = 0.85
+@export var shuffle_recovery_time: float = 1.0
+@export var shuffle_knockback_distance: float = 1.0
 
 var _current_lane: int = 1
 var run_speed: float = 0.0
@@ -31,10 +36,7 @@ var _shuffle_active: bool = false
 var _shuffle_time_left: float = 0.0
 var _recovery_time_left: float = 0.0
 
-@export_group("Subway Shuffle")
-@export var shuffle_choice_time: float = 0.85
-@export var shuffle_recovery_time: float = 1.0
-@export var shuffle_knockback_distance: float = 1.0
+@onready var shuffle_cast: RayCast3D = $ShuffleCast
 
 
 # Initialize speed and visual state.

@@ -21,6 +21,7 @@ var _path_index: int = 0
 
 # Capture the player's start position and begin navigation.
 func _ready() -> void:
+	add_to_group("npc")
 	navigation_agent.target_desired_distance = arrival_distance
 	navigation_agent.path_desired_distance = arrival_distance
 	_set_target_from_player.call_deferred()
