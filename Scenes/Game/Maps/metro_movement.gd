@@ -59,6 +59,7 @@ func _ready() -> void:
 	if Engine.is_editor_hint():
 		return
 	_player.lane_changed.connect(_on_lane_changed)
+	_player.subway_shuffle_failed.connect(_on_subway_shuffle_failed)
 	_wait_for_nav.call_deferred()
 
 
@@ -468,6 +469,8 @@ func _physics_process(delta: float) -> void:
 		return
 	if _segment_index >= _corners.size() - 1:
 		return
+	if _player.is_runner_paused():
+		return
 
 	_distance_along += _player.run_speed * delta
 
@@ -576,3 +579,24 @@ func _apply_yaw(delta: float) -> void:
 	var target_yaw: float = atan2(-fwd.x, -fwd.z)
 	var turn_weight: float = clamp(TURN_WEIGHT * delta, 0.0, 1.0)
 	_player.rotation.y = lerp_angle(_player.rotation.y, target_yaw, turn_weight)
+
+
+# Move the runner back after a failed subway shuffle collision.
+func _on_subway_shuffle_failed() -> void:
+	_rewind_distance(_player.shuffle_knockback_distance)
+	_apply_position()
+
+
+# Rewind along the current lane path by the requested distance.
+func _rewind_distance(distance: float) -> void:
+	var remaining: float = max(distance, 0.0)
+	while remaining > 0.0 and _segment_index >= 0:
+		if _distance_along >= remaining:
+			_distance_along -= remaining
+			return
+		remaining -= _distance_along
+		if _segment_index <= 0:
+			_distance_along = 0.0
+			return
+		_segment_index -= 1
+		_distance_along = _get_segment_length()

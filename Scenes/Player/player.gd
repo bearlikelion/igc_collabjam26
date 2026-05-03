@@ -11,7 +11,7 @@ const LANE_COUNT: int = 3
 @export var max_speed: float = 6.0
 ## Time in seconds to accelerate from start_speed to max_speed.
 @export var acceleration_time: float = 5.0
-@export var player_model: Node3D
+@export var player_model: CharacterVisual
 
 @export_group("Headbob")
 @export var enable_headbob: bool = true
@@ -20,19 +20,32 @@ const LANE_COUNT: int = 3
 @export_range(0.0, 30.0, 0.1) var headbob_smoothing: float = 12.0
 
 signal lane_changed
+signal subway_shuffle_failed
+signal subway_shuffle_completed(direction: int)
 
 var _current_lane: int = 1
 var run_speed: float = 0.0
 var _headbob_phase: float = 0.0
 var _headbob_offset: float = 0.0
+var _shuffle_active: bool = false
+var _shuffle_time_left: float = 0.0
+var _recovery_time_left: float = 0.0
+
+@export_group("Subway Shuffle")
+@export var shuffle_choice_time: float = 0.85
+@export var shuffle_recovery_time: float = 1.0
+@export var shuffle_knockback_distance: float = 1.0
 
 
 # Initialize speed and visual state.
 func _ready() -> void:
 	super()
+	add_to_group("player")
 	run_speed = start_speed
 	if camera_mode == CameraMode.FIRST_PERSON and player_model != null:
 		player_model.hide()
+	if player_model != null:
+		player_model.set_move_speed(run_speed)
 
 
 # Update camera effects after inherited camera smoothing.
@@ -56,13 +69,39 @@ func _physics_process(delta: float) -> void:
 	# Here we only handle input and accelerate run_speed toward max_speed.
 	if game_state == GameState.DISABLED or not _can_move():
 		return
+	_update_shuffle(delta)
+	if _shuffle_active or _recovery_time_left > 0.0:
+		return
 	_handle_lane_input()
 	_update_run_speed(delta)
+	if player_model != null:
+		player_model.set_move_speed(run_speed)
 
 
 # Return the active lane index for external movement controllers.
 func get_current_lane() -> int:
 	return _current_lane
+
+
+# Return whether the route controller should pause forward travel.
+func is_runner_paused() -> bool:
+	return _shuffle_active or _recovery_time_left > 0.0 or not _can_move()
+
+
+# Start a timed left/right dodge prompt.
+func start_subway_shuffle() -> void:
+	if _shuffle_active or _recovery_time_left > 0.0:
+		return
+	_shuffle_active = true
+	_shuffle_time_left = shuffle_choice_time
+	run_speed = max(start_speed, run_speed * 0.5)
+
+
+# Kill the player and play the death state.
+func die() -> void:
+	set_game_state(GameState.DISABLED)
+	if player_model != null:
+		player_model.play_die()
 
 
 # Accelerate toward max speed.
@@ -97,6 +136,52 @@ func _handle_lane_input() -> void:
 		_set_current_lane(_current_lane + 1)
 
 
+# Resolve the timed subway shuffle prompt.
+func _update_shuffle(delta: float) -> void:
+	if _recovery_time_left > 0.0:
+		_recovery_time_left = max(0.0, _recovery_time_left - delta)
+		if _recovery_time_left <= 0.0 and player_model != null:
+			player_model.play_walk()
+		return
+
+	if not _shuffle_active:
+		return
+
+	if Input.is_action_just_pressed("left"):
+		_complete_subway_shuffle(-1)
+		return
+	if Input.is_action_just_pressed("right"):
+		_complete_subway_shuffle(1)
+		return
+
+	_shuffle_time_left -= delta
+	if _shuffle_time_left <= 0.0:
+		_fail_subway_shuffle()
+
+
+# Apply a successful left/right shuffle choice.
+func _complete_subway_shuffle(direction: int) -> void:
+	_shuffle_active = false
+	var next_lane: int = _current_lane + direction
+	if next_lane >= 0 and next_lane < LANE_COUNT:
+		_set_current_lane(next_lane)
+	if direction < 0 and player_model != null:
+		player_model.play_interact_left()
+	elif direction > 0 and player_model != null:
+		player_model.play_interact_right()
+	subway_shuffle_completed.emit(direction)
+
+
+# Handle a missed shuffle choice.
+func _fail_subway_shuffle() -> void:
+	_shuffle_active = false
+	_recovery_time_left = shuffle_recovery_time
+	run_speed = start_speed
+	if player_model != null:
+		player_model.play_recover()
+	subway_shuffle_failed.emit()
+
+
 # Update the lane and notify listeners.
 func _set_current_lane(next_lane: int) -> void:
 	var clamped_lane: int = clampi(next_lane, 0, LANE_COUNT - 1)
@@ -114,6 +199,11 @@ func _gather_movement_input() -> void:
 	wish_sprint = false
 	wish_jump = false
 	wish_crouch = false
+
+
+# Prevent inherited movement while the runner is resolving an encounter.
+func _can_move() -> bool:
+	return game_state == GameState.ACTIVE
 
 
 # Apply first-person pitch while external code drives translation.

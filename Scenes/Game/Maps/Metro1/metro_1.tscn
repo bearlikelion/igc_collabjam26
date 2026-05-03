@@ -7,6 +7,7 @@
 [ext_resource type="Script" uid="uid://bd83xckma828n" path="res://Scenes/Game/Maps/metro_sounds.gd" id="5_ug0ud"]
 [ext_resource type="PackedScene" uid="uid://btcjwh6fye4ui" path="res://Scenes/Game/Maps/Metro1/test_map.tscn" id="6_4ntj2"]
 [ext_resource type="PackedScene" uid="uid://24xx8rg8c7jb" path="res://Scenes/Player/Player.tscn" id="7_1u2wa"]
+[ext_resource type="PackedScene" uid="uid://dwb2s0dmhbkis" path="res://Scenes/Characters/NPCCharacter.tscn" id="8_svs80"]
 
 [sub_resource type="AudioStreamRandomizer" id="AudioStreamRandomizer_et2qy"]
 streams_count = 3
@@ -62,15 +63,16 @@ navigation_mesh = SubResource("NavigationMesh_pnnlu")
 
 [node name="FuncGodotMap" parent="NavigationRegion3D" unique_id=402080530 instance=ExtResource("6_4ntj2")]
 
-[node name="Player" parent="NavigationRegion3D" unique_id=759156532 instance=ExtResource("7_1u2wa")]
-unique_name_in_owner = true
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0, -1)
-enable_bhop = false
-enable_surf = false
-
 [node name="Finish" type="Marker3D" parent="NavigationRegion3D" unique_id=299558328]
 unique_name_in_owner = true
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 46, 1, -21.5)
+
+[node name="Player" parent="NavigationRegion3D" unique_id=759156532 instance=ExtResource("7_1u2wa")]
+unique_name_in_owner = true
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0, -1)
+
+[node name="NPCCharacter" parent="NavigationRegion3D" unique_id=1919134681 instance=ExtResource("8_svs80")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0, -52)
 
 [node name="L" type="Label3D" parent="." unique_id=1268959272]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 2, -53.5)

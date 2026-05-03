@@ -2,17 +2,17 @@
 
 [ext_resource type="Script" uid="uid://dvjvdkbrutgub" path="res://Scenes/Player/player.gd" id="1_h54ih"]
 [ext_resource type="Script" uid="uid://cie81viouwiyw" path="res://addons/SUCC/scripts/succ_camera.gd" id="3_rcfhv"]
-[ext_resource type="PackedScene" uid="uid://d0xqrivp0c4i7" path="res://Assets/Models/Characters/character-male-d.glb" id="4_ude3g"]
+[ext_resource type="PackedScene" uid="uid://c1sd4qbsm8bge" path="res://Scenes/Characters/CharacterVisual.tscn" id="4_7mlbe"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_1"]
 size = Vector3(0.813, 1.5, 0.813)
 
-[node name="Player" type="CharacterBody3D" unique_id=759156532 node_paths=PackedStringArray("player_model")]
+[node name="Player" type="CharacterBody3D" unique_id=759156532 node_paths=PackedStringArray("player_model") groups=["player"]]
 script = ExtResource("1_h54ih")
 start_speed = 0.5
 max_speed = 3.0
 acceleration_time = 10.0
-player_model = NodePath("suit_male")
+player_model = NodePath("CharacterVisual")
 
 [node name="Collision" type="CollisionShape3D" parent="." unique_id=1635607958]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.75, 0)
@@ -27,10 +27,13 @@ script = ExtResource("3_rcfhv")
 current = true
 fov = 90.0
 
-[node name="suit_male" parent="." unique_id=2082475865 instance=ExtResource("4_ude3g")]
-transform = Transform3D(-2, 0, 3.019916e-07, 0, 2, 0, -3.019916e-07, 0, -2, 0, 0, 0)
-
 [node name="NavigationAgent3D" type="NavigationAgent3D" parent="." unique_id=899641710]
 debug_enabled = true
 debug_path_custom_color = Color(0, 0, 1, 1)
 debug_path_custom_point_size = 50.0
+
+[node name="CharacterVisual" parent="." unique_id=876488184 instance=ExtResource("4_7mlbe")]
+
+[node name="ShuffleCast" type="RayCast3D" parent="." unique_id=1077217293]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+target_position = Vector3(0, 0, -3)

@@ -1,0 +1,19 @@
+[gd_scene format=3 uid="uid://dwb2s0dmhbkis"]
+
+[ext_resource type="Script" uid="uid://bt3o6n0cmfctv" path="res://Scenes/Characters/npc_character.gd" id="1_npc"]
+[ext_resource type="PackedScene" uid="uid://c1sd4qbsm8bge" path="res://Scenes/Characters/CharacterVisual.tscn" id="2_visual"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_npc"]
+size = Vector3(0.813, 1.5, 0.813)
+
+[node name="NPCCharacter" type="CharacterBody3D" unique_id=1919134681 node_paths=PackedStringArray("visual")]
+script = ExtResource("1_npc")
+visual = NodePath("CharacterVisual")
+
+[node name="Collision" type="CollisionShape3D" parent="." unique_id=1818591572]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.75, 0)
+shape = SubResource("BoxShape3D_npc")
+
+[node name="CharacterVisual" parent="." unique_id=876488184 instance=ExtResource("2_visual")]
+
+[node name="NavigationAgent3D" type="NavigationAgent3D" parent="." unique_id=1838137378]
