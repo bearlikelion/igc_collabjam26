@@ -1,5 +1,5 @@
 @tool
-class_name MovementTest
+class_name MetroMovement
 extends Node3D
 
 # Drives the player parametrically along nav path segments.
