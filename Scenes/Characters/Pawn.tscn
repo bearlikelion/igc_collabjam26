@@ -10,9 +10,6 @@ size = Vector3(0.813, 1.5, 0.813)
 [node name="Pawn" type="CharacterBody3D" unique_id=71114608 node_paths=PackedStringArray("visual")]
 script = ExtResource("1_pawn")
 acceleration_time = 2.0
-avoid_obstacles = true
-obstacle_lookahead = 2.0
-avoidance_cooldown = 2.0
 visual = NodePath("CharacterVisual")
 
 [node name="Collision" type="CollisionShape3D" parent="." unique_id=184064025]

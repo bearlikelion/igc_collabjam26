@@ -1,6 +1,7 @@
-[gd_resource type="Resource" script_class="AIBrain" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="AIBrain" format=3 uid="uid://ba3m8vv7l3cu7"]
 
-[ext_resource type="Script" path="res://Scenes/Characters/Brains/ai_brain.gd" id="1_brain"]
+[ext_resource type="Script" uid="uid://di4oo53chm4l7" path="res://Scenes/Characters/Brains/ai_brain.gd" id="1_brain"]
 
 [resource]
 script = ExtResource("1_brain")
+destination_group = &"start"

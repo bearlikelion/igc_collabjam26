@@ -19,9 +19,10 @@
 [ext_resource type="PackedScene" uid="uid://by5hvbonr0euy" path="res://Scenes/Game/Props/oh_light.tscn" id="11_hwpev"]
 [ext_resource type="Material" uid="uid://bmti88ony01qi" path="res://Assets/Textures/dev/bumps.tres" id="11_tckt1"]
 [ext_resource type="Resource" path="res://Scenes/Characters/Brains/PlayerBrain.tres" id="12_pbrn"]
-[ext_resource type="Resource" path="res://Scenes/Characters/Brains/AIBrain.tres" id="13_aibrn"]
+[ext_resource type="Resource" uid="uid://ba3m8vv7l3cu7" path="res://Scenes/Characters/Brains/AIBrain.tres" id="13_aibrn"]
 [ext_resource type="Script" uid="uid://b0kdqdyh2br7w" path="res://Scenes/Game/Maps/Metro1/end_camera.gd" id="13_akkrs"]
 [ext_resource type="Shader" uid="uid://t6b0t5n4jabv" path="res://Shaders/cctv.gdshader" id="14_0rra6"]
+[ext_resource type="Script" uid="uid://di4oo53chm4l7" path="res://Scenes/Characters/Brains/ai_brain.gd" id="19_m7ql2"]
 
 [sub_resource type="AudioStreamRandomizer" id="AudioStreamRandomizer_et2qy"]
 streams_count = 3
@@ -241,6 +242,10 @@ indices = PackedInt32Array(0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7, 8, 9, 10, 8, 10, 
 
 [sub_resource type="ConcavePolygonShape3D" id="ConcavePolygonShape3D_s4vao"]
 data = PackedVector3Array(-18, 0.5, -24, -21, 0.5, -24, -21, -0.5, -24, -18, 0.5, -24, -21, -0.5, -24, -18, -0.5, -24, -21, -0.5, 27, -21, -0.5, -24, -21, 0.5, -24, -21, -0.5, 27, -21, 0.5, -24, -21, 0.5, 27, -21, -0.5, 27, -18, -0.5, 27, -18, -0.5, -24, -21, -0.5, 27, -18, -0.5, -24, -21, -0.5, -24, -21, 0.5, 27, -21, 0.5, -24, -18, 0.5, -24, -21, 0.5, 27, -18, 0.5, -24, -18, 0.5, 27, -18, 0.5, 27, -18, 0.5, -24, -18, -0.5, -24, -18, 0.5, 27, -18, -0.5, -24, -18, -0.5, 27, -18, -0.5, 27, -21, -0.5, 27, -21, 0.5, 27, -18, -0.5, 27, -21, 0.5, 27, -18, 0.5, 27, 28, 0.5, -27, -31, 0.5, -27, -31, -0.5, -27, 28, 0.5, -27, -31, -0.5, -27, 28, -0.5, -27, -31, -0.5, -24, -31, -0.5, -27, -31, 0.5, -27, -31, -0.5, -24, -31, 0.5, -27, -31, 0.5, -24, -31, -0.5, -24, 28, -0.5, -24, 28, -0.5, -27, -31, -0.5, -24, 28, -0.5, -27, -31, -0.5, -27, -31, 0.5, -24, -31, 0.5, -27, 28, 0.5, -27, -31, 0.5, -24, 28, 0.5, -27, 28, 0.5, -24, 28, 0.5, -24, 28, 0.5, -27, 28, -0.5, -27, 28, 0.5, -24, 28, -0.5, -27, 28, -0.5, -24, 28, -0.5, -24, -31, -0.5, -24, -31, 0.5, -24, 28, -0.5, -24, -31, 0.5, -24, 28, 0.5, -24, 6, 0.5, -24, 3, 0.5, -24, 3, -0.5, -24, 6, 0.5, -24, 3, -0.5, -24, 6, -0.5, -24, 3, -0.5, 7, 3, -0.5, -24, 3, 0.5, -24, 3, -0.5, 7, 3, 0.5, -24, 3, 0.5, 7, 3, -0.5, 7, 6, -0.5, 7, 6, -0.5, -24, 3, -0.5, 7, 6, -0.5, -24, 3, -0.5, -24, 3, 0.5, 7, 3, 0.5, -24, 6, 0.5, -24, 3, 0.5, 7, 6, 0.5, -24, 6, 0.5, 7, 6, 0.5, 7, 6, 0.5, -24, 6, -0.5, -24, 6, 0.5, 7, 6, -0.5, -24, 6, -0.5, 7, 6, -0.5, 7, 3, -0.5, 7, 3, 0.5, 7, 6, -0.5, 7, 3, 0.5, 7, 6, 0.5, 7, 28, 0.5, 4, 6, 0.5, 4, 6, -0.5, 4, 28, 0.5, 4, 6, -0.5, 4, 28, -0.5, 4, 6, -0.5, 7, 6, -0.5, 4, 6, 0.5, 4, 6, -0.5, 7, 6, 0.5, 4, 6, 0.5, 7, 6, -0.5, 7, 28, -0.5, 7, 28, -0.5, 4, 6, -0.5, 7, 28, -0.5, 4, 6, -0.5, 4, 6, 0.5, 7, 6, 0.5, 4, 28, 0.5, 4, 6, 0.5, 7, 28, 0.5, 4, 28, 0.5, 7, 28, 0.5, 7, 28, 0.5, 4, 28, -0.5, 4, 28, 0.5, 7, 28, -0.5, 4, 28, -0.5, 7, 28, -0.5, 7, 6, -0.5, 7, 6, 0.5, 7, 28, -0.5, 7, 6, 0.5, 7, 28, 0.5, 7, 31, 0.5, -27, 28, 0.5, -27, 28, -0.5, -27, 31, 0.5, -27, 28, -0.5, -27, 31, -0.5, -27, 28, -0.5, 7, 28, -0.5, -27, 28, 0.5, -27, 28, -0.5, 7, 28, 0.5, -27, 28, 0.5, 7, 28, -0.5, 7, 31, -0.5, 7, 31, -0.5, -27, 28, -0.5, 7, 31, -0.5, -27, 28, -0.5, -27, 28, 0.5, 7, 28, 0.5, -27, 31, 0.5, -27, 28, 0.5, 7, 31, 0.5, -27, 31, 0.5, 7, 31, -0.5, 7, 28, -0.5, 7, 28, 0.5, 7, 31, -0.5, 7, 28, 0.5, 7, 31, 0.5, 7, 31, 0.5, 7, 31, 0.5, -27, 31, -0.5, -27, 31, 0.5, 7, 31, -0.5, -27, 31, -0.5, 7)
+
+[sub_resource type="Resource" id="Resource_lnewu"]
+script = ExtResource("19_m7ql2")
+metadata/_custom_type_script = "uid://di4oo53chm4l7"
 
 [sub_resource type="QuadMesh" id="QuadMesh_kvorr"]
 
@@ -465,6 +470,10 @@ shape = SubResource("ConcavePolygonShape3D_s4vao")
 unique_name_in_owner = true
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 48.81285, 0.41481966, -21.5)
 
+[node name="Start" type="Marker3D" parent="NavigationRegion3D" unique_id=1573585237 groups=["start"]]
+unique_name_in_owner = true
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.41108003, 0.22435647, -0.37636137)
+
 [node name="Player" parent="NavigationRegion3D" unique_id=759156532 instance=ExtResource("8_svs80")]
 unique_name_in_owner = true
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0, -1)
@@ -476,7 +485,7 @@ shuffle_knockback_distance = 1.5
 
 [node name="NPCCharacter" parent="NavigationRegion3D" unique_id=1919134681 instance=ExtResource("8_svs80")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0, -24)
-brain = ExtResource("13_aibrn")
+brain = SubResource("Resource_lnewu")
 
 [node name="NPCCharacter2" parent="NavigationRegion3D" unique_id=2133715270 instance=ExtResource("8_svs80")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0, -39)

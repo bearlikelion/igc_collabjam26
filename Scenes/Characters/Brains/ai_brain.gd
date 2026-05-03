@@ -1,14 +1,31 @@
 class_name AIBrain
 extends Brain
 
-# AI brain. Drives an NPC's lane decisions and shuffle telegraph. Reacts to
-# Pawn signals and ticks msec-timestamped timers via physics_tick (no Timer
-# nodes — Brain is a Resource and can't have child nodes).
+# AI brain. Owns all rail-movement intent for an NPC: destination, speed, lane
+# avoidance. MetroMovement queries these via the Brain virtual interface on Pawn.
+# Timer-driven lane decisions tick through physics_tick (no Timer nodes — Brain
+# is a Resource and cannot have child nodes).
 
+@export_group("Rail")
+## Group name of the node this NPC walks toward. "finish" for same-direction
+## runners, "player" for oncoming traffic. Resolved to a Node3D at bind time.
+@export var destination_group: StringName = &"finish"
+@export var spawn_distance: float = 0.0
+@export var move_speed: float = 1.8
+@export_range(0.0, 1.0, 0.01) var move_speed_variance: float = 0.3
+
+@export_group("Lane Behavior")
+@export var avoid_obstacles: bool = true
+@export var obstacle_lookahead: float = 2.0
+@export var avoidance_cooldown: float = 2.0
+
+@export_group("Random Lane")
 @export var random_lane_changes: bool = false
 @export_range(0.5, 30.0, 0.5) var random_lane_interval_min: float = 3.0
 @export_range(0.5, 30.0, 0.5) var random_lane_interval_max: float = 7.0
 
+var destination: Node3D
+var _actual_move_speed: float = 0.0
 var _next_random_lane_msec: int = 0
 var _avoidance_until_msec: int = 0
 
@@ -17,6 +34,8 @@ var _avoidance_until_msec: int = 0
 
 func _on_bound() -> void:
 	pawn.add_to_group("npc")
+	destination = pawn.get_tree().get_first_node_in_group(destination_group)
+	_roll_speed()
 	if random_lane_changes:
 		_next_random_lane_msec = Time.get_ticks_msec() + int(_next_random_lane_delay() * 1000.0)
 
@@ -45,18 +64,47 @@ func _on_encounter_detected(other: Pawn, _distance: float) -> void:
 	var clear_lane: int = _pick_random_other_lane(pawn.get_current_lane())
 	if clear_lane != pawn.get_current_lane():
 		pawn.set_current_lane(clear_lane)
-		_avoidance_until_msec = Time.get_ticks_msec() + int(pawn.avoidance_cooldown * 1000.0)
+		_avoidance_until_msec = Time.get_ticks_msec() + int(avoidance_cooldown * 1000.0)
 
 
 func _on_shuffle_began(_other: Pawn, _other_telegraph: int, _deadline_msec: int) -> void:
-	# Stage 3 baseline: roll a random direction. Stage 4 archetypes will
-	# override this for variety (lean-toward-player, late-lean, feint, etc.)
+	# Roll a random direction. Future archetypes can override for variety.
 	var direction: int = -1 if randf() < 0.5 else 1
 	pawn.lean(direction)
 	pawn.set_shuffle_telegraph(direction)
 
 
+# --- Brain virtuals -------------------------------------------------------
+
+func get_destination() -> Node3D:
+	return destination
+
+
+func get_move_speed() -> float:
+	if _actual_move_speed <= 0.0:
+		_roll_speed()
+	return _actual_move_speed
+
+
+func get_spawn_distance() -> float:
+	return spawn_distance
+
+
+func should_avoid_obstacles() -> bool:
+	return avoid_obstacles
+
+
+func get_obstacle_lookahead() -> float:
+	return obstacle_lookahead
+
+
+
 # --- Helpers --------------------------------------------------------------
+
+func _roll_speed() -> void:
+	var jitter: float = (randf() * 2.0 - 1.0) * move_speed_variance
+	_actual_move_speed = maxf(0.1, move_speed * (1.0 + jitter))
+
 
 func _pick_random_other_lane(current: int) -> int:
 	if Pawn.LANE_COUNT <= 1:

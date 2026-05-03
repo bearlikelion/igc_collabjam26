@@ -34,7 +34,6 @@ const LANE_COUNT: int = 3
 const START_LANE: int = LANE_COUNT / 2
 
 enum GameState { ACTIVE, FROZEN, DISABLED }
-enum RailDirection { FORWARD, REVERSE }
 
 # --- Signals: Pawn → Brain (results out) -----------------------------------
 
@@ -102,19 +101,6 @@ signal game_state_changed(old_state: int, new_state: int)
 @export var shuffle_get_up_time: float = 1.0
 ## Distance to push the pawn away from the impact origin on knockdown.
 @export var shuffle_knockback_distance: float = 2.0
-
-@export_group("Rail")
-@export var rail_direction: RailDirection = RailDirection.FORWARD
-@export var rail_start_distance: float = 0.0
-@export var rail_speed: float = 1.8
-@export_range(0.0, 1.0, 0.01) var rail_speed_variance: float = 0.3
-
-@export_group("Lane Behavior")
-@export var avoid_obstacles: bool = false
-@export var obstacle_lookahead: float = 2.5
-## Seconds after an avoidance lane change before AI brains will swerve again.
-## Read by AIBrain off its bound pawn.
-@export var avoidance_cooldown: float = 0.6
 
 @export_group("Mouse")
 @export var mouse_sensitivity: float = 3.0
@@ -184,6 +170,10 @@ var _shuffle_lane_elapsed: float = 0.0
 var _parked_at_finish: bool = false
 var _parked_offset: Vector3 = Vector3.ZERO
 
+# Rail direction — set by MetroMovement at registration based on destination
+# geometry. True = same direction as player (toward finish end of rail).
+var _is_forward_runner: bool = true
+
 # Camera-driven state (Pawn owns these — the camera is a "sense").
 var _headbob_phase: float = 0.0
 var _headbob_offset: float = 0.0
@@ -193,7 +183,6 @@ var _shuffle_previous_time_scale: float = 1.0
 
 var _movement_blocked: bool = false
 var _goal_reached: bool = false
-var _actual_rail_speed: float = 0.0
 
 
 func _ready() -> void:
@@ -377,18 +366,11 @@ func get_lane_position() -> float:
 	return _lane_position
 
 
-func get_rail_direction() -> int:
-	return rail_direction
-
-
-func get_rail_start_distance() -> float:
-	return rail_start_distance
-
 
 func get_rail_speed() -> float:
-	if _actual_rail_speed <= 0.0:
-		_roll_actual_rail_speed()
-	return _actual_rail_speed
+	if brain == null:
+		return 0.0
+	return brain.get_move_speed()
 
 
 func get_shuffle_telegraph() -> int:
@@ -400,7 +382,11 @@ func is_runner_paused() -> bool:
 
 
 func is_routing_to_finish_point() -> bool:
-	return rail_direction == RailDirection.FORWARD
+	return _is_forward_runner
+
+
+func set_rail_forward(value: bool) -> void:
+	_is_forward_runner = value
 
 
 func is_shuffle_active() -> bool:
@@ -408,11 +394,15 @@ func is_shuffle_active() -> bool:
 
 
 func should_avoid_obstacles() -> bool:
-	return avoid_obstacles
+	if brain == null:
+		return false
+	return brain.should_avoid_obstacles()
 
 
 func get_obstacle_lookahead() -> float:
-	return obstacle_lookahead
+	if brain == null:
+		return 0.0
+	return brain.get_obstacle_lookahead()
 
 
 func reach_goal() -> void:
@@ -694,11 +684,6 @@ func _update_run_speed(delta: float) -> void:
 	if run_speed < max_speed and acceleration_time > 0.0:
 		var rate: float = (max_speed - start_speed) / acceleration_time
 		run_speed = min(max_speed, run_speed + rate * delta)
-
-
-func _roll_actual_rail_speed() -> void:
-	var jitter: float = (randf() * 2.0 - 1.0) * rail_speed_variance
-	_actual_rail_speed = maxf(0.1, rail_speed * (1.0 + jitter))
 
 
 # --- Side-step ------------------------------------------------------------

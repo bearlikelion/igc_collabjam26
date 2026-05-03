@@ -105,3 +105,31 @@ func _on_obstacle_detected(_other: Pawn, _distance: float, _in_lane: int) -> voi
 
 func _on_goal_reached() -> void:
 	pass
+
+
+# --- Virtual interface: movement intent (queried by MetroMovement via Pawn) -
+
+# The node this pawn is walking toward. AIBrain returns the authored export;
+# PlayerBrain returns null (player speed is owned by Pawn.run_speed).
+func get_destination() -> Node3D:
+	return null
+
+
+# Movement speed in m/s. AIBrain returns jitter-rolled move_speed.
+func get_move_speed() -> float:
+	return 0.0
+
+
+# Distance along the rail at which this pawn should spawn.
+func get_spawn_distance() -> float:
+	return 0.0
+
+
+# Whether to swerve away from obstacles ahead.
+func should_avoid_obstacles() -> bool:
+	return false
+
+
+# Lookahead distance (m) for obstacle sampling.
+func get_obstacle_lookahead() -> float:
+	return 0.0
