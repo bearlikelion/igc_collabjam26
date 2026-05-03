@@ -21,7 +21,17 @@ extends Node3D
 #   so each lane reaches the center of its L/M/R tile before turning.
 
 const LANE_OFFSETS: Array[float] = [-1.0, 0.0, 1.0]
+const AXIS_TOLERANCE: float = 0.5
 const CORNER_ANGLE_THRESHOLD: float = 0.95
+const DIAGONAL_TURN_RATIO: float = 0.35
+const MIN_SEGMENT_LENGTH: float = 2.0
+const MERGE_DISTANCE: float = 1.5
+const CENTER_SAMPLE_DISTANCE: float = 2.0
+const MIN_CENTER_SAMPLE_DISTANCE: float = 0.25
+const CENTER_WALK_STEP: float = 0.1
+const CENTER_MAX_WALK: float = 8.0
+const CENTER_TOLERANCE: float = 0.05
+const TURN_WEIGHT: float = 10.0
 
 # Debug visualization
 @export var debug_show_corners: bool = true
@@ -44,6 +54,7 @@ var _segment_index: int = 0
 var _distance_along: float = 0.0
 
 
+# Start runtime path setup.
 func _ready() -> void:
 	if Engine.is_editor_hint():
 		return
@@ -51,29 +62,22 @@ func _ready() -> void:
 	_wait_for_nav.call_deferred()
 
 
+# Wait for the navigation map, then cache the processed path.
 func _wait_for_nav() -> void:
 	print("Wait for nav")
 	var params: NavigationPathQueryParameters3D = NavigationPathQueryParameters3D.new()
 	var result: NavigationPathQueryResult3D = NavigationPathQueryResult3D.new()
+	var map_rid: RID = get_world_3d().navigation_map
 	while true:
 		await get_tree().physics_frame
-		params.map = get_world_3d().navigation_map
+		params.map = map_rid
 		params.start_position = _player.global_position
 		params.target_position = _finish.global_position
 		NavigationServer3D.query_path(params, result)
 		if result.path.size() >= 2:
 			break
-	_corners = _simplify_path(result.path)
-	_corners = _snap_to_axes(_corners)
-	_corners = _collapse_short_segments(_corners)
-	_corners = _center_corners_on_corridor(_corners, get_world_3d().navigation_map)
-	_corners = _snap_to_axes(_corners)
-	_corners = _merge_close_corners(_corners)
-	_pin_path_endpoints(_player.global_position, _finish.global_position)
-	_corners = _orthogonalize_preserving_endpoints(_corners)
-	print("=== CORNERS (%s) ===" % _corners.size())
-	for i: int in range(_corners.size()):
-		print("  [%s] %s" % [i, _corners[i]])
+	_corners = _build_corners(result.path, _player.global_position, _finish.global_position, map_rid)
+	_print_corners("===")
 	if debug_show_corners:
 		_spawn_debug_markers()
 	_ready_state = true
@@ -131,6 +135,7 @@ func _spawn_debug_markers() -> void:
 			root.add_child(lane_line)
 
 
+# Build a debug line mesh.
 func _make_line(from: Vector3, to: Vector3, color: Color) -> MeshInstance3D:
 	var im: ImmediateMesh = ImmediateMesh.new()
 	var mat: StandardMaterial3D = StandardMaterial3D.new()
@@ -147,6 +152,25 @@ func _make_line(from: Vector3, to: Vector3, color: Color) -> MeshInstance3D:
 	return mi
 
 
+# Run the nav path through all cleanup passes.
+func _build_corners(path: PackedVector3Array, start_position: Vector3, finish_position: Vector3, map_rid: RID) -> Array[Vector3]:
+	var corners: Array[Vector3] = _simplify_path(path)
+	corners = _snap_to_axes(corners)
+	corners = _collapse_short_segments(corners)
+	corners = _center_corners_on_corridor(corners, map_rid)
+	corners = _snap_to_axes(corners)
+	corners = _merge_close_corners(corners)
+	corners = _pin_path_endpoints(corners, start_position, finish_position)
+	return _orthogonalize_preserving_endpoints(corners)
+
+
+# Print the processed corner list.
+func _print_corners(label: String) -> void:
+	print("%s CORNERS (%s) ===" % [label, _corners.size()])
+	for i: int in range(_corners.size()):
+		print("  [%s] %s" % [i, _corners[i]])
+
+
 # Snap corner positions so each segment is perfectly axis-aligned (X or Z only).
 # When a raw segment changes BOTH X and Z significantly, it's an L-bend the nav
 # took diagonally — we insert an intermediate corner to make two axis-aligned
@@ -156,8 +180,6 @@ func _snap_to_axes(corners: Array[Vector3]) -> Array[Vector3]:
 		return corners
 	var result: Array[Vector3] = []
 	result.append(corners[0])
-	const AXIS_TOLERANCE: float = 0.5
-	const DIAGONAL_TURN_RATIO: float = 0.35
 
 	for i: int in range(1, corners.size()):
 		var prev: Vector3 = result[result.size() - 1]
@@ -193,6 +215,7 @@ func _snap_to_axes(corners: Array[Vector3]) -> Array[Vector3]:
 	return result
 
 
+# Keep only path points where direction changes.
 func _simplify_path(path: PackedVector3Array) -> Array[Vector3]:
 	var result: Array[Vector3] = []
 	result.append(path[0])
@@ -214,7 +237,6 @@ func _simplify_path(path: PackedVector3Array) -> Array[Vector3]:
 func _collapse_short_segments(corners: Array[Vector3]) -> Array[Vector3]:
 	if corners.size() < 3:
 		return corners
-	const MIN_SEG: float = 2.0
 	var result: Array[Vector3] = [corners[0]]
 	for i: int in range(1, corners.size() - 1):
 		var prev: Vector3 = result[result.size() - 1]
@@ -222,7 +244,7 @@ func _collapse_short_segments(corners: Array[Vector3]) -> Array[Vector3]:
 		var nxt: Vector3 = corners[i + 1]
 		var seg_len: float = (curr - prev).length()
 		# Skip this corner if the segment leading into it is too short.
-		if seg_len < MIN_SEG:
+		if seg_len < MIN_SEGMENT_LENGTH:
 			continue
 		# Skip if removing it leaves a pure axis-aligned segment to the next.
 		var after: Vector3 = nxt - curr
@@ -270,8 +292,8 @@ func _center_corners_on_corridor(corners: Array[Vector3], map_rid: RID) -> Array
 
 		# Sample inside each neighboring segment. Short final legs can be less than
 		# 2m, so clamp the sample distance to avoid centering from outside the corridor.
-		var in_sample_distance: float = min(2.0, max(0.25, in_length * 0.5))
-		var out_sample_distance: float = min(2.0, max(0.25, out_length * 0.5))
+		var in_sample_distance: float = min(CENTER_SAMPLE_DISTANCE, max(MIN_CENTER_SAMPLE_DISTANCE, in_length * 0.5))
+		var out_sample_distance: float = min(CENTER_SAMPLE_DISTANCE, max(MIN_CENTER_SAMPLE_DISTANCE, out_length * 0.5))
 		var in_sample: Vector3 = curr - in_dir * in_sample_distance
 		var in_centered: Vector3 = _center_on_axis(in_sample, in_perp, map_rid)
 		var out_sample: Vector3 = curr + out_dir * out_sample_distance
@@ -302,33 +324,26 @@ func _intersect_lines_xz(p1: Vector3, d1: Vector3, p2: Vector3, d2: Vector3) -> 
 # Walk in both +axis and -axis directions to find the corridor edges,
 # then return the midpoint between them. axis must be a unit vector.
 func _center_on_axis(point: Vector3, axis: Vector3, map_rid: RID) -> Vector3:
-	const STEP: float = 0.1
-	const MAX_WALK: float = 8.0
-	const TOLERANCE: float = 0.05
-
-	var pos_dist: float = _walk_until_off_mesh(point, axis, STEP, MAX_WALK, TOLERANCE, map_rid)
-	var neg_dist: float = _walk_until_off_mesh(point, -axis, STEP, MAX_WALK, TOLERANCE, map_rid)
+	var pos_dist: float = _walk_until_off_mesh(point, axis, map_rid)
+	var neg_dist: float = _walk_until_off_mesh(point, -axis, map_rid)
 	# Midpoint = point + axis * (pos_dist - neg_dist) / 2
 	var shift: float = (pos_dist - neg_dist) * 0.5
 	return point + axis * shift
 
 
-# Walk along (point + axis * d) increasing d until off the nav mesh.
-# Returns the last d that was still on-mesh.
-# Collapse consecutive corners that are within MERGE_DIST of each other into one,
+# Collapse consecutive corners that are close enough to represent the same turn,
 # averaging their positions. Fixes "stacked spheres" at L-bend corners where two
 # nav path points end up at the same physical corner after centering.
 func _merge_close_corners(corners: Array[Vector3]) -> Array[Vector3]:
 	if corners.size() < 2:
 		return corners
-	const MERGE_DIST: float = 1.5
 	var result: Array[Vector3] = [corners[0]]
 	for i: int in range(1, corners.size()):
 		var last: Vector3 = result[result.size() - 1]
 		var curr: Vector3 = corners[i]
 		var flat_last: Vector3 = Vector3(last.x, 0.0, last.z)
 		var flat_curr: Vector3 = Vector3(curr.x, 0.0, curr.z)
-		if flat_last.distance_to(flat_curr) < MERGE_DIST:
+		if flat_last.distance_to(flat_curr) < MERGE_DISTANCE:
 			# Merge: replace last with average.
 			result[result.size() - 1] = (last + curr) * 0.5
 		else:
@@ -336,14 +351,15 @@ func _merge_close_corners(corners: Array[Vector3]) -> Array[Vector3]:
 	return result
 
 
-func _walk_until_off_mesh(point: Vector3, axis: Vector3, step: float, max_walk: float, tolerance: float, map_rid: RID) -> float:
+# Walk along an axis until leaving the nav mesh.
+func _walk_until_off_mesh(point: Vector3, axis: Vector3, map_rid: RID) -> float:
 	var d: float = 0.0
 	var last: float = 0.0
-	while d < max_walk:
-		d += step
+	while d < CENTER_MAX_WALK:
+		d += CENTER_WALK_STEP
 		var test: Vector3 = point + axis * d
 		var snap: Vector3 = NavigationServer3D.map_get_closest_point(map_rid, test)
-		if snap.distance_to(test) > tolerance:
+		if snap.distance_to(test) > CENTER_TOLERANCE:
 			break
 		last = d
 	return last
@@ -376,15 +392,8 @@ func _editor_rebuild_debug() -> void:
 		push_warning("MovementTest: editor path query returned no points. Try saving the scene first so the NavigationRegion3D registers with the server.")
 		return
 
-	_corners = _simplify_path(result.path)
-	_corners = _snap_to_axes(_corners)
-	_corners = _collapse_short_segments(_corners)
-	_corners = _center_corners_on_corridor(_corners, map_rid)
-	_corners = _snap_to_axes(_corners)
-	_corners = _merge_close_corners(_corners)
-	_pin_path_endpoints(player_node.global_position, finish_node.global_position)
-	_corners = _orthogonalize_preserving_endpoints(_corners)
-	print("[Editor] Corners (%s): %s" % [_corners.size(), _corners])
+	_corners = _build_corners(result.path, player_node.global_position, finish_node.global_position, map_rid)
+	_print_corners("[Editor]")
 	if debug_show_corners:
 		_spawn_debug_markers()
 
@@ -396,18 +405,18 @@ func _clear_debug_markers() -> void:
 
 
 # Preserve authored start and finish marker positions after navmesh cleanup.
-func _pin_path_endpoints(start_position: Vector3, finish_position: Vector3) -> void:
-	if _corners.is_empty():
-		return
-	_corners[0] = start_position
-	_corners[_corners.size() - 1] = finish_position
+func _pin_path_endpoints(corners: Array[Vector3], start_position: Vector3, finish_position: Vector3) -> Array[Vector3]:
+	if corners.is_empty():
+		return corners
+	corners[0] = start_position
+	corners[corners.size() - 1] = finish_position
+	return corners
 
 
 # Insert bends for any remaining diagonal segments without moving endpoints.
 func _orthogonalize_preserving_endpoints(corners: Array[Vector3]) -> Array[Vector3]:
 	if corners.size() < 2:
 		return corners
-	const AXIS_TOLERANCE: float = 0.5
 	var result: Array[Vector3] = [corners[0]]
 
 	for i: int in range(1, corners.size()):
@@ -481,7 +490,7 @@ func _physics_process(delta: float) -> void:
 func _apply_position() -> void:
 	if _segment_index >= _corners.size() - 1:
 		return
-	var lane: int = _player._current_lane
+	var lane: int = _player.get_current_lane()
 	var seg_start: Vector3 = _get_lane_segment_start(_segment_index, lane)
 	var seg_end: Vector3 = _get_lane_segment_end(_segment_index, lane)
 	var seg_dir: Vector3 = seg_end - seg_start
@@ -497,7 +506,7 @@ func _apply_position() -> void:
 
 # Compute the active lane segment length from its lane-specific endpoints.
 func _get_segment_length() -> float:
-	var lane: int = _player._current_lane
+	var lane: int = _player.get_current_lane()
 	var seg_start: Vector3 = _get_lane_segment_start(_segment_index, lane)
 	var seg_end: Vector3 = _get_lane_segment_end(_segment_index, lane)
 	return seg_start.distance_to(seg_end)
@@ -554,8 +563,9 @@ func _get_lane_turn_point(corner_index: int, lane: int) -> Vector3:
 	return turn_point
 
 
+# Rotate the player toward the active lane segment.
 func _apply_yaw(delta: float) -> void:
-	var lane: int = _player._current_lane
+	var lane: int = _player.get_current_lane()
 	var seg_start: Vector3 = _get_lane_segment_start(_segment_index, lane)
 	var seg_end: Vector3 = _get_lane_segment_end(_segment_index, lane)
 	var fwd: Vector3 = seg_end - seg_start
@@ -564,5 +574,5 @@ func _apply_yaw(delta: float) -> void:
 		return
 	fwd = fwd.normalized()
 	var target_yaw: float = atan2(-fwd.x, -fwd.z)
-	var turn_weight: float = clamp(10.0 * delta, 0.0, 1.0)
+	var turn_weight: float = clamp(TURN_WEIGHT * delta, 0.0, 1.0)
 	_player.rotation.y = lerp_angle(_player.rotation.y, target_yaw, turn_weight)

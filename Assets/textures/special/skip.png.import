@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://byjgghlhhjc2d"
-path="res://.godot/imported/skip.png-3178db916e2032c39330e2545cd49cf3.ctex"
+path="res://.godot/imported/skip.png-d88c70c71b4758e6ad287969bb700544.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://Assets/Textures/special/skip.png"
-dest_files=["res://.godot/imported/skip.png-3178db916e2032c39330e2545cd49cf3.ctex"]
+source_file="res://Assets/textures/special/skip.png"
+dest_files=["res://.godot/imported/skip.png-d88c70c71b4758e6ad287969bb700544.ctex"]
 
 [params]
 
