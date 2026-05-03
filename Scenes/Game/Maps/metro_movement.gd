@@ -88,7 +88,7 @@ func _ready() -> void:
 	if Engine.is_editor_hint():
 		return
 	_player.lane_change_started.connect(_on_lane_change_started)
-	_player.shuffle_resolved.connect(_on_shuffle_resolved)
+	_player.knocked_down.connect(_on_player_knocked_down)
 	_wait_for_nav.call_deferred()
 
 
@@ -569,10 +569,10 @@ func _advance_player(delta: float) -> void:
 	if _player.is_runner_paused():
 		_player.set_movement_blocked(false)
 		return
-	var blocked: bool = _is_lane_blocked_by_obstacle()
-	_player.set_movement_blocked(blocked)
-	if blocked:
+	if _is_lane_blocked_by_obstacle():
+		_player.knock_down_from_shuffle()
 		return
+	_player.set_movement_blocked(false)
 
 	_distance_along += _player.run_speed * delta
 
@@ -1037,10 +1037,9 @@ func _apply_yaw(delta: float) -> void:
 	_player.rotation.y = lerp_angle(_player.rotation.y, target_yaw, turn_weight)
 
 
-# Move the runner back after a failed subway shuffle collision.
-func _on_shuffle_resolved(succeeded: bool, _direction: int) -> void:
-	if succeeded:
-		return
+# Rewind the player along the rail whenever they are knocked down — covers both
+# shuffle failures and same-direction NPC collisions.
+func _on_player_knocked_down() -> void:
 	_rewind_distance(_player.shuffle_knockback_distance)
 	_apply_position()
 

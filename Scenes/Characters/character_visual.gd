@@ -46,8 +46,17 @@ func _ready() -> void:
 		_torso_bone_index = skeleton.find_bone("torso")
 	if _torso_bone_index < 0:
 		push_warning("CharacterVisual could not find torso bone for lean.")
+	_force_locomotion_loop()
 	_configure_animation_tree()
 	play_walk()
+
+
+# Walk and sprint must loop. GLB clips import without loop_mode set by default;
+# set it here so the AnimationTree state machine never freezes on either clip.
+func _force_locomotion_loop() -> void:
+	for anim_name: String in ["walk", "sprint"]:
+		if animation_player.has_animation(anim_name):
+			animation_player.get_animation(anim_name).loop_mode = Animation.LOOP_LINEAR
 
 
 # Blend the torso lean after animation playback updates the skeleton.
