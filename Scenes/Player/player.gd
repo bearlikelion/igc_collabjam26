@@ -6,6 +6,7 @@ extends SUCC
 # Player.gd handles lane input, speed, and camera pitch.
 
 const LANE_COUNT: int = 3
+const START_LANE: int = LANE_COUNT / 2
 
 signal lane_changed
 signal subway_shuffle_failed
@@ -34,7 +35,24 @@ signal goal_reached
 @export_range(0.0, 40.0, 0.1) var shuffle_camera_tilt_speed: float = 18.0
 @export var shuffle_debug_enabled: bool = true
 
-var _current_lane: int = 1
+@export_group("Lane Change")
+@export_range(0.05, 1.0, 0.01, "suffix:s") var lane_tween_duration: float = 0.30
+@export_range(0.0, 25.0, 0.1, "suffix:deg") var lane_camera_tilt_degrees: float = 8.0
+## Spring stiffness for the camera lean. Higher = snappier, more aggressive
+## response. Combined with damping_ratio to produce the spring feel.
+@export_range(1.0, 400.0, 1.0) var lane_camera_tilt_stiffness: float = 90.0
+## Spring damping ratio. <1.0 underdamped (overshoots and bounces),
+## ==1.0 critically damped (no overshoot, fastest settle), >1.0 overdamped
+## (sluggish). 0.4-0.6 gives a satisfying snap-and-bounce.
+@export_range(0.0, 2.0, 0.01) var lane_camera_tilt_damping_ratio: float = 0.45
+
+var _target_lane: int = START_LANE
+var _lane_position: float = float(START_LANE)
+var _lane_intent: int = 0
+var _tween_from: float = float(START_LANE)
+var _tween_elapsed: float = 0.0
+var _tween_active: bool = false
+var _lane_lean_velocity: float = 0.0
 var run_speed: float = 0.0
 var _headbob_phase: float = 0.0
 var _headbob_offset: float = 0.0
@@ -75,18 +93,28 @@ func _process(delta: float) -> void:
 	super(delta)
 	_update_headbob(delta)
 	_update_shuffle_camera_tilt(delta)
+	_update_lane_lean(delta)
 
 
 # Capture shuffle input before it can be consumed by other handlers.
+# Outside shuffle, route left/right to lane intent (press) and lane commit (release).
 func _input(event: InputEvent) -> void:
-	if not _shuffle_active:
+	if _shuffle_active:
+		if event.is_action_pressed("left"):
+			_capture_shuffle_choice(-1)
+		elif event.is_action_pressed("right"):
+			_capture_shuffle_choice(1)
+		elif event.is_action_released("left") or event.is_action_released("right"):
+			_shuffle_camera_lean_direction = _get_current_shuffle_input_direction()
+		return
+	if _recovery_time_left > 0.0 or not _can_move():
 		return
 	if event.is_action_pressed("left"):
-		_capture_shuffle_choice(-1)
+		_on_lane_input_press(-1)
 	elif event.is_action_pressed("right"):
-		_capture_shuffle_choice(1)
+		_on_lane_input_press(1)
 	elif event.is_action_released("left") or event.is_action_released("right"):
-		_shuffle_camera_lean_direction = _get_current_shuffle_input_direction()
+		_on_lane_input_release()
 
 
 # Handle look and mouse capture input.
@@ -115,15 +143,24 @@ func _physics_process(delta: float) -> void:
 	if not _can_move():
 		return
 	_check_shuffle_cast()
-	_handle_lane_input()
+	_update_lane_tween(delta)
 	_update_run_speed(delta)
 	if player_model != null:
 		player_model.set_move_speed(run_speed)
 
 
 # Return the active lane index for external movement controllers.
+# This is the *target* lane (where the player is heading); for the visual
+# position during a tween, MetroMovement reads get_lane_position().
 func get_current_lane() -> int:
-	return _current_lane
+	return _target_lane
+
+
+# Return the visual lane position as a continuous float (e.g. 1.3 = 30% from
+# center to right while tweening). MetroMovement interpolates between
+# floor(lane_pos) and ceil(lane_pos) for smooth lane transitions.
+func get_lane_position() -> float:
+	return _lane_position
 
 
 # Notify listeners and lock locomotion when the player reaches the goal.
@@ -171,6 +208,13 @@ func start_subway_shuffle(npc: NPCCharacter = null) -> void:
 	_shuffle_previous_time_scale = Engine.time_scale
 	Engine.time_scale = shuffle_time_scale
 	run_speed = 0.0
+	# Snap mid-flight tween to nearest integer lane — shuffle direction adds
+	# onto a discrete lane, not a fractional position.
+	if _tween_active:
+		_target_lane = clampi(roundi(_lane_position), 0, LANE_COUNT - 1)
+		_lane_position = float(_target_lane)
+		_tween_active = false
+	_lane_intent = 0
 	_debug_shuffle("START npc=%s npc_move=%s" % [_shuffle_npc.name, _direction_name(_shuffle_npc_direction)])
 	_set_shuffle_debug_text("NPC %s\nHOLD LEFT/RIGHT" % _direction_name(_shuffle_npc_direction))
 
@@ -214,12 +258,29 @@ func _update_headbob(delta: float) -> void:
 	camera_rig.set_headbob_offset(_headbob_offset)
 
 
-# Apply lane input.
-func _handle_lane_input() -> void:
-	if Input.is_action_just_pressed("left") and _current_lane > 0:
-		_set_current_lane(_current_lane - 1)
-	elif Input.is_action_just_pressed("right") and _current_lane < LANE_COUNT - 1:
-		_set_current_lane(_current_lane + 1)
+# Press handler — set lane intent. Cancels intent if both keys are now held.
+# Edge presses (lane 0 left, lane 2 right) still set intent so the camera
+# leans in stage 3; commit is gated on bounds in _on_lane_input_release.
+func _on_lane_input_press(direction: int) -> void:
+	if not _can_move() or _movement_blocked or _goal_reached:
+		return
+	var both_held: bool = Input.is_action_pressed("left") and Input.is_action_pressed("right")
+	_lane_intent = 0 if both_held else direction
+
+
+# Release handler — commit the lane change if no other key is still held.
+# If the other key is still held, intent transfers to it (no commit yet).
+# Intent is always cleared at the end so a stale intent can't carry over.
+func _on_lane_input_release() -> void:
+	var still_held: bool = Input.is_action_pressed("left") or Input.is_action_pressed("right")
+	if still_held:
+		_lane_intent = -1 if Input.is_action_pressed("left") else 1
+		return
+	if _can_move() and not _movement_blocked and not _goal_reached:
+		var next_lane: int = clampi(_target_lane + _lane_intent, 0, LANE_COUNT - 1)
+		if next_lane != _target_lane:
+			_commit_lane_change(next_lane)
+	_lane_intent = 0
 
 
 # Resolve the timed subway shuffle prompt.
@@ -263,7 +324,7 @@ func _complete_subway_shuffle(direction: int) -> void:
 		_shuffle_npc.end_subway_shuffle()
 		_shuffle_ignored_npc = _shuffle_npc
 		_shuffle_npc = null
-	_set_current_lane(_current_lane + direction)
+	_commit_lane_change(_target_lane + direction)
 	_shuffle_player_direction = 0
 	_shuffle_camera_lean_direction = 0
 	_shuffle_npc_direction = 0
@@ -371,8 +432,14 @@ func _get_current_shuffle_input_direction() -> int:
 
 
 # Roll the first-person camera toward the currently held shuffle lean.
+# Only runs during shuffle (held tilt) or recovery (settle to neutral). Outside
+# those windows, lane lean owns camera_rig.rotation.z — without the early-out
+# this function's lerp-toward-zero would fight the spring every frame and
+# suppress its overshoot.
 func _update_shuffle_camera_tilt(delta: float) -> void:
 	if camera_rig == null:
+		return
+	if not _shuffle_active and _recovery_time_left <= 0.0:
 		return
 	var target_tilt: float = 0.0
 	if _shuffle_active:
@@ -383,6 +450,44 @@ func _update_shuffle_camera_tilt(delta: float) -> void:
 	camera_rig.rotation.z = lerp_angle(camera_rig.rotation.z, target_tilt, weight)
 	if abs(camera_rig.rotation.z) < 0.001 and is_zero_approx(target_tilt):
 		camera_rig.rotation.z = 0.0
+
+
+# Roll the first-person camera toward the held lane intent, then decay through
+# the body tween via 1 - sqrt(t) so the lean follows through and uprights as
+# the body settles. Driven by a spring-damper so it overshoots and bounces
+# when underdamped. Mutually exclusive with shuffle tilt — shuffle wins;
+# velocity is parked at 0 during shuffle so the lean restarts cleanly.
+func _update_lane_lean(delta: float) -> void:
+	if camera_rig == null:
+		return
+	if _shuffle_active or _recovery_time_left > 0.0:
+		_lane_lean_velocity = 0.0
+		return
+	var target_tilt: float = 0.0
+	if _lane_intent != 0:
+		# Hold phase — full tilt toward intent.
+		target_tilt = -deg_to_rad(lane_camera_tilt_degrees) * float(_lane_intent)
+	elif _tween_active:
+		# Follow-through during body tween — decay tilt as body settles.
+		var travel_dir: int = signi(float(_target_lane) - _tween_from)
+		if travel_dir != 0:
+			var raw: float = clampf(_tween_elapsed / maxf(lane_tween_duration, 0.001), 0.0, 1.0)
+			var follow: float = 1.0 - sqrt(raw)
+			target_tilt = -deg_to_rad(lane_camera_tilt_degrees) * float(travel_dir) * follow
+	# Semi-implicit Euler spring step. Critical damping coefficient at mass=1
+	# is 2*sqrt(stiffness); damping_ratio scales it. Ratio < 1 produces
+	# overshoot and bounce; ratio == 1 is critical (fastest no-overshoot).
+	var current: float = camera_rig.rotation.z
+	var damping: float = 2.0 * sqrt(lane_camera_tilt_stiffness) * lane_camera_tilt_damping_ratio
+	var acceleration: float = lane_camera_tilt_stiffness * (target_tilt - current) - damping * _lane_lean_velocity
+	_lane_lean_velocity += acceleration * delta
+	var next: float = current + _lane_lean_velocity * delta
+	# Settle exactly when both displacement and velocity are tiny — avoids
+	# infinite micro-oscillation around zero from float noise.
+	if absf(_lane_lean_velocity) < 0.01 and absf(next - target_tilt) < 0.001:
+		next = target_tilt
+		_lane_lean_velocity = 0.0
+	camera_rig.rotation.z = next
 
 
 # Resolve held input by comparing each character's world-space side step.
@@ -488,6 +593,9 @@ func _finish_shuffle_recovery() -> void:
 	_shuffle_recover_started = false
 	_shuffle_fail_reason = ""
 	run_speed = start_speed
+	# Require a fresh press to lane-change after recovery — any key still held
+	# from before the knockdown shouldn't auto-commit.
+	_lane_intent = 0
 	set_game_state(GameState.ACTIVE)
 	set_camera_mode(CameraMode.FIRST_PERSON)
 	if player_model != null:
@@ -534,14 +642,33 @@ func _direction_name(direction: int) -> String:
 	return "NONE"
 
 
-# Update the lane and notify listeners.
-func _set_current_lane(next_lane: int) -> void:
+# Update the target lane and start the visual tween. _tween_from = current
+# visual position so mid-tween interrupts restart smoothly from where the body
+# actually is rather than snapping back to the previous integer lane.
+func _commit_lane_change(next_lane: int) -> void:
 	var clamped_lane: int = clampi(next_lane, 0, LANE_COUNT - 1)
-	if clamped_lane == _current_lane:
+	if clamped_lane == _target_lane:
 		return
-	_current_lane = clamped_lane
+	_target_lane = clamped_lane
+	_tween_from = _lane_position
+	_tween_elapsed = 0.0
+	_tween_active = true
 	lane_changed.emit()
-	print("LANE CHANGE -> lane %s" % _current_lane)
+
+
+# Advance the sqrt-eased lane tween. sqrt easing is fast-departure, soft-arrival
+# — the body launches the instant the player releases and decelerates into the
+# new lane.
+func _update_lane_tween(delta: float) -> void:
+	if not _tween_active:
+		return
+	_tween_elapsed += delta
+	var raw: float = clampf(_tween_elapsed / maxf(lane_tween_duration, 0.001), 0.0, 1.0)
+	var eased: float = sqrt(raw)
+	_lane_position = lerp(_tween_from, float(_target_lane), eased)
+	if raw >= 1.0:
+		_lane_position = float(_target_lane)
+		_tween_active = false
 
 
 # Disable inherited direct movement input.

@@ -577,7 +577,7 @@ func _advance_player(delta: float) -> void:
 	_distance_along += _player.run_speed * delta
 
 	while _segment_index < _corners.size() - 1:
-		var seg_length: float = _get_segment_length()
+		var seg_length: float = _get_advance_segment_length()
 		if _distance_along < seg_length:
 			break
 		_distance_along -= seg_length
@@ -598,25 +598,26 @@ func _advance_npcs(delta: float) -> void:
 		_advance_npc_runner(runner, delta)
 
 
-# Compute the player's current position from segment + distance + lane.
+# Compute the player's current position. When tweening (t > 0) interpolate
+# between the floor and ceil lane positions; otherwise single-lane query.
 func _apply_position() -> void:
 	if _segment_index >= _corners.size() - 1:
 		return
-	var lane: int = _player.get_current_lane()
-	var seg_start: Vector3 = _get_lane_segment_start(_segment_index, lane)
-	var seg_end: Vector3 = _get_lane_segment_end(_segment_index, lane)
-	var seg_dir: Vector3 = seg_end - seg_start
-	seg_dir.y = 0.0
-	if seg_dir.length_squared() < 0.001:
-		return
-	seg_dir = seg_dir.normalized()
-	var distance: float = min(_distance_along, seg_start.distance_to(seg_end))
-	var pos: Vector3 = seg_start + seg_dir * distance
+	var lane_pos: float = _player.get_lane_position()
+	var lane_floor: int = clampi(floori(lane_pos), 0, LANE_OFFSETS.size() - 1)
+	var t: float = clampf(lane_pos - float(lane_floor), 0.0, 1.0)
+	var pos: Vector3 = _position_for_lane(lane_floor)
+	if t > 0.001:
+		var lane_ceil: int = clampi(lane_floor + 1, 0, LANE_OFFSETS.size() - 1)
+		pos = pos.lerp(_position_for_lane(lane_ceil), t)
 	pos.y = _player.global_position.y
 	_player.global_position = pos
 
 
-# Cast a short ray forward along the active lane to detect obstacle bodies.
+# Cast a short ray forward along the player's TARGET lane to detect obstacle
+# bodies. Using target (not visual / both-lane OR) because mid-tween the body
+# isn't physically overlapping the from-lane's obstacles, and a from-lane
+# block would keep the player stuck even while they're escaping it.
 func _is_lane_blocked_by_obstacle() -> bool:
 	var lane: int = _player.get_current_lane()
 	var seg_start: Vector3 = _get_lane_segment_start(_segment_index, lane)
@@ -973,17 +974,65 @@ func _get_lane_turn_point(corner_index: int, lane: int) -> Vector3:
 	return turn_point
 
 
-# Rotate the player toward the active lane segment.
-func _apply_yaw(delta: float) -> void:
-	var lane: int = _player.get_current_lane()
+# World-space position of the player on a given lane at the current
+# _distance_along, clamped to that lane's segment length.
+func _position_for_lane(lane: int) -> Vector3:
+	var seg_start: Vector3 = _get_lane_segment_start(_segment_index, lane)
+	var seg_end: Vector3 = _get_lane_segment_end(_segment_index, lane)
+	var seg_dir: Vector3 = seg_end - seg_start
+	seg_dir.y = 0.0
+	if seg_dir.length_squared() < 0.001:
+		return seg_start
+	var seg_length: float = seg_dir.length()
+	seg_dir = seg_dir / seg_length
+	var distance: float = min(_distance_along, seg_length)
+	return seg_start + seg_dir * distance
+
+
+# Yaw the player should face on a given lane's segment. Returns the player's
+# current yaw on a degenerate segment so lerp_angle doesn't snap to zero.
+func _yaw_for_lane(lane: int) -> float:
 	var seg_start: Vector3 = _get_lane_segment_start(_segment_index, lane)
 	var seg_end: Vector3 = _get_lane_segment_end(_segment_index, lane)
 	var fwd: Vector3 = seg_end - seg_start
 	fwd.y = 0.0
 	if fwd.length_squared() < 0.001:
-		return
+		return _player.rotation.y
 	fwd = fwd.normalized()
-	var target_yaw: float = atan2(-fwd.x, -fwd.z)
+	return atan2(-fwd.x, -fwd.z)
+
+
+# Segment length used by _advance_player to decide when to advance segments.
+# During a tween, return the longer of the two lane segments so we don't
+# advance before the body has cleared both lanes' geometry — prevents the
+# early-snap artifact at corners where the target lane is shorter than the
+# source lane.
+func _get_advance_segment_length() -> float:
+	var lane_pos: float = _player.get_lane_position()
+	var lane_floor: int = clampi(floori(lane_pos), 0, LANE_OFFSETS.size() - 1)
+	var t: float = clampf(lane_pos - float(lane_floor), 0.0, 1.0)
+	var seg_start_floor: Vector3 = _get_lane_segment_start(_segment_index, lane_floor)
+	var seg_end_floor: Vector3 = _get_lane_segment_end(_segment_index, lane_floor)
+	var len_floor: float = seg_start_floor.distance_to(seg_end_floor)
+	if t <= 0.001:
+		return len_floor
+	var lane_ceil: int = clampi(lane_floor + 1, 0, LANE_OFFSETS.size() - 1)
+	var seg_start_ceil: Vector3 = _get_lane_segment_start(_segment_index, lane_ceil)
+	var seg_end_ceil: Vector3 = _get_lane_segment_end(_segment_index, lane_ceil)
+	return maxf(len_floor, seg_start_ceil.distance_to(seg_end_ceil))
+
+
+# Rotate the player toward the trajectory of the current lane(s). When tweening
+# (t > 0) interpolate yaw between the two lanes' forwards so facing tracks
+# position through corners.
+func _apply_yaw(delta: float) -> void:
+	var lane_pos: float = _player.get_lane_position()
+	var lane_floor: int = clampi(floori(lane_pos), 0, LANE_OFFSETS.size() - 1)
+	var t: float = clampf(lane_pos - float(lane_floor), 0.0, 1.0)
+	var target_yaw: float = _yaw_for_lane(lane_floor)
+	if t > 0.001:
+		var lane_ceil: int = clampi(lane_floor + 1, 0, LANE_OFFSETS.size() - 1)
+		target_yaw = lerp_angle(target_yaw, _yaw_for_lane(lane_ceil), t)
 	var turn_weight: float = clamp(TURN_WEIGHT * delta, 0.0, 1.0)
 	_player.rotation.y = lerp_angle(_player.rotation.y, target_yaw, turn_weight)
 
