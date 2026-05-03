@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="FuncGodotFGDPointClass" load_steps=3 format=3 uid="uid://c1n4ubrm7k3t2"]
+
+[ext_resource type="Script" uid="uid://cxsqwtsqd8w33" path="res://addons/func_godot/src/fgd/func_godot_fgd_point_class.gd" id="1_ptcls"]
+[ext_resource type="PackedScene" uid="uid://by5hvbonr0euy" path="res://Scenes/Game/Props/oh_light.tscn" id="2_scene"]
+
+[resource]
+script = ExtResource("1_ptcls")
+classname = "oh_light"
+description = "Overhead light fixture with a spotlight."
+scene_file = ExtResource("2_scene")
+apply_rotation_on_map_build = true
+apply_scale_on_map_build = false
+meta_properties = Dictionary[String, Variant]({
+"color": Color(1, 0.9, 0.5, 1)
+})
