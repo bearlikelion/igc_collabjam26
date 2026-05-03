@@ -8,10 +8,10 @@
 [ext_resource type="PackedScene" uid="uid://btcjwh6fye4ui" path="res://Scenes/Game/Maps/Metro1/test_map.tscn" id="6_4ntj2"]
 [ext_resource type="PackedScene" uid="uid://24xx8rg8c7jb" path="res://Scenes/Player/Player.tscn" id="7_1u2wa"]
 [ext_resource type="PackedScene" uid="uid://dwb2s0dmhbkis" path="res://Scenes/Characters/NPCCharacter.tscn" id="8_svs80"]
-[ext_resource type="ArrayMesh" uid="uid://yfjpiqonpf55" path="res://Assets/Models/Metro/Meshes/Metro_subway_car.res" id="9_rrdri"]
+[ext_resource type="ArrayMesh" uid="uid://dgtirktt1xuok" path="res://Assets/Models/Metro/Meshes/Metro_subway_car.res" id="9_rrdri"]
 [ext_resource type="PackedScene" uid="uid://v4iekc8b5cgx" path="res://Scenes/Game/Props/three_chair_bench.tscn" id="10_cfpln"]
 [ext_resource type="AudioStream" uid="uid://bpi1lxlloups3" path="res://Assets/Audio/Music/Los Del Rios - Macarena (8 Bit Raxlen Slice Chiptune Remix).mp3" id="10_sryx3"]
-[ext_resource type="ArrayMesh" uid="uid://dsakuk5ianxen" path="res://Assets/Models/Metro/Meshes/Metro_light.res" id="11_kvorr"]
+[ext_resource type="ArrayMesh" uid="uid://crkrak5yedkiy" path="res://Assets/Models/Metro/Meshes/Metro_light.res" id="11_kvorr"]
 [ext_resource type="Script" uid="uid://b0kdqdyh2br7w" path="res://Scenes/Game/Maps/Metro1/end_camera.gd" id="13_akkrs"]
 [ext_resource type="Shader" uid="uid://t6b0t5n4jabv" path="res://Shaders/cctv.gdshader" id="14_0rra6"]
 
@@ -127,6 +127,7 @@ _data = {
 
 [node name="Metro1" type="Node3D" unique_id=1736708119]
 script = ExtResource("1_drku4")
+debug_show_corners = false
 
 [node name="Ambiance" type="AudioStreamPlayer" parent="." unique_id=1301785252]
 stream = SubResource("AudioStreamRandomizer_et2qy")

@@ -11,6 +11,7 @@ script = ExtResource("1_npc")
 visual = NodePath("CharacterVisual")
 obstacle_lookahead = 2.0
 avoidance_cooldown = 2.0
+shuffle_debug_enabled = false
 
 [node name="Collision" type="CollisionShape3D" parent="." unique_id=1818591572]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.75, 0)
