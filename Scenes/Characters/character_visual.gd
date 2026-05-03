@@ -128,6 +128,20 @@ func is_recovery_locked() -> bool:
 	return _is_recovery_state_locked()
 
 
+# Freeze the animation tree on its current pose (e.g., when an NPC arrives
+# at the train and stands idle). Locomotion state is preserved so a later
+# resume_animation() resumes the same clip.
+func pause_animation() -> void:
+	if animation_tree != null:
+		animation_tree.active = false
+
+
+# Resume a previously paused animation tree.
+func resume_animation() -> void:
+	if animation_tree != null:
+		animation_tree.active = true
+
+
 # Configure an AnimationTree state machine using local clips.
 func _configure_animation_tree() -> void:
 	if animation_tree.tree_root == null:

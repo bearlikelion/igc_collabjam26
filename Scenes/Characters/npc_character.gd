@@ -1,25 +1,47 @@
 class_name NPCCharacter
 extends CharacterBody3D
 
-@export var walk_speed: float = 1.8
-@export var sprint_speed: float = 3.5
+# Rail direction constants. Forward runs Start -> Finish (player direction);
+# reverse runs Finish -> Start (oncoming traffic).
+enum RailDirection { FORWARD, REVERSE }
+
+const LANE_COUNT: int = 3
+
 @export var visual: CharacterVisual
 @export var player_group: StringName = &"player"
 @export var finish_group: StringName = &"finish"
-@export var route_to_finish_point: bool = false
-@export var arrival_distance: float = 0.5
-@export var waypoint_skip_distance: float = 0.15
+
+@export_group("Rail")
+## Direction of travel along the lane rail.
+@export var rail_direction: RailDirection = RailDirection.REVERSE
+## Initial distance along the rail. Authored per-instance.
+@export var rail_start_distance: float = 0.0
+## Forward speed along the rail.
+@export var rail_speed: float = 1.8
+## Multiplicative jitter applied once on spawn so NPCs don't form a wall.
+## A value of 0.3 means rail_speed is randomized in [0.7 * rail_speed, 1.3 * rail_speed].
+@export_range(0.0, 1.0, 0.01) var rail_speed_variance: float = 0.3
+
+@export_group("Lane Behavior")
+## Steer around chair benches and other obstacles by switching lanes.
+@export var avoid_obstacles: bool = true
+## Distance ahead checked when deciding to swerve away from an obstacle.
+@export var obstacle_lookahead: float = 2.5
+## Periodically pick a new random lane while traveling.
+@export var random_lane_changes: bool = false
+## Average seconds between random lane change attempts.
+@export var random_lane_interval_min: float = 3.0
+@export var random_lane_interval_max: float = 7.0
+## Seconds to wait after an avoidance lane change before swerving again.
+@export var avoidance_cooldown: float = 0.6
+
+@export_group("Subway Shuffle")
 @export var shuffle_debug_enabled: bool = true
 @export var shuffle_lane_distance: float = 1.0
 @export var shuffle_lane_move_time: float = 0.25
 
-var desired_direction: Vector3 = Vector3.ZERO
-var wants_sprint: bool = false
-var route_target_position: Vector3 = Vector3.ZERO
-var _has_target: bool = false
-var _path_ready: bool = false
-var _path_points: PackedVector3Array = PackedVector3Array()
-var _path_index: int = 0
+var _current_lane: int = 1
+var _actual_rail_speed: float = 0.0
 var _shuffle_direction: int = 0
 var _shuffle_paused: bool = false
 var _debug_label: Label3D
@@ -31,48 +53,107 @@ var _shuffle_lane_move_active: bool = false
 var _shuffle_lane_start_position: Vector3 = Vector3.ZERO
 var _shuffle_lane_target_position: Vector3 = Vector3.ZERO
 var _shuffle_lane_elapsed: float = 0.0
+var _random_lane_timer: float = 0.0
+var _avoidance_timer: float = 0.0
+var _parked_at_finish: bool = false
+var _parked_offset: Vector3 = Vector3.ZERO
 
-@onready var navigation_agent: NavigationAgent3D = $NavigationAgent3D
+@onready var _shuffle_cast: RayCast3D = get_node_or_null("ShuffleCast")
 
 
-# Capture the route target and begin navigation.
+# Pick an initial lane and randomize the first lane-change timer.
 func _ready() -> void:
 	add_to_group("npc")
 	_create_debug_label()
-	navigation_agent.target_desired_distance = arrival_distance
-	navigation_agent.path_desired_distance = arrival_distance
-	_set_route_target.call_deferred()
+	_current_lane = randi() % LANE_COUNT
+	_random_lane_timer = _next_random_lane_delay()
+	_roll_actual_rail_speed()
 
 
-# Follow the cached navigation path toward the selected route target.
+# Tick down lane-change timers; the rail controller drives forward motion.
 func _physics_process(delta: float) -> void:
 	if _knockdown_active:
 		_update_knockdown_recovery(delta)
 		return
-
 	if _shuffle_paused:
 		_update_shuffle_lane_move(delta)
-		_stop_moving()
 		return
+	if _avoidance_timer > 0.0:
+		_avoidance_timer = maxf(0.0, _avoidance_timer - delta)
+	else:
+		_check_avoidance_cast()
+	if random_lane_changes:
+		_random_lane_timer -= delta
+		if _random_lane_timer <= 0.0:
+			_random_lane_timer = _next_random_lane_delay()
+			_attempt_random_lane_change()
 
-	if not _has_target:
-		_stop_moving()
-		return
 
-	if _has_arrived():
-		queue_free()
-		return
+# Return the lane the rail controller should use for this NPC.
+func get_current_lane() -> int:
+	return _current_lane
 
-	_advance_path_index()
-	var next_position: Vector3 = _get_current_path_target()
-	var direction: Vector3 = next_position - global_position
-	_move_in_direction(direction, delta)
-	move_and_slide()
-	_face_velocity()
 
+# Set the lane directly; the rail controller will snap our position next frame.
+func set_current_lane(lane: int) -> void:
+	_current_lane = clampi(lane, 0, LANE_COUNT - 1)
+
+
+# Return whether the rail controller should stop advancing this NPC.
+func is_runner_paused() -> bool:
+	return _shuffle_paused or _knockdown_active
+
+
+# Return the rail direction for this NPC.
+func get_rail_direction() -> int:
+	return rail_direction
+
+
+# Return the authored starting distance along the rail.
+func get_rail_start_distance() -> float:
+	return rail_start_distance
+
+
+# Park the NPC at the finish: pause its animation and record an offset the
+# rail controller can apply to keep it off the player's lane line.
+func park_at_finish(offset: Vector3) -> void:
+	_parked_at_finish = true
+	_parked_offset = offset
 	if visual != null:
-		visual.set_move_speed(Vector2(velocity.x, velocity.z).length())
-	_set_debug_text("MOVE\n%s" % _direction_name(_movement_direction()))
+		visual.pause_animation()
+
+
+# Return whether this NPC has been parked at the finish.
+func is_parked_at_finish() -> bool:
+	return _parked_at_finish
+
+
+# Return the loiter offset to apply on top of the rail position when parked.
+func get_parked_offset() -> Vector3:
+	return _parked_offset
+
+
+# Return the rail forward speed (with per-instance jitter applied at spawn).
+func get_rail_speed() -> float:
+	if _actual_rail_speed <= 0.0:
+		_roll_actual_rail_speed()
+	return _actual_rail_speed
+
+
+# Roll a randomized rail speed within +/- rail_speed_variance of the base.
+func _roll_actual_rail_speed() -> void:
+	var jitter: float = (randf() * 2.0 - 1.0) * rail_speed_variance
+	_actual_rail_speed = maxf(0.1, rail_speed * (1.0 + jitter))
+
+
+# Return whether obstacle avoidance is enabled.
+func should_avoid_obstacles() -> bool:
+	return avoid_obstacles
+
+
+# Return the planning lookahead distance for swerving.
+func get_obstacle_lookahead() -> float:
+	return obstacle_lookahead
 
 
 # Play a left-side interaction animation.
@@ -89,16 +170,14 @@ func interact_right() -> void:
 
 # Play the death animation and stop movement.
 func die() -> void:
-	desired_direction = Vector3.ZERO
 	velocity = Vector3.ZERO
 	if visual != null:
 		visual.play_die()
 
 
-# Pause navigation and telegraph a left or right shuffle.
+# Pause rail movement and telegraph a left or right shuffle.
 func begin_subway_shuffle() -> int:
 	_shuffle_paused = true
-	_stop_moving()
 	_shuffle_direction = -1 if randf() < 0.5 else 1
 	if _shuffle_direction < 0:
 		interact_left()
@@ -109,7 +188,7 @@ func begin_subway_shuffle() -> int:
 	return _shuffle_direction
 
 
-# Resume navigation after a successful shuffle.
+# Resume rail movement after a successful shuffle.
 func end_subway_shuffle() -> void:
 	_start_shuffle_lane_move(_shuffle_direction)
 	_finish_shuffle_lane_move()
@@ -117,9 +196,6 @@ func end_subway_shuffle() -> void:
 	_shuffle_direction = 0
 	if visual != null:
 		visual.play_walk()
-	if _has_target:
-		navigation_agent.target_position = route_target_position
-		_cache_navigation_path()
 	_set_debug_text("MOVE")
 	_debug_shuffle("RESUME")
 
@@ -129,7 +205,6 @@ func stop_subway_shuffle() -> void:
 	_shuffle_paused = true
 	_shuffle_direction = 0
 	_shuffle_lane_move_active = false
-	_stop_moving()
 	_set_debug_text("STOP")
 	_debug_shuffle("STOP")
 
@@ -143,7 +218,6 @@ func knock_down_from_shuffle(player_position: Vector3, recovery_time: float, get
 	_get_up_time = get_up_time
 	_recover_started = false
 	_knockdown_active = true
-	_stop_moving()
 	_apply_knockback_from(player_position, knockback_distance)
 	if visual != null:
 		visual.play_die()
@@ -158,106 +232,11 @@ func get_shuffle_direction() -> int:
 
 # Return whether this NPC is routing in the same direction as the player.
 func is_routing_to_finish_point() -> bool:
-	return route_to_finish_point
-
-
-# Resolve the route target after the navigation map has registered.
-func _set_route_target() -> void:
-	await get_tree().physics_frame
-	var target: Node3D = _find_route_target()
-	if target == null:
-		push_warning("NPCCharacter could not find a %s target." % _route_target_name())
-		return
-	route_target_position = target.global_position
-	navigation_agent.target_position = route_target_position
-	print("NPC Target Position (%s): %s" % [_route_target_name(), navigation_agent.target_position])
-	_has_target = true
-	await get_tree().physics_frame
-	_cache_navigation_path()
-	_path_ready = true
-
-
-# Find the active route target.
-func _find_route_target() -> Node3D:
-	if route_to_finish_point:
-		return _find_finish()
-	return _find_player()
-
-
-# Find the player from an explicit path, group, or scene-tree search.
-func _find_player() -> Player:
-	var grouped_node: Node = get_tree().get_first_node_in_group(player_group)
-	if grouped_node is Player:
-		return grouped_node as Player
-	return null
-
-
-# Find the finish marker by group.
-func _find_finish() -> Node3D:
-	var grouped_node: Node = get_tree().get_first_node_in_group(finish_group)
-	if grouped_node is Node3D:
-		return grouped_node as Node3D
-	return null
-
-
-# Apply horizontal velocity for a navigation direction.
-func _move_in_direction(direction: Vector3, delta: float) -> void:
-	direction.y = 0.0
-	if direction.length_squared() <= 0.001:
-		_stop_moving()
-		return
-	var distance: float = direction.length()
-	direction = direction.normalized()
-	desired_direction = direction
-	var speed: float = sprint_speed if wants_sprint else walk_speed
-	if distance < speed * delta:
-		speed = distance / delta
-	velocity.x = direction.x * speed
-	velocity.z = direction.z * speed
-
-
-# Cache the current navigation path after the agent has synchronized.
-func _cache_navigation_path() -> void:
-	navigation_agent.get_next_path_position()
-	_path_points = navigation_agent.get_current_navigation_path()
-	_path_index = navigation_agent.get_current_navigation_path_index()
-	_advance_path_index()
-	if _path_points.is_empty():
-		push_warning("NPCCharacter could not build a path to %s." % _route_target_name())
-	else:
-		_debug_shuffle("PATH points=%s target=%s" % [_path_points.size(), route_target_position])
-
-
-# Move past waypoints already reached by the NPC.
-func _advance_path_index() -> void:
-	var skip_distance: float = maxf(waypoint_skip_distance, arrival_distance)
-	while _path_index < _path_points.size():
-		var waypoint_delta: Vector3 = _path_points[_path_index] - global_position
-		waypoint_delta.y = 0.0
-		if waypoint_delta.length() > skip_distance:
-			return
-		_path_index += 1
-
-
-# Return the active path point or the final target as a fallback.
-func _get_current_path_target() -> Vector3:
-	if _path_index >= 0 and _path_index < _path_points.size():
-		return _path_points[_path_index]
-	return route_target_position
-
-
-# Return whether the NPC has reached the selected route target.
-func _has_arrived() -> bool:
-	if not _path_ready:
-		return false
-	var flat_delta: Vector3 = route_target_position - global_position
-	flat_delta.y = 0.0
-	return flat_delta.length() <= arrival_distance
+	return rail_direction == RailDirection.FORWARD
 
 
 # Update the NPC knockdown/get-up timer.
 func _update_knockdown_recovery(delta: float) -> void:
-	_stop_moving()
 	if _recovery_time_left > 0.0:
 		_recovery_time_left = maxf(0.0, _recovery_time_left - delta)
 	_set_debug_text("NPC RECOVER\n%.2f" % _recovery_time_left)
@@ -280,15 +259,13 @@ func _can_finish_knockdown_recovery() -> bool:
 	return visual == null or not visual.is_recovery_locked()
 
 
-# Resume navigation after knockdown recovery.
+# Resume rail movement after knockdown recovery.
 func _finish_knockdown_recovery() -> void:
 	_recover_started = false
 	_knockdown_active = false
 	_shuffle_paused = false
 	if visual != null:
 		visual.play_walk()
-	navigation_agent.target_position = route_target_position
-	_cache_navigation_path()
 	_set_debug_text("MOVE")
 	_debug_shuffle("RECOVERED")
 
@@ -343,19 +320,59 @@ func _finish_shuffle_lane_move() -> void:
 	global_position = _shuffle_lane_target_position
 
 
-# Stop horizontal movement.
-func _stop_moving() -> void:
-	desired_direction = Vector3.ZERO
-	velocity.x = 0.0
-	velocity.z = 0.0
-
-
-# Turn the NPC toward its current travel direction.
-func _face_velocity() -> void:
-	var horizontal_velocity: Vector3 = Vector3(velocity.x, 0.0, velocity.z)
-	if horizontal_velocity.length_squared() <= 0.001:
+# Swerve to a different lane when the forward cast sees another character.
+# NPCs swerve away from any other NPC and from a knocked-down player, but
+# they keep their lane against an active player so the dodge mechanic still
+# triggers normally.
+func _check_avoidance_cast() -> void:
+	if _shuffle_cast == null:
 		return
-	rotation.y = atan2(-horizontal_velocity.x, -horizontal_velocity.z)
+	_shuffle_cast.force_raycast_update()
+	if not _shuffle_cast.is_colliding():
+		return
+	var collider: Object = _shuffle_cast.get_collider()
+	if not (collider is Node):
+		return
+	var node: Node = collider as Node
+	if node == self:
+		return
+	var should_swerve: bool = false
+	if node.is_in_group("npc"):
+		should_swerve = true
+	elif node.is_in_group(player_group):
+		# Only swerve around the player when they can't react (knocked down).
+		var player_node: Player = node as Player
+		should_swerve = player_node != null and player_node.is_runner_paused()
+	if not should_swerve:
+		return
+	if _attempt_random_lane_change():
+		_avoidance_timer = avoidance_cooldown
+		_debug_shuffle("AVOIDANCE -> lane %s" % _current_lane)
+
+
+# Pick a random lane different from the current lane. Returns true if the
+# lane actually changed so callers can gate cooldowns on a real swap.
+func _attempt_random_lane_change() -> bool:
+	if LANE_COUNT <= 1:
+		return false
+	var choices: Array[int] = []
+	for lane: int in range(LANE_COUNT):
+		if lane != _current_lane:
+			choices.append(lane)
+	if choices.is_empty():
+		return false
+	_current_lane = choices[randi() % choices.size()]
+	_debug_shuffle("RANDOM LANE -> %s" % _current_lane)
+	return true
+
+
+# Return a randomized delay before the next lane change attempt.
+func _next_random_lane_delay() -> float:
+	var lo: float = minf(random_lane_interval_min, random_lane_interval_max)
+	var hi: float = maxf(random_lane_interval_min, random_lane_interval_max)
+	if hi <= 0.0:
+		return 1.0
+	return lo + randf() * maxf(hi - lo, 0.0)
 
 
 # Create a visible debug label above the NPC.
@@ -385,18 +402,6 @@ func _set_debug_text(text: String) -> void:
 func _debug_shuffle(message: String) -> void:
 	if shuffle_debug_enabled:
 		print("[Shuffle][NPC:%s] %s" % [name, message])
-
-
-# Return the NPC's current dominant movement direction.
-func _movement_direction() -> int:
-	if abs(velocity.x) > abs(velocity.z):
-		return -1 if velocity.x < 0.0 else 1
-	return 0
-
-
-# Return the selected route target name for debug output.
-func _route_target_name() -> String:
-	return "finish" if route_to_finish_point else "player spawn"
 
 
 # Return a readable direction label.

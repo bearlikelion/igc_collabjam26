@@ -9,6 +9,8 @@ size = Vector3(0.813, 1.5, 0.813)
 [node name="NPCCharacter" type="CharacterBody3D" unique_id=1919134681 node_paths=PackedStringArray("visual")]
 script = ExtResource("1_npc")
 visual = NodePath("CharacterVisual")
+obstacle_lookahead = 2.0
+avoidance_cooldown = 2.0
 
 [node name="Collision" type="CollisionShape3D" parent="." unique_id=1818591572]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.75, 0)
@@ -19,3 +21,7 @@ playback_fade_time = 0.3
 torso_lean_amount = 0.5
 
 [node name="NavigationAgent3D" type="NavigationAgent3D" parent="." unique_id=1838137378]
+
+[node name="ShuffleCast" type="RayCast3D" parent="." unique_id=583951925]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+target_position = Vector3(0, 0, -2)

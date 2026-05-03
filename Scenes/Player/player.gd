@@ -10,6 +10,7 @@ const LANE_COUNT: int = 3
 signal lane_changed
 signal subway_shuffle_failed
 signal subway_shuffle_completed(direction: int)
+signal goal_reached
 
 @export var start_speed: float = 2.0
 @export var max_speed: float = 6.0
@@ -52,6 +53,7 @@ var _shuffle_debug_label: Label3D
 var _shuffle_fail_reason: String = ""
 var _shuffle_recover_started: bool = false
 var _movement_blocked: bool = false
+var _goal_reached: bool = false
 
 @onready var shuffle_cast: RayCast3D = $ShuffleCast
 
@@ -124,6 +126,21 @@ func get_current_lane() -> int:
 	return _current_lane
 
 
+# Notify listeners and lock locomotion when the player reaches the goal.
+func reach_goal() -> void:
+	if _goal_reached:
+		return
+	_goal_reached = true
+	_movement_blocked = false
+	run_speed = 0.0
+	goal_reached.emit()
+
+
+# Return whether the player has reached the goal.
+func is_goal_reached() -> bool:
+	return _goal_reached
+
+
 # Allow the level controller to flag the runner as blocked by an obstacle.
 func set_movement_blocked(blocked: bool) -> void:
 	if blocked and not _movement_blocked:
@@ -169,6 +186,9 @@ func die() -> void:
 
 # Accelerate toward max speed.
 func _update_run_speed(delta: float) -> void:
+	if _goal_reached:
+		run_speed = 0.0
+		return
 	if _movement_blocked:
 		run_speed = start_speed
 		return
@@ -183,7 +203,7 @@ func _update_headbob(delta: float) -> void:
 		return
 
 	var target_offset: float = 0.0
-	if enable_headbob and game_state == GameState.ACTIVE and _can_move() and run_speed > 0.01 and not _movement_blocked:
+	if enable_headbob and game_state == GameState.ACTIVE and _can_move() and run_speed > 0.01 and not _movement_blocked and not _goal_reached:
 		_headbob_phase = fmod(_headbob_phase + run_speed * headbob_steps_per_meter * TAU * delta, TAU)
 		target_offset = sin(_headbob_phase) * headbob_amplitude
 
