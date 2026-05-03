@@ -3,9 +3,10 @@
 [ext_resource type="Script" uid="uid://drlmgulwbjwqu" path="res://addons/func_godot/src/fgd/func_godot_fgd_file.gd" id="1_ffile"]
 [ext_resource type="Resource" uid="uid://crgpdahjaj" path="res://addons/func_godot/fgd/func_godot_fgd.tres" id="2_base"]
 [ext_resource type="Resource" uid="uid://c1n4ubrm7k3t2" path="res://Resources/FGD/oh_light.tres" id="3_ohl"]
+[ext_resource type="Resource" path="res://Resources/FGD/func_floor.tres" id="4_floor"]
 
 [resource]
 script = ExtResource("1_ffile")
 fgd_name = "igc_cj26"
 base_fgd_files = Array[Resource]([ExtResource("2_base")])
-entity_definitions = Array[Resource]([ExtResource("3_ohl")])
+entity_definitions = Array[Resource]([ExtResource("3_ohl"), ExtResource("4_floor")])
