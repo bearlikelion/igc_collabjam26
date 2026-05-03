@@ -1,7 +1,0 @@
-[gd_resource type="Resource" script_class="SUCCConfig" format=3 uid="uid://dff56twp2y8nx"]
-
-[ext_resource type="Script" uid="uid://caigicac4nqdq" path="res://addons/SUCC/scripts/succ_config.gd" id="1_succ_config"]
-
-[resource]
-script = ExtResource("1_succ_config")
-crouch_speed_modifier = 0.3333333

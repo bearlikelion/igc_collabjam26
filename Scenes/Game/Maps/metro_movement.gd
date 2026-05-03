@@ -63,10 +63,10 @@ const NPC_PARK_SLOTS_PER_ROW: int = 4
 		if Engine.is_editor_hint():
 			_editor_rebuild_debug()
 
-@onready var _player: Player = %Player
+@onready var _player: Pawn = %Player
 @onready var _finish: Marker3D = %Finish
 
-# Rail direction constants matching NPCCharacter.RailDirection.
+# Rail direction constants matching Pawn.RailDirection.
 const RAIL_FORWARD: int = 0
 const RAIL_REVERSE: int = 1
 
@@ -78,7 +78,7 @@ var _start_position: Vector3 = Vector3.ZERO
 var _finish_position: Vector3 = Vector3.ZERO
 
 # Each NPC runner is a Dictionary:
-# { node: NPCCharacter, direction: int, segment_index: int, distance_along: float, finished: bool }
+# { node: Pawn, direction: int, segment_index: int, distance_along: float, finished: bool }
 var _npc_runners: Array[Dictionary] = []
 var _parked_npc_count: int = 0
 
@@ -87,8 +87,8 @@ var _parked_npc_count: int = 0
 func _ready() -> void:
 	if Engine.is_editor_hint():
 		return
-	_player.lane_changed.connect(_on_lane_changed)
-	_player.subway_shuffle_failed.connect(_on_subway_shuffle_failed)
+	_player.lane_change_started.connect(_on_lane_change_started)
+	_player.shuffle_resolved.connect(_on_shuffle_resolved)
 	_wait_for_nav.call_deferred()
 
 
@@ -116,12 +116,12 @@ func _wait_for_nav() -> void:
 	_ready_state = true
 
 
-# Find every NPCCharacter in the scene and bind it to the rail.
+# Find every Pawn in the "npc" group and bind it to the rail.
 func _register_existing_npcs() -> void:
 	# Track how many NPCs we've registered per direction so each one gets a
 	# distinct stagger offset and the group doesn't form a wall.
 	var stagger_counts: Dictionary = {RAIL_FORWARD: 0, RAIL_REVERSE: 0}
-	for npc: NPCCharacter in get_tree().get_nodes_in_group("npc"):
+	for npc: Pawn in get_tree().get_nodes_in_group("npc"):
 		var direction: int = npc.get_rail_direction()
 		var stagger_index: int = stagger_counts[direction]
 		stagger_counts[direction] = stagger_index + 1
@@ -131,7 +131,7 @@ func _register_existing_npcs() -> void:
 # Build a runner record for an NPC, snapped to its authored start distance,
 # offset by a staggered slot to keep multiple NPCs from spawning on top of
 # each other.
-func _register_npc(npc: NPCCharacter, stagger_index: int) -> void:
+func _register_npc(npc: Pawn, stagger_index: int) -> void:
 	var direction: int = npc.get_rail_direction()
 	var stagger_offset: float = float(stagger_index) * NPC_SPAWN_STAGGER_DISTANCE
 	stagger_offset += randf() * NPC_SPAWN_STAGGER_JITTER
@@ -157,7 +157,7 @@ func _enforce_safe_spawn_radius(runner: Dictionary) -> void:
 	var pushed: float = 0.0
 	var step: float = 0.5
 	while pushed < NPC_SAFE_SPAWN_MAX_PUSH:
-		var npc: NPCCharacter = runner["node"]
+		var npc: Pawn = runner["node"]
 		var lane: int = npc.get_current_lane()
 		var distance_along: float = runner["distance_along"]
 		var pos: Vector3 = _runner_position_at(runner, lane, distance_along)
@@ -547,7 +547,7 @@ func _choose_axis_bend(result: Array[Vector3], curr: Vector3) -> Vector3:
 	return Vector3(curr.x, prev.y, prev.z)
 
 
-func _on_lane_changed() -> void:
+func _on_lane_change_started(_from_lane: int, _to_lane: int) -> void:
 	# When the lane changes, snap player position immediately to the new lane
 	# at the same distance along the current segment.
 	_apply_position()
@@ -648,7 +648,7 @@ func _is_lane_blocked_by_obstacle() -> bool:
 # Drive one NPC runner: pick a lane (with optional avoidance), advance distance,
 # handle end-of-rail behavior, and write the world position + yaw.
 func _advance_npc_runner(runner: Dictionary, delta: float) -> void:
-	var npc: NPCCharacter = runner["node"]
+	var npc: Pawn = runner["node"]
 	if not is_instance_valid(npc):
 		return
 	if npc.is_runner_paused():
@@ -695,8 +695,8 @@ func _handle_runner_end_of_rail(runner: Dictionary) -> void:
 		runner["segment_index"] = 0
 		runner["distance_along"] = randf() * NPC_SPAWN_STAGGER_DISTANCE
 		_normalize_runner(runner)
-		var npc: NPCCharacter = runner["node"]
-		npc.set_current_lane(randi() % NPCCharacter.LANE_COUNT)
+		var npc: Pawn = runner["node"]
+		npc.set_current_lane(randi() % Pawn.LANE_COUNT)
 		_enforce_safe_spawn_radius(runner)
 		_apply_runner_position(runner)
 		_apply_runner_yaw_instant(runner)
@@ -707,7 +707,7 @@ func _handle_runner_end_of_rail(runner: Dictionary) -> void:
 	runner["finished"] = true
 	runner["segment_index"] = _corners.size() - 2
 	runner["distance_along"] = _runner_segment_length(runner)
-	var npc_forward: NPCCharacter = runner["node"]
+	var npc_forward: Pawn = runner["node"]
 	var slot: int = _parked_npc_count
 	_parked_npc_count += 1
 	npc_forward.park_at_finish(_compute_park_offset(slot))
@@ -768,7 +768,7 @@ func _normalize_runner(runner: Dictionary) -> void:
 # Switch the NPC's lane to a clear one if its current lane is about to hit
 # an obstacle within the lookahead distance.
 func _npc_avoid_obstacle(runner: Dictionary) -> void:
-	var npc: NPCCharacter = runner["node"]
+	var npc: Pawn = runner["node"]
 	var lookahead: float = npc.get_obstacle_lookahead()
 	if lookahead <= 0.0:
 		return
@@ -777,7 +777,7 @@ func _npc_avoid_obstacle(runner: Dictionary) -> void:
 		return
 	# Shuffle through the other lanes and pick the first clear one.
 	var candidates: Array[int] = []
-	for lane: int in range(NPCCharacter.LANE_COUNT):
+	for lane: int in range(Pawn.LANE_COUNT):
 		if lane != current_lane:
 			candidates.append(lane)
 	candidates.shuffle()
@@ -790,7 +790,7 @@ func _npc_avoid_obstacle(runner: Dictionary) -> void:
 # Sample positions ahead along the runner's rail in a candidate lane and
 # return whether any of them sits inside an obstacle.
 func _runner_lane_blocked(runner: Dictionary, lane: int, lookahead: float) -> bool:
-	var npc: NPCCharacter = runner["node"]
+	var npc: Pawn = runner["node"]
 	var space_state: PhysicsDirectSpaceState3D = npc.get_world_3d().direct_space_state
 	if space_state == null:
 		return false
@@ -836,7 +836,7 @@ func _runner_position_at(runner: Dictionary, lane: int, distance_along: float) -
 # Parked NPCs (already at the finish) get a fixed lateral/depth offset so
 # they loiter on the train instead of blocking the rail.
 func _apply_runner_position(runner: Dictionary) -> void:
-	var npc: NPCCharacter = runner["node"]
+	var npc: Pawn = runner["node"]
 	var lane: int = npc.get_current_lane()
 	var distance_along: float = runner["distance_along"]
 	var pos: Vector3 = _runner_position_at(runner, lane, distance_along)
@@ -849,7 +849,7 @@ func _apply_runner_position(runner: Dictionary) -> void:
 
 # Smoothly rotate the runner toward its current rail direction.
 func _apply_runner_yaw(runner: Dictionary, delta: float) -> void:
-	var npc: NPCCharacter = runner["node"]
+	var npc: Pawn = runner["node"]
 	var lane: int = npc.get_current_lane()
 	var direction: int = runner["direction"]
 	var segment_index: int = runner["segment_index"]
@@ -867,7 +867,7 @@ func _apply_runner_yaw(runner: Dictionary, delta: float) -> void:
 
 # Snap the runner's yaw to the current rail direction without easing.
 func _apply_runner_yaw_instant(runner: Dictionary) -> void:
-	var npc: NPCCharacter = runner["node"]
+	var npc: Pawn = runner["node"]
 	var lane: int = npc.get_current_lane()
 	var direction: int = runner["direction"]
 	var segment_index: int = runner["segment_index"]
@@ -883,7 +883,7 @@ func _apply_runner_yaw_instant(runner: Dictionary) -> void:
 
 # Length of the runner's current segment along its lane.
 func _runner_segment_length(runner: Dictionary) -> float:
-	var npc: NPCCharacter = runner["node"]
+	var npc: Pawn = runner["node"]
 	var lane: int = npc.get_current_lane()
 	var direction: int = runner["direction"]
 	var segment_index: int = runner["segment_index"]
@@ -898,7 +898,7 @@ func _runner_segment_length(runner: Dictionary) -> float:
 func _runner_lane_segment_start(segment_index: int, lane: int, direction: int) -> Vector3:
 	if direction == RAIL_REVERSE:
 		var reversed_index: int = (_corners.size() - 2) - segment_index
-		var flipped_lane: int = (NPCCharacter.LANE_COUNT - 1) - lane
+		var flipped_lane: int = (Pawn.LANE_COUNT - 1) - lane
 		return _get_lane_segment_end(reversed_index, flipped_lane)
 	return _get_lane_segment_start(segment_index, lane)
 
@@ -907,7 +907,7 @@ func _runner_lane_segment_start(segment_index: int, lane: int, direction: int) -
 func _runner_lane_segment_end(segment_index: int, lane: int, direction: int) -> Vector3:
 	if direction == RAIL_REVERSE:
 		var reversed_index: int = (_corners.size() - 2) - segment_index
-		var flipped_lane: int = (NPCCharacter.LANE_COUNT - 1) - lane
+		var flipped_lane: int = (Pawn.LANE_COUNT - 1) - lane
 		return _get_lane_segment_start(reversed_index, flipped_lane)
 	return _get_lane_segment_end(segment_index, lane)
 
@@ -1038,7 +1038,9 @@ func _apply_yaw(delta: float) -> void:
 
 
 # Move the runner back after a failed subway shuffle collision.
-func _on_subway_shuffle_failed() -> void:
+func _on_shuffle_resolved(succeeded: bool, _direction: int) -> void:
+	if succeeded:
+		return
 	_rewind_distance(_player.shuffle_knockback_distance)
 	_apply_position()
 

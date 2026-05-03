@@ -1,6 +1,6 @@
 extends Camera3D
 
-@onready var player: Player = get_tree().get_first_node_in_group('player')
+@onready var player: Pawn = get_tree().get_first_node_in_group('player')
 @onready var animation_player: AnimationPlayer = $AnimationPlayer
 
 func _ready() -> void:

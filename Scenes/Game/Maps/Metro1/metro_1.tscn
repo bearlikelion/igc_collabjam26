@@ -6,19 +6,20 @@
 [ext_resource type="AudioStream" uid="uid://d3eum4cf3d2fw" path="res://Assets/Audio/SFX/Metro/727842__alexanderche__ambience-city-metro-preobrazhenskaya-ploshad-subway-moscow.ogg" id="4_jf3xt"]
 [ext_resource type="Script" uid="uid://bd83xckma828n" path="res://Scenes/Game/Maps/metro_sounds.gd" id="5_ug0ud"]
 [ext_resource type="Script" uid="uid://cwu5cf7a0awcd" path="res://addons/func_godot/src/map/func_godot_map.gd" id="6_b3fhr"]
-[ext_resource type="PackedScene" uid="uid://24xx8rg8c7jb" path="res://Scenes/Player/Player.tscn" id="7_1u2wa"]
 [ext_resource type="Resource" uid="uid://bkhxcqsquw1yg" path="res://addons/func_godot/func_godot_default_map_settings.tres" id="7_cyw2y"]
-[ext_resource type="Material" uid="uid://c02p7shc1fy7o" path="res://Assets/textures/dev/wall.tres" id="8_b3fhr"]
-[ext_resource type="PackedScene" uid="uid://dwb2s0dmhbkis" path="res://Scenes/Characters/NPCCharacter.tscn" id="8_svs80"]
-[ext_resource type="Texture2D" uid="uid://bkgsq3b8op3s4" path="res://Assets/textures/dev/track_wall.png" id="9_hwpev"]
+[ext_resource type="Material" uid="uid://c02p7shc1fy7o" path="res://Assets/Textures/dev/wall.tres" id="8_b3fhr"]
+[ext_resource type="PackedScene" uid="uid://cfbedqf0p215d" path="res://Scenes/Characters/Pawn.tscn" id="8_svs80"]
+[ext_resource type="Texture2D" uid="uid://bkgsq3b8op3s4" path="res://Assets/Textures/dev/track_wall.png" id="9_hwpev"]
 [ext_resource type="ArrayMesh" uid="uid://dgtirktt1xuok" path="res://Assets/Models/Metro/Meshes/Metro_subway_car.res" id="9_rrdri"]
-[ext_resource type="Texture2D" uid="uid://dik0ga1mw17h8" path="res://Assets/textures/dev/tracks.png" id="10_0ujbg"]
+[ext_resource type="Texture2D" uid="uid://dik0ga1mw17h8" path="res://Assets/Textures/dev/tracks.png" id="10_0ujbg"]
 [ext_resource type="PackedScene" uid="uid://v4iekc8b5cgx" path="res://Scenes/Game/Props/three_chair_bench.tscn" id="10_cfpln"]
-[ext_resource type="Material" uid="uid://c0nfc87pvu6h0" path="res://Assets/textures/dev/floor.tres" id="10_cyw2y"]
+[ext_resource type="Material" uid="uid://c0nfc87pvu6h0" path="res://Assets/Textures/dev/floor.tres" id="10_cyw2y"]
 [ext_resource type="AudioStream" uid="uid://bpi1lxlloups3" path="res://Assets/Audio/Music/Los Del Rios - Macarena (8 Bit Raxlen Slice Chiptune Remix).mp3" id="10_sryx3"]
-[ext_resource type="Material" uid="uid://doyt74p2tw1sq" path="res://Assets/textures/dev/roof.tres" id="10_vvu7a"]
+[ext_resource type="Material" uid="uid://doyt74p2tw1sq" path="res://Assets/Textures/dev/roof.tres" id="10_vvu7a"]
 [ext_resource type="PackedScene" uid="uid://by5hvbonr0euy" path="res://Scenes/Game/Props/oh_light.tscn" id="11_hwpev"]
-[ext_resource type="Material" uid="uid://bmti88ony01qi" path="res://Assets/textures/dev/bumps.tres" id="11_tckt1"]
+[ext_resource type="Material" uid="uid://bmti88ony01qi" path="res://Assets/Textures/dev/bumps.tres" id="11_tckt1"]
+[ext_resource type="Resource" path="res://Scenes/Characters/Brains/PlayerBrain.tres" id="12_pbrn"]
+[ext_resource type="Resource" path="res://Scenes/Characters/Brains/AIBrain.tres" id="13_aibrn"]
 [ext_resource type="Script" uid="uid://b0kdqdyh2br7w" path="res://Scenes/Game/Maps/Metro1/end_camera.gd" id="13_akkrs"]
 [ext_resource type="Shader" uid="uid://t6b0t5n4jabv" path="res://Shaders/cctv.gdshader" id="14_0rra6"]
 
@@ -451,32 +452,38 @@ shape = SubResource("ConcavePolygonShape3D_s4vao")
 unique_name_in_owner = true
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 48.81285, 0.41481966, -21.5)
 
-[node name="Player" parent="NavigationRegion3D" unique_id=759156532 instance=ExtResource("7_1u2wa")]
+[node name="Player" parent="NavigationRegion3D" unique_id=759156532 instance=ExtResource("8_svs80")]
 unique_name_in_owner = true
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0, -1)
+brain = ExtResource("12_pbrn")
+is_active_camera = true
+apply_bullet_time = true
 shuffle_choice_time = 0.75
 shuffle_knockback_distance = 1.5
 
 [node name="NPCCharacter" parent="NavigationRegion3D" unique_id=1919134681 instance=ExtResource("8_svs80")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0, -24)
-rail_direction = 0
+brain = ExtResource("13_aibrn")
 
 [node name="NPCCharacter2" parent="NavigationRegion3D" unique_id=2133715270 instance=ExtResource("8_svs80")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0, -39)
+brain = ExtResource("13_aibrn")
 
 [node name="NPCCharacter3" parent="NavigationRegion3D" unique_id=1641043877 instance=ExtResource("8_svs80")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0, -52.5)
-rail_direction = 0
+brain = ExtResource("13_aibrn")
 
 [node name="NPCCharacter4" parent="NavigationRegion3D" unique_id=957812564 instance=ExtResource("8_svs80")]
 transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 9.5, 0, -52.5)
+brain = ExtResource("13_aibrn")
 
 [node name="NPCCharacter5" parent="NavigationRegion3D" unique_id=214608436 instance=ExtResource("8_svs80")]
 transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 23.5, 0, -52.5)
-rail_direction = 0
+brain = ExtResource("13_aibrn")
 
 [node name="NPCCharacter6" parent="NavigationRegion3D" unique_id=1201259432 instance=ExtResource("8_svs80")]
 transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 15, 0, -53.5)
+brain = ExtResource("13_aibrn")
 
 [node name="TRAIN" type="MeshInstance3D" parent="NavigationRegion3D" unique_id=779706671]
 transform = Transform3D(-1.3113416e-07, 0, -3, 0, 3, 0, 3, 0, -1.3113416e-07, 50.100002, 2.2, -21.5)

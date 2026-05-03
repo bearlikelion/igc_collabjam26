@@ -1,0 +1,101 @@
+class_name PlayerBrain
+extends Brain
+
+# Player brain. Reads keyboard input (left/right) via process_input forwarded
+# from Pawn, and translates it into Pawn intent calls (request_lane_change /
+# set_shuffle_telegraph / lean). The Pawn owns the camera, headbob, lane-lean
+# spring, bullet-time, and visual show/hide — Brain doesn't touch any of that.
+
+var _lane_intent: int = 0
+
+
+func _on_bound() -> void:
+	pawn.add_to_group("player")
+
+
+# Called by Pawn._input for every input event. During an active shuffle, route
+# left/right to the telegraph; outside, route to lane intent (press) and lane
+# commit (release).
+func process_input(event: InputEvent) -> void:
+	if pawn == null:
+		return
+	if pawn.is_shuffle_active():
+		if event.is_action_pressed("left"):
+			_capture_shuffle_choice(-1)
+		elif event.is_action_pressed("right"):
+			_capture_shuffle_choice(1)
+		elif event.is_action_released("left") or event.is_action_released("right"):
+			pawn.lean(_get_held_direction())
+		return
+	if pawn.is_knocked_down() or not pawn.can_move():
+		return
+	if event.is_action_pressed("left"):
+		_on_lane_input_press(-1)
+	elif event.is_action_pressed("right"):
+		_on_lane_input_press(1)
+	elif event.is_action_released("left") or event.is_action_released("right"):
+		_on_lane_input_release()
+
+
+func _on_lane_change_canceled() -> void:
+	# A shuffle interrupted our tween — reset camera-lean intent.
+	_lane_intent = 0
+	pawn.lean(0)
+
+
+func _on_recovered() -> void:
+	# Require a fresh press to lane-change after recovery.
+	_lane_intent = 0
+	pawn.lean(0)
+
+
+func _on_encounter_detected(other: Pawn, _distance: float) -> void:
+	if other == null:
+		return
+	# Same-direction NPCs: instant knockdown for the player, no shuffle window.
+	# (Preserves Player._fail_same_direction_collision from pre-Stage-3 code.)
+	# Mark the offender as ignored so the forward cast doesn't re-trigger
+	# this same collision the moment recovery completes.
+	if other.is_routing_to_finish_point():
+		pawn.set_shuffle_ignored(other)
+		pawn.knock_down_from_shuffle()
+		return
+	pawn.start_shuffle(other)
+
+
+# Press handler — set lane intent. Cancels intent if both keys are now held.
+func _on_lane_input_press(direction: int) -> void:
+	if not pawn.can_move() or pawn.is_knocked_down() or pawn.is_movement_blocked() or pawn.is_goal_reached():
+		return
+	var both_held: bool = Input.is_action_pressed("left") and Input.is_action_pressed("right")
+	_lane_intent = 0 if both_held else direction
+	pawn.lean(_lane_intent)
+
+
+# Release handler — commit the lane change if no other key is still held.
+func _on_lane_input_release() -> void:
+	var still_held: bool = Input.is_action_pressed("left") or Input.is_action_pressed("right")
+	if still_held:
+		_lane_intent = -1 if Input.is_action_pressed("left") else 1
+		pawn.lean(_lane_intent)
+		return
+	if pawn.can_move() and not pawn.is_knocked_down() and not pawn.is_movement_blocked() and not pawn.is_goal_reached():
+		var next_lane: int = clampi(pawn.get_current_lane() + _lane_intent, 0, Pawn.LANE_COUNT - 1)
+		if next_lane != pawn.get_current_lane():
+			pawn.request_lane_change(next_lane)
+	_lane_intent = 0
+	pawn.lean(0)
+
+
+func _capture_shuffle_choice(direction: int) -> void:
+	pawn.set_shuffle_telegraph(direction)
+	pawn.lean(direction)
+
+
+func _get_held_direction() -> int:
+	var direction: int = 0
+	if Input.is_action_pressed("left"):
+		direction -= 1
+	if Input.is_action_pressed("right"):
+		direction += 1
+	return clampi(direction, -1, 1)
