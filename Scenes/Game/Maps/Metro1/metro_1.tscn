@@ -146,6 +146,10 @@ _surfaces = [{
 "vertex_data": PackedByteArray("AABIQgAAAD0AAFjCAABGQgAAAD0AAFjCAABGQgAAAAAAAFjCAABIQgAAAAAAAFjCAABGQgAAAAAAAKDBAABGQgAAAAAAAFjCAABGQgAAAD0AAFjCAABGQgAAAD0AAKDBAABGQgAAAAAAAKDBAABIQgAAAAAAAKDBAABIQgAAAAAAAFjCAABGQgAAAAAAAFjCAABGQgAAAD0AAKDBAABGQgAAAD0AAFjCAABIQgAAAD0AAFjCAABIQgAAAD0AAKDBAABIQgAAAD0AAKDBAABIQgAAAD0AAFjCAABIQgAAAAAAAFjCAABIQgAAAAAAAKDBAABIQgAAAAAAAKDBAABGQgAAAAAAAKDBAABGQgAAAD0AAKDBAABIQgAAAD0AAKDBAABiQgAAAD0AAFjCAABgQgAAAD0AAFjCAABgQgAAAAAAAFjCAABiQgAAAAAAAFjCAABgQgAAAAAAAKDBAABgQgAAAAAAAFjCAABgQgAAAD0AAFjCAABgQgAAAD0AAKDBAABgQgAAAAAAAKDBAABiQgAAAAAAAKDBAABiQgAAAAAAAFjCAABgQgAAAAAAAFjCAABgQgAAAD0AAKDBAABgQgAAAD0AAFjCAABiQgAAAD0AAFjCAABiQgAAAD0AAKDBAABiQgAAAD0AAKDBAABiQgAAAD0AAFjCAABiQgAAAAAAAFjCAABiQgAAAAAAAKDBAABiQgAAAAAAAKDBAABgQgAAAAAAAKDBAABgQgAAAD0AAKDBAABiQgAAAD0AAKDB/////wAA/7//////AAD/v/////8AAP+//////wAA/78AAP9//3//vwAA/3//f/+/AAD/f/9//78AAP9//3//v/9/AAD//////38AAP//////fwAA//////9/AAD//////3////9//7//f////3//v/9/////f/+//3////9//7////9//////////3//////////f/////////9///////9//3////+//3//f////7//f/9/////v/9//3////+//////wAA/7//////AAD/v/////8AAP+//////wAA/78AAP9//3//vwAA/3//f/+/AAD/f/9//78AAP9//3//v/9/AAD//////38AAP//////fwAA//////9/AAD//////3////9//7//f////3//v/9/////f/+//3////9//7////9//////////3//////////f/////////9///////9//3////+//3//f////7//f/9/////v/9//3////+/")
 }]
 
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_h2wfe"]
+transparency = 1
+albedo_color = Color(1, 1, 1, 0)
+
 [sub_resource type="ConvexPolygonShape3D" id="ConvexPolygonShape3D_agc11"]
 points = PackedVector3Array(2, 4, 0, 2, -1, 0, 1, 4, 0, 1, -1, 0, 2, 4, -51, 2, -1, -51, 1, 4, -51, 1, -1, -51)
 
@@ -283,7 +287,7 @@ tracks/0/keys = {
 "times": PackedFloat32Array(0),
 "transitions": PackedFloat32Array(1),
 "update": 0,
-"values": [Vector3(50.100002, 2.2, -21.5)]
+"values": [Vector3(53.100002, 2.2, -38.5)]
 }
 
 [sub_resource type="Animation" id="Animation_kvorr"]
@@ -296,10 +300,10 @@ tracks/0/path = NodePath("NavigationRegion3D/TRAIN:position")
 tracks/0/interp = 1
 tracks/0/loop_wrap = true
 tracks/0/keys = {
-"times": PackedFloat32Array(2, 4, 6, 8, 10),
+"times": PackedFloat32Array(1.9666667, 4, 6, 8, 10),
 "transitions": PackedFloat32Array(1, 1, 1, 1, 1),
 "update": 0,
-"values": [Vector3(50.100002, 2.2, -21.5), Vector3(50.1, 2.2, -32.15), Vector3(50.1, 2.2, -40.37), Vector3(50.1, 2.2, -100), Vector3(50.1, 2.2, -300)]
+"values": [Vector3(53.100002, 2.2, -38.5), Vector3(53.1, 2.2, -48.5), Vector3(53.1, 2.2, -58.5), Vector3(53.1, 2.2, -100), Vector3(53.1, 2.2, -300)]
 }
 tracks/1/type = "method"
 tracks/1/imported = false
@@ -344,7 +348,7 @@ environment = SubResource("Environment_ddw0b")
 navigation_mesh = SubResource("NavigationMesh_pnnlu")
 
 [node name="TRAIN" type="MeshInstance3D" parent="NavigationRegion3D" unique_id=779706671]
-transform = Transform3D(-1.3113416e-07, 0, -3, 0, 3, 0, 3, 0, -1.3113416e-07, 50.100002, 2.2, -21.5)
+transform = Transform3D(-1.3113416e-07, 0, -3, 0, 3, 0, 3, 0, -1.3113416e-07, 53.100002, 2.2, -38.5)
 mesh = ExtResource("9_rrdri")
 
 [node name="StaticBody3D" type="StaticBody3D" parent="NavigationRegion3D/TRAIN" unique_id=1392915564]
@@ -367,6 +371,7 @@ collision_mask = 0
 
 [node name="entity_0_mesh_instance" type="MeshInstance3D" parent="NavigationRegion3D/FuncGodotMap/entity_0_worldspawn" unique_id=1059534458]
 mesh = SubResource("ArrayMesh_h2wfe")
+surface_material_override/4 = SubResource("StandardMaterial3D_h2wfe")
 
 [node name="entity_0_brush_0_collision_shape" type="CollisionShape3D" parent="NavigationRegion3D/FuncGodotMap/entity_0_worldspawn" unique_id=134975071]
 shape = SubResource("ConvexPolygonShape3D_agc11")
