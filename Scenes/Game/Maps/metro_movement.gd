@@ -7,18 +7,19 @@ extends Node3D
 # Each segment has: start point, end point, forward direction, length.
 # Actor position = segment.start + forward * distance + right * lane_offset
 # Distance increments at run_speed each frame.
-# When distance >= segment length (adjusted for lane), advance to next segment.
+# When distance >= segment length, advance to next segment.
 #
-# Lane is a fixed perpendicular offset:
+# Lane is a fixed perpendicular offset to the CURRENT segment's direction:
 #   Lane 0 (left)   = -1.0 perpendicular
 #   Lane 1 (center) =  0.0
 #   Lane 2 (right)  = +1.0 perpendicular
 #
-# Segment length per lane:
-#   The end of a segment is the corner point. To reach the L tile (outer),
-#   the left lane needs to travel longer along the incoming straight, then
-#   takes a shorter outgoing segment. We compute per-lane segment lengths
-#   so each lane reaches the center of its L/M/R tile before turning.
+# At interior corners non-center lanes snap from "perpendicular to old segment"
+# to "perpendicular to new segment" — a ~sqrt(2)*offset world-space jump for
+# 90° turns. This keeps strafes purely perpendicular to the current rail
+# direction (the previous lane-line-intersection geometry baked a parallel-to-
+# rail component into non-center lanes, so post-turn strafes drifted forward
+# or backward along the rail).
 
 const LANE_OFFSETS: Array[float] = [-1.0, 0.0, 1.0]
 const AXIS_TOLERANCE: float = 0.5
@@ -1394,17 +1395,22 @@ func _runner_lane_segment_end(segment_index: int, lane: int, toward_finish: bool
 
 
 # Get the lane-specific start point for a segment.
+# Lane offset is perpendicular to THIS segment's direction. The previous
+# implementation used _get_lane_turn_point (intersection of in/out lane lines
+# at interior corners), which baked a parallel-to-rail component into non-center
+# lanes — strafing right after a right turn moved the player forward along the
+# rail. Uniform perpendicular offset costs the per-lane corner-tracking
+# geometry (outer lanes no longer take longer paths around corners, and lanes
+# 0/2 visibly snap by ~sqrt(2)*offset across each interior corner) but fixes
+# the strafe direction throughout each segment.
 func _get_lane_segment_start(segment_index: int, lane: int) -> Vector3:
-	if segment_index == 0:
-		return _get_lane_endpoint(0, 0, 1, lane)
-	return _get_lane_turn_point(segment_index, lane)
+	return _get_lane_endpoint(segment_index, segment_index, segment_index + 1, lane)
 
 
-# Get the lane-specific end point for a segment.
+# Get the lane-specific end point for a segment. See _get_lane_segment_start
+# for the rationale on perpendicular-to-segment offsets vs lane turn points.
 func _get_lane_segment_end(segment_index: int, lane: int) -> Vector3:
-	if segment_index >= _corners.size() - 2:
-		return _get_lane_endpoint(_corners.size() - 1, _corners.size() - 2, _corners.size() - 1, lane)
-	return _get_lane_turn_point(segment_index + 1, lane)
+	return _get_lane_endpoint(segment_index + 1, segment_index, segment_index + 1, lane)
 
 
 # Offset a path endpoint onto the requested lane.
@@ -1417,28 +1423,3 @@ func _get_lane_endpoint(corner_index: int, segment_start_index: int, segment_end
 	direction = direction.normalized()
 	var right: Vector3 = direction.cross(Vector3.UP).normalized()
 	return corner + right * LANE_OFFSETS[lane]
-
-
-# Intersect the incoming and outgoing lane lines at an interior corner.
-func _get_lane_turn_point(corner_index: int, lane: int) -> Vector3:
-	var prev: Vector3 = _corners[corner_index - 1]
-	var corner: Vector3 = _corners[corner_index]
-	var next: Vector3 = _corners[corner_index + 1]
-
-	var in_dir: Vector3 = corner - prev
-	var out_dir: Vector3 = next - corner
-	in_dir.y = 0.0
-	out_dir.y = 0.0
-	if in_dir.length_squared() < 0.001 or out_dir.length_squared() < 0.001:
-		return corner
-	in_dir = in_dir.normalized()
-	out_dir = out_dir.normalized()
-
-	var lane_offset: float = LANE_OFFSETS[lane]
-	var in_right: Vector3 = in_dir.cross(Vector3.UP).normalized()
-	var out_right: Vector3 = out_dir.cross(Vector3.UP).normalized()
-	var incoming_point: Vector3 = corner + in_right * lane_offset
-	var outgoing_point: Vector3 = corner + out_right * lane_offset
-	var turn_point: Vector3 = _intersect_lines_xz(incoming_point, in_dir, outgoing_point, out_dir)
-	turn_point.y = corner.y
-	return turn_point
