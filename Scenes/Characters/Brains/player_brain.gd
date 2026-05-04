@@ -78,23 +78,7 @@ func get_move_speed() -> float:
 			_waiting_for = null
 		else:
 			return 0.0
-	return _modulate_for_same_direction_peer(pawn.run_speed)
-
-
-# Cap player speed behind a same-direction NPC so the player never collides
-# with someone walking their way. Opposing-direction peers stay at full speed
-# so the player can engage the shuffle dodge mechanic on contact.
-func _modulate_for_same_direction_peer(raw: float) -> float:
-	if pawn._metro_movement == null:
-		return raw
-	var peer: Pawn = pawn._metro_movement.find_lane_occupant_ahead(
-		pawn, pawn.get_current_lane(), encounter_lookahead
-	)
-	if peer == null:
-		return raw
-	if peer.is_routing_to_finish_point() != pawn.is_routing_to_finish_point():
-		return raw
-	return minf(raw, peer.get_rail_speed())
+	return modulate_for_same_direction_peer(pawn.run_speed)
 
 
 # Called by Pawn._input for every input event. During an active shuffle, route

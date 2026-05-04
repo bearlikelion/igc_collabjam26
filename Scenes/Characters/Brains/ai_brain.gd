@@ -22,6 +22,10 @@ extends Brain
 ## will swerve into it. If no candidate clears the floor, the AI holds its
 ## current lane rather than swap into a tighter slot.
 @export var min_clearance: float = 1.5
+## Comfort gap (rail-meters) behind a same-direction peer. Inside this
+## distance the AI slows below peer speed so the gap regrows — prevents
+## convoy stacking. See `Brain.modulate_for_same_direction_peer`.
+@export var min_peer_gap: float = 1.0
 
 @export_group("Encounters")
 ## Rail-distance the encounter scan looks ahead for other Pawns in the same
@@ -267,25 +271,11 @@ func get_move_speed() -> float:
 			return 0.0
 	if _actual_move_speed <= 0.0:
 		_roll_speed()
-	return _modulate_for_same_direction_peer(_actual_move_speed)
+	return modulate_for_same_direction_peer(_actual_move_speed)
 
 
-# Cap speed at the same-direction peer ahead so we never close to collision
-# distance — knockback should only happen head-on. Returns `raw` if no peer
-# in the lane, no MetroMovement back-ref, or the peer is opposing direction
-# (those go through the shuffle protocol).
-func _modulate_for_same_direction_peer(raw: float) -> float:
-	if pawn._metro_movement == null:
-		return raw
-	var peer: Pawn = pawn._metro_movement.find_lane_occupant_ahead(
-		pawn, pawn.get_current_lane(), encounter_lookahead
-	)
-	if peer == null:
-		return raw
-	if peer.is_routing_to_finish_point() != pawn.is_routing_to_finish_point():
-		return raw
-	# Same direction: match peer speed so the gap holds steady at lookahead.
-	return minf(raw, peer.get_rail_speed())
+func get_min_peer_gap() -> float:
+	return min_peer_gap
 
 
 func get_spawn_distance() -> float:

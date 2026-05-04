@@ -161,3 +161,43 @@ func get_encounter_lookahead() -> float:
 # AIBrain returns PARK or RESPAWN based on its destination.
 func get_end_of_rail_action() -> int:
 	return EndOfRailAction.RESPAWN
+
+
+# Comfort gap (rail-meters) behind a same-direction peer. Inside this distance
+# this Pawn slows BELOW peer speed so the gap regrows — prevents stacking.
+# Subclasses may override per-instance via export.
+func get_min_peer_gap() -> float:
+	return 1.0
+
+
+# Cap `raw` speed so this Pawn doesn't catch up to a same-direction peer ahead
+# in its lane, AND backs off (drops below peer speed) when inside the comfort
+# gap so the gap can recover instead of compressing into a stack. Returns the
+# raw speed unchanged if no peer is in the lane, the peer is opposing-direction
+# (those go through the shuffle protocol), the brain has no encounter scan
+# enabled, or the MetroMovement back-ref isn't wired.
+func modulate_for_same_direction_peer(raw: float) -> float:
+	if pawn == null or pawn._metro_movement == null:
+		return raw
+	var lookahead: float = get_encounter_lookahead()
+	if lookahead <= 0.0:
+		return raw
+	var peer: Pawn = pawn._metro_movement.find_lane_occupant_ahead(
+		pawn, pawn.get_current_lane(), lookahead
+	)
+	if peer == null:
+		return raw
+	if peer.is_routing_to_finish_point() != pawn.is_routing_to_finish_point():
+		return raw
+	var peer_speed: float = peer.get_rail_speed()
+	var distance: float = pawn._metro_movement.get_lane_clearance(
+		pawn, pawn.get_current_lane(), lookahead
+	)
+	var min_gap: float = get_min_peer_gap()
+	if distance >= min_gap:
+		# Far enough: match peer speed, hold the gap steady.
+		return minf(raw, peer_speed)
+	# Inside comfort gap: linear scale below peer_speed so peer pulls away.
+	# At distance == 0 → speed 0 (full stop, no overlap). At distance == min_gap
+	# → speed == peer_speed (continuous boundary with the match-branch above).
+	return peer_speed * clampf(distance / min_gap, 0.0, 1.0)
