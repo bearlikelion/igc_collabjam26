@@ -107,19 +107,21 @@ func get_move_speed() -> float:
 	return modulate_for_same_direction_peer(pawn.run_speed)
 
 
-# Called by Pawn._input for every input event. During an active shuffle, route
-# left/right to the telegraph; outside, route to lane intent (press) and lane
-# commit (release).
+# Called by Pawn._input for every input event. During an active shuffle, the
+# telegraph mirrors the currently-held direction (tap to choose, release
+# returns to stay, both-held cancels) — same surface as normal lane input
+# pressed/released states, but the shuffle resolves at deadline rather than
+# on release. Outside shuffle, route to lane intent (press) and lane commit
+# (release).
 func process_input(event: InputEvent) -> void:
 	if pawn == null:
 		return
 	if pawn.is_shuffle_active():
-		if event.is_action_pressed("left"):
-			_capture_shuffle_choice(-1)
-		elif event.is_action_pressed("right"):
-			_capture_shuffle_choice(1)
-		elif event.is_action_released("left") or event.is_action_released("right"):
-			pawn.lean(_get_held_direction())
+		if event.is_action_pressed("left") or event.is_action_pressed("right") \
+				or event.is_action_released("left") or event.is_action_released("right"):
+			var held: int = _get_held_direction()
+			pawn.set_shuffle_telegraph(held)
+			pawn.lean(held)
 		return
 	if pawn.is_knocked_down() or not pawn.can_move():
 		return
@@ -186,11 +188,6 @@ func _on_lane_input_release() -> void:
 			pawn.request_lane_change(next_lane)
 	_lane_intent = 0
 	pawn.lean(0)
-
-
-func _capture_shuffle_choice(direction: int) -> void:
-	pawn.set_shuffle_telegraph(direction)
-	pawn.lean(direction)
 
 
 func _get_held_direction() -> int:

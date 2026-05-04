@@ -1247,10 +1247,68 @@ func _runner_yaw_for_lane(runner: Runner, lane: int) -> float:
 # Rewind any runner along the rail when they are knocked down. The pawn's
 # brain config governs how far back they end up, so the player and NPCs can
 # have different recoil tuning by swapping configs.
+#
+# Chain reaction: before we rewind, propagate the knockdown to any
+# same-direction peer behind us in the same physical lane within the requested
+# rewind distance. Their `knock_down_from_shuffle()` emits `knocked_down`
+# synchronously, which re-enters this handler for that pawn and cascades
+# until no further chain target exists. By the time our `_rewind_runner` runs,
+# every chained peer has already moved backward, so the existing
+# `_clamp_rewind_to_rear_pawn` logic re-queries their NEW positions and
+# yields a clean buffered separation with no overlap math here.
 func _on_runner_knocked_down(runner: Runner) -> void:
 	var knockback: float = runner.node.brain.get_shuffle_knockback_distance() if runner.node.brain != null else 0.0
+	_propagate_knockback_chain(runner, knockback)
 	_rewind_runner(runner, knockback)
 	_apply_runner_position(runner)
+
+
+# Trigger knock_down_from_shuffle on the nearest same-direction peer behind
+# `runner` within `distance` rail-meters. Pawn.knock_down_from_shuffle is
+# idempotent (no-op on KNOCKED_DOWN) and emits `knocked_down` synchronously,
+# so the recursion bottoms out naturally when _find_chain_target returns null.
+func _propagate_knockback_chain(runner: Runner, distance: float) -> void:
+	if distance <= 0.0:
+		return
+	var rear: Runner = _find_chain_target(runner, distance)
+	if rear == null:
+		return
+	rear.node.knock_down_from_shuffle()
+
+
+# Nearest same-direction, same-physical-lane peer behind `runner` within
+# `distance` rail-meters that is in a state we can chain into (RUNNING or
+# SHUFFLING). Skips KNOCKED_DOWN / PARKED / FINISHED / DISABLED — those are
+# either already part of an active chain or shouldn't be disturbed. Returns
+# the Runner or null if no chain target exists.
+func _find_chain_target(runner: Runner, distance: float) -> Runner:
+	var phys_lane: int = _runner_physical_lane(runner)
+	var center: float = _runner_centerline_position(runner)
+	var nearest: Runner = null
+	var nearest_behind: float = INF
+	for other: Runner in _runners:
+		if other == runner or not is_instance_valid(other.node):
+			continue
+		if other.toward_finish != runner.toward_finish:
+			continue
+		if _runner_physical_lane(other) != phys_lane:
+			continue
+		var loco: int = other.node.locomotion
+		if loco != Pawn.LocomotionState.RUNNING and loco != Pawn.LocomotionState.SHUFFLING:
+			continue
+		var ahead: float = _signed_distance_ahead(
+			center, _runner_centerline_position(other), runner.toward_finish
+		)
+		# Negative `ahead` = peer is behind us along travel direction.
+		if ahead >= 0.0:
+			continue
+		var behind: float = -ahead
+		if behind > distance:
+			continue
+		if behind < nearest_behind:
+			nearest_behind = behind
+			nearest = other
+	return nearest
 
 
 # Rewind a runner backward along the rail by the given distance, clamped so

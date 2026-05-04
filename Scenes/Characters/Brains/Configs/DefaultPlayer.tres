@@ -1,14 +1,10 @@
-[gd_resource type="Resource" script_class="PlayerBrainConfig" load_steps=2 format=3 uid="uid://b0u5cgxlaxnpc"]
+[gd_resource type="Resource" script_class="PlayerBrainConfig" format=3 uid="uid://b0u5cgxlaxnpc"]
 
 [ext_resource type="Script" uid="uid://bqgv3dpcfjk43" path="res://Scenes/Characters/Brains/player_brain_config.gd" id="1_plycfg"]
 
 [resource]
 script = ExtResource("1_plycfg")
-start_speed = 0.5
-max_speed = 3.0
-acceleration_time = 10.0
-shuffle_recovery_time = 2.5
-shuffle_get_up_time = 1.0
+start_speed = 1.0
+acceleration_time = 0.5
 shuffle_knockback_distance = 1.5
 obstacle_lookahead = 0.75
-encounter_lookahead = 2.0

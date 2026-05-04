@@ -1,22 +1,11 @@
-[gd_resource type="Resource" script_class="AIBrainConfig" load_steps=2 format=3 uid="uid://b6vlhpe8r7m4l"]
+[gd_resource type="Resource" script_class="AIBrainConfig" format=3 uid="uid://b6vlhpe8r7m4l"]
 
 [ext_resource type="Script" uid="uid://c0ualm8b6ru86" path="res://Scenes/Characters/Brains/ai_brain_config.gd" id="1_aibcfg"]
 
 [resource]
 script = ExtResource("1_aibcfg")
-start_speed = 0.5
-max_speed = 3.0
-acceleration_time = 10.0
-shuffle_recovery_time = 2.5
-shuffle_get_up_time = 1.0
-shuffle_knockback_distance = 2.0
-obstacle_lookahead = 2.0
-encounter_lookahead = 2.0
 destination_group = &"start"
-spawn_distance = 0.0
-move_speed = 1.8
 move_speed_variance = 0.1
-avoid_obstacles = true
 avoidance_cooldown = 3.0
 min_clearance = 2.0
 min_peer_gap = 1.2
@@ -25,6 +14,3 @@ reaction_period_ms = 200
 inner_shuffle_radius = 0.6
 stubbornness = 0.9
 stay_chance = 0.7
-random_lane_changes = false
-random_lane_interval_min = 3.0
-random_lane_interval_max = 7.0
