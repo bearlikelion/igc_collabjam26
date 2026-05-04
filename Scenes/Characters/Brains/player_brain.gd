@@ -104,7 +104,7 @@ func get_move_speed() -> float:
 			_waiting_for = null
 		else:
 			return 0.0
-	return modulate_for_same_direction_peer(pawn.run_speed)
+	return modulate_for_same_direction_peer(pawn.get_run_speed())
 
 
 # Called by Pawn._input for every input event. During an active shuffle, the
@@ -145,7 +145,7 @@ func _on_recovered() -> void:
 	pawn.lean(0)
 
 
-func _on_encounter_detected(other: Pawn, _distance: float) -> void:
+func _on_encounter_detected(other: Pawn, distance: float) -> void:
 	if other == null:
 		return
 	# Same-direction peer (NPC walking the same way as the player): no
@@ -160,10 +160,25 @@ func _on_encounter_detected(other: Pawn, _distance: float) -> void:
 	# during the wait.
 	if other.is_runner_paused():
 		_waiting_for = other
-		pawn.run_speed = config.start_speed
+		pawn.set_run_speed(config.start_speed)
 		return
 	_waiting_for = null
-	pawn.start_shuffle(other)
+	# Engagement gate: defer shuffle until both pawns are settled in their
+	# lane. Encounter scan keeps firing every frame, so the moment the in-flight
+	# tween completes the next signal re-engages cleanly. Without this gate the
+	# old `_snap_tween_to_target_if_active` path produced a visible teleport.
+	if not pawn.is_lane_settled() or not other.is_lane_settled():
+		return
+	# Entry-distance gate: shuffle only initiates inside `inner_shuffle_radius`.
+	# Outside, the encounter signal still fires each frame as the gap closes,
+	# so we engage the moment we're close enough. This bounds the entry gap
+	# so slow-approach math (`Pawn._compute_shuffle_speed`) gets bounded inputs.
+	if distance > config.inner_shuffle_radius:
+		return
+	# Forward the latest signal's distance — never cache. If the brain ever
+	# defers `start_shuffle` (e.g. waiting for tween settle), this `distance`
+	# is from the most recent encounter scan, not the first one.
+	pawn.start_shuffle(other, distance)
 
 
 # Press handler — set lane intent. Cancels intent if both keys are now held.

@@ -49,11 +49,7 @@ extends BrainConfig
 ## snappier reactions; 0 disables the reroll loop entirely (initial roll
 ## at encounter time persists).
 @export_range(0, 500, 10, "suffix:ms") var reaction_period_ms: int = 50
-## Rail-distance (m) inside which AI-vs-AI engages the shuffle protocol.
-## Outside this radius the AI still rolls and broadcasts its stance via
-## `pawn.lean()` so the peer can read intent during run-up — but doesn't
-## start a shuffle yet. Should be < `encounter_lookahead`.
-@export_range(0.1, 5.0, 0.05) var inner_shuffle_radius: float = 0.8
+# `inner_shuffle_radius` lives on `BrainConfig` — shared by PlayerBrain and AIBrain.
 ## 0–1: chance per re-roll tick the AI keeps its current stance instead of
 ## reconsidering. High values let peers read intent and exploit it (the
 ## telegraph stays committed); low values let the AI flicker between

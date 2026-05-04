@@ -104,8 +104,6 @@ func _tick_overtake() -> void:
 		return
 	if pawn.locomotion != Pawn.LocomotionState.RUNNING:
 		return
-	if pawn._metro_movement == null:
-		return
 	if Time.get_ticks_msec() < _avoidance_until_msec:
 		return
 	if _pre_shuffle_other != null:
@@ -116,12 +114,12 @@ func _tick_overtake() -> void:
 	if lookahead <= 0.0:
 		return
 	var current: int = pawn.get_current_lane()
-	var peer_ahead: Pawn = pawn._metro_movement.find_lane_occupant_ahead(pawn, current, lookahead)
+	var peer_ahead: Pawn = pawn.find_lane_occupant_ahead(current, lookahead)
 	if peer_ahead == null:
 		return
 	if peer_ahead.is_routing_to_finish_point() != pawn.is_routing_to_finish_point():
 		return
-	var current_clearance: float = pawn._metro_movement.get_lane_clearance(pawn, current, lookahead)
+	var current_clearance: float = pawn.get_lane_clearance(current, lookahead)
 	var best_lane: int = current
 	var best_score: float = current_clearance
 	for lane: int in range(Pawn.LANE_COUNT):
@@ -160,9 +158,9 @@ func _on_encounter_detected(other: Pawn, distance: float) -> void:
 	# fall through to the stance-roll branch and swerve around the body.
 	# `_roll_stance` suppresses stay_chance for paused peers so the AI commits
 	# to ±1 instead of phasing through.
-	if other.is_in_group("npc") and other.locomotion == Pawn.LocomotionState.SHUFFLING:
+	if other.is_in_group("npc") and other.is_shuffle_active():
 		_waiting_for = other
-		pawn.run_speed = config.start_speed
+		pawn.set_run_speed(config.start_speed)
 		return
 	_waiting_for = null
 
@@ -188,7 +186,14 @@ func _on_encounter_detected(other: Pawn, distance: float) -> void:
 	if other.is_in_group("npc") and not other.is_runner_paused():
 		if Time.get_ticks_msec() < _avoidance_until_msec:
 			return
-		pawn.start_shuffle(other)
+		# Engagement gate: defer shuffle until both pawns are lane-settled.
+		# Encounter scan re-fires next frame; no buffering needed.
+		if not pawn.is_lane_settled() or not other.is_lane_settled():
+			return
+		# Forward latest signal's distance — never cache. Brain may defer
+		# `start_shuffle` (lane-settle wait, avoidance cooldown), so always
+		# pass the current scan's gap, not the first one.
+		pawn.start_shuffle(other, distance)
 
 
 # Environment obstacle in the current lane — swerve via the clearance ranker
@@ -346,11 +351,9 @@ func _request_adjacent_lane_change(target_lane: int) -> void:
 # rail-distance to the nearest occupant (capped at lookahead). No registry =
 # assume clear (defensive — keeps unit-test scenarios from soft-locking).
 func _is_dodge_lane_clear(lane: int) -> bool:
-	if pawn._metro_movement == null:
-		return true
-	var clearance: float = pawn._metro_movement.get_lane_clearance(
-		pawn, lane, config.encounter_lookahead
-	)
+	# Pre-registration → INF (defensive); inside config.min_clearance threshold
+	# the lane reads as clear. Keeps unit-test scenarios from soft-locking.
+	var clearance: float = pawn.get_lane_clearance(lane, config.encounter_lookahead)
 	return clearance >= config.min_clearance
 
 
@@ -397,10 +400,7 @@ func _tick_stance_reroll() -> void:
 		pawn.locomotion == Pawn.LocomotionState.RUNNING
 		and _pre_shuffle_other != null
 	)
-	var in_shuffle: bool = (
-		pawn.locomotion == Pawn.LocomotionState.SHUFFLING
-		and pawn.shuffle != null
-	)
+	var in_shuffle: bool = pawn.is_shuffle_active()
 	if not (in_runup or in_shuffle):
 		return
 	if Time.get_ticks_msec() < _next_reaction_msec:
@@ -409,7 +409,7 @@ func _tick_stance_reroll() -> void:
 	# Stubbornness gate: random skip = keep current stance, no re-roll this tick.
 	if randf() < config.stubbornness:
 		return
-	var other: Pawn = pawn.shuffle.other if in_shuffle else _pre_shuffle_other
+	var other: Pawn = pawn.get_shuffle_other() if in_shuffle else _pre_shuffle_other
 	if other == null:
 		return
 	var new_stance: int = _roll_stance(other)
@@ -451,15 +451,11 @@ func _opposite_world_side(other: Pawn, other_telegraph: int) -> int:
 # REVERSE peers vs FORWARD querier this is wrong, but the runner sets are
 # typically same-direction in dense traffic. Good-enough for the jam.
 func _lane_safety_score(candidate_lane: int) -> float:
-	var clearance: float = pawn._metro_movement.get_lane_clearance(
-		pawn, candidate_lane, config.encounter_lookahead
-	)
+	var clearance: float = pawn.get_lane_clearance(candidate_lane, config.encounter_lookahead)
 	if config.lean_threat_weight <= 0.0:
 		return clearance
 	var threat: float = 0.0
-	var nearby: Array[Pawn] = pawn._metro_movement.get_runners_near(
-		pawn, config.encounter_lookahead
-	)
+	var nearby: Array[Pawn] = pawn.get_runners_near(config.encounter_lookahead)
 	for peer: Pawn in nearby:
 		var peer_target: int = peer.get_current_lane() + peer.lean_direction
 		if peer_target == candidate_lane:
@@ -559,7 +555,7 @@ func _roll_speed() -> void:
 func _pick_clear_lane(current: int) -> int:
 	if Pawn.LANE_COUNT <= 1:
 		return current
-	if pawn._metro_movement == null:
+	if not pawn.is_registered():
 		return current
 	var best: int = current
 	var best_score: float = -INF

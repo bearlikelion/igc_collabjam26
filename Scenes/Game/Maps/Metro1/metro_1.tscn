@@ -519,6 +519,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.41108003, 0.22435647, -0.3
 [node name="Player" parent="NavigationRegion3D" unique_id=759156532 instance=ExtResource("8_svs80")]
 unique_name_in_owner = true
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0, -1)
+shuffle_debug_enabled = false
 
 [node name="Brain" type="Node" parent="NavigationRegion3D/Player" unique_id=436571780]
 script = ExtResource("12_pbrn")

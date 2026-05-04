@@ -89,7 +89,20 @@ class Runner:
 		toward_finish = p_toward_finish
 
 
-# Debug visualization
+@export_group("Subway Shuffle")
+## Wall-clock time (s) the initiating brain has to commit a side. Single
+## source of truth — every Pawn reads this via its `_metro_movement` back-ref.
+## Pawn falls back to a const default if the back-ref is null (pre-registration
+## / unit-test scenarios), but the encounter scan can only fire post-registration
+## so production paths always read this value. Default preserves the prior
+## per-pawn `Pawn.tscn` override (= 2.5 s wall-clock during bullet-time).
+@export_range(0.05, 5.0, 0.01, "suffix:s") var shuffle_choice_time: float = 2.5
+## Multiplier applied to `Engine.time_scale` while the player Pawn is in a
+## shuffle (`apply_bullet_time = true`). Default 0.2 = 5× slow-mo. AI-vs-AI
+## shuffles never apply this — `apply_bullet_time` is false on NPC pawns.
+@export_range(0.05, 1.0, 0.01) var shuffle_bullet_time_scale: float = 0.2
+
+@export_group("Debug")
 @export var debug_show_corners: bool = true
 @export var debug_corner_color: Color = Color(1.0, 0.2, 0.2, 0.7)
 @export var debug_lane_color: Color = Color(0.2, 1.0, 0.2, 0.5)
@@ -249,6 +262,18 @@ func _spawn_overlap_pawn(runner: Runner, min_gap: float) -> Pawn:
 func _wire_runner_signals(runner: Runner) -> void:
 	runner.node.lane_change_started.connect(_on_runner_lane_change_started.bind(runner))
 	runner.node.knocked_down.connect(_on_runner_knocked_down.bind(runner))
+
+
+# Public accessors for the shuffle timing exports. Pawn calls these via its
+# `_metro_movement` back-ref, with const fallbacks for pre-registration.
+# Wrapping the @export reads behind methods means the API surface stays
+# explicit even though the underlying field is also accessible.
+func get_shuffle_choice_time() -> float:
+	return shuffle_choice_time
+
+
+func get_shuffle_bullet_time_scale() -> float:
+	return shuffle_bullet_time_scale
 
 
 # Public: mark `other` as ignored by `pawn`'s encounter scan. Routed through
@@ -712,7 +737,7 @@ func _advance_runner(runner: Runner, delta: float) -> void:
 		return
 	if runner.finished:
 		return
-	if runner.node.is_runner_paused():
+	if runner.node.is_advancing_paused():
 		runner.node.set_movement_blocked(false)
 		return
 
@@ -721,7 +746,7 @@ func _advance_runner(runner: Runner, delta: float) -> void:
 	# may have switched lanes.
 	if runner.node.should_avoid_obstacles():
 		_detect_obstacle_and_notify_brain(runner)
-		if runner.node.is_runner_paused():
+		if runner.node.is_advancing_paused():
 			return
 
 	runner.node.set_movement_blocked(false)

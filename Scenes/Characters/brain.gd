@@ -205,22 +205,19 @@ func get_shuffle_knockback_distance() -> float:
 # (those go through the shuffle protocol), the brain has no encounter scan
 # enabled, or the MetroMovement back-ref isn't wired.
 func modulate_for_same_direction_peer(raw: float) -> float:
-	if pawn == null or pawn._metro_movement == null:
+	if pawn == null:
 		return raw
 	var lookahead: float = get_encounter_lookahead()
 	if lookahead <= 0.0:
 		return raw
-	var peer: Pawn = pawn._metro_movement.find_lane_occupant_ahead(
-		pawn, pawn.get_current_lane(), lookahead
-	)
+	var current_lane: int = pawn.get_current_lane()
+	var peer: Pawn = pawn.find_lane_occupant_ahead(current_lane, lookahead)
 	if peer == null:
 		return raw
 	if peer.is_routing_to_finish_point() != pawn.is_routing_to_finish_point():
 		return raw
 	var peer_speed: float = peer.get_rail_speed()
-	var distance: float = pawn._metro_movement.get_lane_clearance(
-		pawn, pawn.get_current_lane(), lookahead
-	)
+	var distance: float = pawn.get_lane_clearance(current_lane, lookahead)
 	var min_gap: float = get_min_peer_gap()
 	if distance >= min_gap:
 		# Far enough: match peer speed, hold the gap steady.

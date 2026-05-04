@@ -29,3 +29,9 @@ extends Resource
 ## Rail-distance the encounter scan looks ahead for other Pawns in the same
 ## lane. Replaces the legacy 2 m forward ShuffleCast.
 @export var encounter_lookahead: float = 2.0
+## Rail-distance (m) inside which a brain initiates the subway shuffle. Both
+## PlayerBrain (player initiating on opposing NPC) and AIBrain (AI-vs-AI)
+## gate `pawn.start_shuffle(other)` on `distance <= inner_shuffle_radius`.
+## Outside the radius the encounter signal still fires and may drive run-up
+## tells (AIBrain), but no shuffle begins yet. Should be < `encounter_lookahead`.
+@export_range(0.1, 5.0, 0.05) var inner_shuffle_radius: float = 0.8
