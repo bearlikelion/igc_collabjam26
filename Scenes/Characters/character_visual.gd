@@ -217,14 +217,19 @@ func _is_recovery_state_locked() -> bool:
 	return _locked_state == MotionState.DIE or _locked_state == MotionState.RECOVER
 
 
-# Apply a directional torso lean for side interactions.
+# Apply a directional torso lean for side interactions. The lerp uses
+# wall-clock-equivalent delta (re-scaled out of Engine.time_scale) so the
+# lean still snaps in visible time during bullet-time shuffles. Without this,
+# Engine.time_scale = 0.2 stretches the lerp 5× and the lean barely moves
+# before the shuffle resolves.
 func _update_torso_lean(delta: float) -> void:
 	if skeleton == null or _torso_bone_index < 0:
 		return
 
 	var target_lean: float = torso_lean_amount * float(_torso_lean_direction)
 
-	var weight: float = clamp(torso_lean_speed * delta, 0.0, 1.0)
+	var wall_delta: float = delta / maxf(Engine.time_scale, 0.01)
+	var weight: float = clamp(torso_lean_speed * wall_delta, 0.0, 1.0)
 	_current_torso_lean = lerp(_current_torso_lean, target_lean, weight)
 	if abs(_current_torso_lean) < 0.001 and is_zero_approx(target_lean):
 		_current_torso_lean = 0.0

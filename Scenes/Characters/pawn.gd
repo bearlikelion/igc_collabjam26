@@ -27,9 +27,8 @@ extends CharacterBody3D
 #   RUNNING  ──park_at_finish─────►   PARKED
 #   any      ──die────────────────►   DISABLED
 #   SHUFFLING ──_complete_shuffle─►   RUNNING (initiator success → lane change)
-#   SHUFFLING ──end_subway_shuffle►   SIDESTEPPING (callee survived)
+#   SHUFFLING ──end_subway_shuffle►   RUNNING (callee survived → lane change)
 #   SHUFFLING ──_fail_shuffle─────►   KNOCKED_DOWN(DOWN)
-#   SIDESTEPPING ──lerp complete──►   RUNNING
 #   KNOCKED_DOWN(DOWN) ──recovery starts──►  KNOCKED_DOWN(RECOVERING)
 #   KNOCKED_DOWN(RECOVERING) ──recover────►  RUNNING
 #   BLOCKED ──set_movement_blocked(false)──► RUNNING
@@ -58,7 +57,6 @@ const START_LANE: int = LANE_COUNT / 2
 enum LocomotionState {
 	RUNNING,        # default; lane tween allowed
 	SHUFFLING,      # subway-shuffle window (initiator OR callee — see shuffle.is_initiator)
-	SIDESTEPPING,   # callee post-shuffle lateral lerp
 	KNOCKED_DOWN,   # see knockdown_phase
 	BLOCKED,        # external pause (cutscene / waiting for goal trigger), throttled to start_speed
 	PARKED,         # FORWARD NPCs at finish marker
@@ -90,6 +88,14 @@ signal lane_change_started(from_lane: int, to_lane: int)
 signal lane_change_completed(lane: int)
 signal lane_change_canceled()
 signal goal_reached()
+
+# Intent broadcast. Fires when this Pawn's directional lean changes (via
+# `lean()`). Captures held lane intent during RUNNING and the committed
+# shuffle telegraph during SHUFFLING — both go through `lean()`. Other Pawns'
+# brains observe peers' intents through this signal (or via the queryable
+# `lean_direction` field). Pair-wise shuffle telegraph still emits separately
+# on `shuffle_telegraph_changed` for the in-shuffle peer.
+signal lean_changed(direction: int)
 
 # Encounter events.
 signal encounter_detected(other: Pawn, distance: float)
@@ -138,10 +144,6 @@ var apply_bullet_time: bool = false
 ## Bullet-time window during which the initiating brain commits a side.
 @export var shuffle_choice_time: float = 0.5
 @export_range(0.05, 1.0, 0.01) var shuffle_time_scale: float = 0.2
-## Side-step displacement when a callee survives a shuffle (lerp duration is
-## shuffle_lane_move_time). Initiator does NOT side-step — it lane-changes.
-@export var shuffle_lane_distance: float = 1.0
-@export var shuffle_lane_move_time: float = 0.25
 @export var shuffle_debug_enabled: bool = false
 
 @export_group("Knockdown")
@@ -174,6 +176,12 @@ var _metro_movement: MetroMovement
 
 var run_speed: float = 0.0
 
+# Public: -1 / 0 / +1 directional intent. Written by `lean()`; observable
+# by other pawns' brains through the `lean_changed` signal or direct read.
+# AIBrain consults peers' `lean_direction` when ranking lane clearance so an
+# AI doesn't swerve into a lane another peer is committing to.
+var lean_direction: int = 0
+
 # Top-level locomotion state. Single source of truth — all transitions go
 # through _set_locomotion(new_state). Default RUNNING.
 var locomotion: int = LocomotionState.RUNNING
@@ -195,11 +203,6 @@ var _recovery_time_left: float = 0.0
 
 # Active shuffle bookkeeping. Non-null iff locomotion == SHUFFLING.
 var shuffle: Shuffle
-
-# Side-step state (lateral lerp during SIDESTEPPING).
-var _shuffle_lane_start_position: Vector3 = Vector3.ZERO
-var _shuffle_lane_target_position: Vector3 = Vector3.ZERO
-var _shuffle_lane_elapsed: float = 0.0
 
 # Parking offset (applied by MetroMovement while locomotion == PARKED).
 var _parked_offset: Vector3 = Vector3.ZERO
@@ -255,8 +258,6 @@ func _physics_process(delta: float) -> void:
 	match locomotion:
 		LocomotionState.KNOCKED_DOWN:
 			_tick_knockdown(delta)
-		LocomotionState.SIDESTEPPING:
-			_tick_sidestep(delta)
 		LocomotionState.SHUFFLING:
 			_tick_shuffle(delta)
 		LocomotionState.RUNNING:
@@ -267,8 +268,7 @@ func _physics_process(delta: float) -> void:
 		brain.physics_tick(delta)
 
 
-# Per-state ticks. Each one is responsible for its own internal updates and
-# any auto-transitions (e.g. SIDESTEPPING → RUNNING when the lerp completes).
+# Per-state ticks. Each one is responsible for its own internal updates.
 
 func _tick_running(delta: float) -> void:
 	_update_lane_tween(delta)
@@ -284,10 +284,6 @@ func _tick_shuffle(_delta: float) -> void:
 	shuffle.time_left = max(0.0, float(shuffle.deadline_msec - Time.get_ticks_msec()) / 1000.0)
 	if Time.get_ticks_msec() >= shuffle.deadline_msec:
 		_resolve_subway_shuffle()
-
-
-func _tick_sidestep(delta: float) -> void:
-	_update_shuffle_lane_move(delta)
 
 
 func _tick_knockdown(delta: float) -> void:
@@ -329,8 +325,15 @@ func request_lane_change(target_lane: int) -> void:
 
 
 # Brain initiates a shuffle encounter. This Pawn becomes the initiator.
+# Hard guard: target must be RUNNING. If they're already SHUFFLING (busy in
+# another pair), KNOCKED_DOWN, PARKED, FINISHED, etc., this is a clean no-op
+# so brains can fall back to waiting / swerving without crashing the protocol
+# (a 2nd `begin_subway_shuffle` call on a busy callee would silently destroy
+# their existing shuffle bookkeeping).
 func start_shuffle(other: Pawn) -> void:
 	if locomotion == LocomotionState.SHUFFLING or locomotion == LocomotionState.KNOCKED_DOWN or other == null:
+		return
+	if other.locomotion != LocomotionState.RUNNING:
 		return
 	shuffle = Shuffle.new()
 	shuffle.is_initiator = true
@@ -369,18 +372,27 @@ func set_shuffle_telegraph(direction: int) -> void:
 		shuffle.other.shuffle_telegraph_changed.emit(clamped)
 
 
-# Brain announces a visible body lean — held lane intent. Routes to torso-lean
-# animation and the camera rig's lane-lean spring. Harmless during shuffle:
-# the rig suppresses lane lean while shuffle tilt is engaged, so this only
-# updates the dormant target until shuffle ends.
+# Brain announces a visible body lean — held lane intent during RUNNING, or
+# committed shuffle telegraph during SHUFFLING. Three side effects:
+#   1. Updates `lean_direction` and emits `lean_changed` (only on actual
+#      change, so observers don't churn on no-op repeats from brain ticks).
+#   2. Routes to the camera rig's lane-lean spring (player-only; null on NPCs).
+#      Harmless during shuffle: the rig suppresses lane lean while shuffle
+#      tilt is engaged, so this only updates the dormant target until shuffle
+#      ends.
+#   3. Plays the corresponding interact animation on the visual.
 func lean(direction: int) -> void:
+	var clamped: int = clampi(direction, -1, 1)
+	if clamped != lean_direction:
+		lean_direction = clamped
+		lean_changed.emit(clamped)
 	if camera_rig != null:
-		camera_rig.set_lean_direction(direction)
+		camera_rig.set_lean_direction(clamped)
 	if visual == null:
 		return
-	if direction < 0:
+	if clamped < 0:
 		visual.play_interact_left()
-	elif direction > 0:
+	elif clamped > 0:
 		visual.play_interact_right()
 
 
@@ -417,15 +429,21 @@ func end_subway_shuffle() -> void:
 	shuffle = null
 	if camera_rig != null:
 		camera_rig.disengage_shuffle_tilt()
+	# Symmetric with initiator's _complete_subway_shuffle: callee actually
+	# lane-changes by its committed direction (no more world-space side-step
+	# that snapped back). _set_locomotion(RUNNING) → lean(0) reset → visual
+	# interact cue → tween. Direction == 0 means we never committed (passive
+	# resolve where the OTHER party stepped aside) — just walk on.
+	_set_locomotion(LocomotionState.RUNNING)
 	if visual != null:
-		visual.play_walk()
-	# SIDESTEPPING transitions back to RUNNING when the lerp completes.
-	# If the side-step setup bails (zero direction, zero distance, degenerate
-	# basis), skip SIDESTEPPING and resume RUNNING immediately.
-	if _start_shuffle_lane_move(direction):
-		_set_locomotion(LocomotionState.SIDESTEPPING)
-	else:
-		_set_locomotion(LocomotionState.RUNNING)
+		if direction < 0:
+			visual.play_interact_left()
+		elif direction > 0:
+			visual.play_interact_right()
+		else:
+			visual.play_walk()
+	if direction != 0:
+		_commit_lane_change(_target_lane + direction)
 
 
 func stop_subway_shuffle() -> void:
@@ -468,11 +486,10 @@ func get_shuffle_telegraph() -> int:
 
 
 # Anything other than RUNNING counts as paused — including PARKED, FINISHED,
-# and BLOCKED. Pre-Stage-1 only checked SHUFFLING / KNOCKED_DOWN /
-# SIDESTEPPING / DISABLED. The widening is safe: MetroMovement short-circuits
-# PARKED and FINISHED via `runner.finished`; BLOCKED is unreached today.
-# AIBrain treats the new states as paused, so oncoming NPCs swerve around
-# parked greeters and finished players (was a latent bug before).
+# and BLOCKED. MetroMovement short-circuits PARKED and FINISHED via
+# `runner.finished`; BLOCKED is unreached today. AIBrain treats all paused
+# states uniformly so oncoming NPCs swerve around parked greeters and finished
+# players.
 func is_runner_paused() -> bool:
 	return locomotion != LocomotionState.RUNNING
 
@@ -658,6 +675,15 @@ func _set_locomotion(new_state: int) -> void:
 	var old_state: int = locomotion
 	locomotion = new_state
 	locomotion_changed.emit(old_state, new_state)
+	# Reset lean_direction when exiting an active-intent state into RUNNING so
+	# the broadcast stays in sync with what the body is actually doing. Without
+	# this, peer brains reading `lean_direction` get stale telegraph values
+	# from the just-finished shuffle / knockdown — AIBrain's lane-safety
+	# scoring would then treat a neutral pawn as if it were still committing.
+	if new_state == LocomotionState.RUNNING and (
+			old_state == LocomotionState.SHUFFLING
+			or old_state == LocomotionState.KNOCKED_DOWN):
+		lean(0)
 
 
 func can_move() -> bool:
@@ -735,7 +761,12 @@ func _resolve_subway_shuffle() -> void:
 	if shuffle.other != null:
 		shuffle.their_telegraph = shuffle.other.get_shuffle_telegraph()
 	var collision: bool = _shuffle_choices_collide()
-	var succeeded: bool = shuffle.my_telegraph != 0 and not collision
+	# Symmetric: succeed if neither side picks a colliding world-side AND at
+	# least one side committed. A passive initiator with a committed callee
+	# now succeeds (the callee steps aside via its own lane change). Both
+	# passive = collision (neither moved → still in same lane).
+	var any_committed: bool = shuffle.my_telegraph != 0 or shuffle.their_telegraph != 0
+	var succeeded: bool = any_committed and not collision
 	if succeeded:
 		_complete_subway_shuffle(shuffle.my_telegraph)
 	else:
@@ -749,6 +780,10 @@ func _complete_subway_shuffle(direction: int) -> void:
 	var other: Pawn = shuffle.other
 	if other != null:
 		other.end_subway_shuffle()
+		# One-sided ignore by design: only the initiator skips the callee on
+		# its next scan. The callee's scan stays live so a same-lane outcome
+		# (e.g. initiator clamped at an edge lane) intentionally cascades into
+		# a fresh callee-initiated shuffle. Awkward, but emergent.
 		set_shuffle_ignored(other)
 	shuffle = null
 	if camera_rig != null:
@@ -779,9 +814,16 @@ func _fail_subway_shuffle() -> void:
 
 
 func _shuffle_choices_collide() -> bool:
-	if shuffle == null or shuffle.other == null \
-			or shuffle.my_telegraph == 0 or shuffle.their_telegraph == 0:
-		return shuffle != null and shuffle.my_telegraph == 0
+	if shuffle == null or shuffle.other == null:
+		return false
+	# Both passive → neither stepped, still in the same lane → collision.
+	if shuffle.my_telegraph == 0 and shuffle.their_telegraph == 0:
+		return true
+	# Exactly one party committed → that party steps aside; no collision.
+	# The committed pawn's lane change handles geometry on resolution.
+	if shuffle.my_telegraph == 0 or shuffle.their_telegraph == 0:
+		return false
+	# Both committed → check whether their world-side picks coincide.
 	var my_side: Vector3 = global_transform.basis.x * float(shuffle.my_telegraph)
 	var their_side: Vector3 = shuffle.other.global_transform.basis.x * float(shuffle.their_telegraph)
 	my_side.y = 0.0
@@ -801,36 +843,6 @@ func _update_run_speed(delta: float) -> void:
 		run_speed = min(max_speed, run_speed + rate * delta)
 
 
-# --- Side-step ------------------------------------------------------------
-
-# Sets up the lateral lerp. Returns false on degenerate input (zero direction,
-# zero distance, or degenerate basis) so the caller can transition straight
-# back to RUNNING instead of entering SIDESTEPPING.
-func _start_shuffle_lane_move(direction: int) -> bool:
-	if direction == 0:
-		return false
-	var lane_direction: Vector3 = global_transform.basis.x * float(direction)
-	lane_direction.y = 0.0
-	if lane_direction.length_squared() <= 0.001 or is_zero_approx(shuffle_lane_distance):
-		return false
-	_shuffle_lane_start_position = global_position
-	_shuffle_lane_target_position = global_position + lane_direction.normalized() * shuffle_lane_distance
-	_shuffle_lane_elapsed = 0.0
-	return true
-
-
-func _update_shuffle_lane_move(delta: float) -> void:
-	var scaled_delta: float = delta / maxf(Engine.time_scale, 0.001)
-	_shuffle_lane_elapsed += scaled_delta
-	var duration: float = maxf(shuffle_lane_move_time, 0.001)
-	var weight: float = clampf(_shuffle_lane_elapsed / duration, 0.0, 1.0)
-	var next_position: Vector3 = _shuffle_lane_start_position.lerp(_shuffle_lane_target_position, weight)
-	next_position.y = global_position.y
-	global_position = next_position
-	if weight >= 1.0:
-		_set_locomotion(LocomotionState.RUNNING)
-
-
 # Camera math (pitch input, headbob, lane lean, shuffle tilt) lives on the
 # PawnCamera rig — Pawn drives intent only:
 #   - _input forwards mouse motion via camera_rig.apply_pitch_input
@@ -838,4 +850,4 @@ func _update_shuffle_lane_move(delta: float) -> void:
 #   - lean() forwards held lane intent via set_lean_direction
 #   - shuffle entry / telegraph change → engage_shuffle_tilt(direction)
 #   - knockdown entry → engage_shuffle_tilt(0)   (rolls back to upright)
-#   - shuffle resolved / sidestep / recovery → disengage_shuffle_tilt
+#   - shuffle resolved / recovery → disengage_shuffle_tilt

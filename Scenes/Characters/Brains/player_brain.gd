@@ -20,6 +20,12 @@ extends Brain
 
 var _lane_intent: int = 0
 
+# Pawn we're stalled behind because they're SHUFFLING with someone else (e.g.
+# an NPC-NPC shuffle in progress). While set, get_move_speed returns 0 so
+# the player visibly halts; auto-clears when the peer becomes RUNNING. Same
+# pattern as AIBrain._waiting_for — keeps the UX consistent across roles.
+var _waiting_for: Pawn
+
 
 func _on_bound() -> void:
 	pawn.add_to_group("player")
@@ -63,9 +69,32 @@ func get_end_of_rail_action() -> int:
 # Player's current speed lives on Pawn (start_speed → max_speed acceleration
 # curve, mutated by knockdown / movement_blocked / goal_reached). MetroMovement
 # queries every runner through this method, so PlayerBrain forwards Pawn's
-# physical speed instead of owning a separate value.
+# physical speed instead of owning a separate value — except while waiting
+# behind a busy peer (zero), or modulated to match a same-direction peer
+# ahead in the same lane (cap at peer speed, no catch-up).
 func get_move_speed() -> float:
-	return pawn.run_speed
+	if _waiting_for != null:
+		if not is_instance_valid(_waiting_for) or not _waiting_for.is_runner_paused():
+			_waiting_for = null
+		else:
+			return 0.0
+	return _modulate_for_same_direction_peer(pawn.run_speed)
+
+
+# Cap player speed behind a same-direction NPC so the player never collides
+# with someone walking their way. Opposing-direction peers stay at full speed
+# so the player can engage the shuffle dodge mechanic on contact.
+func _modulate_for_same_direction_peer(raw: float) -> float:
+	if pawn._metro_movement == null:
+		return raw
+	var peer: Pawn = pawn._metro_movement.find_lane_occupant_ahead(
+		pawn, pawn.get_current_lane(), encounter_lookahead
+	)
+	if peer == null:
+		return raw
+	if peer.is_routing_to_finish_point() != pawn.is_routing_to_finish_point():
+		return raw
+	return minf(raw, peer.get_rail_speed())
 
 
 # Called by Pawn._input for every input event. During an active shuffle, route
@@ -107,14 +136,21 @@ func _on_recovered() -> void:
 func _on_encounter_detected(other: Pawn, _distance: float) -> void:
 	if other == null:
 		return
-	# Same-direction NPCs: instant knockdown for the player, no shuffle window.
-	# (Preserves Player._fail_same_direction_collision from pre-Stage-3 code.)
-	# Mark the offender as ignored so the forward cast doesn't re-trigger
-	# this same collision the moment recovery completes.
-	if other.is_routing_to_finish_point():
-		pawn.set_shuffle_ignored(other)
-		pawn.knock_down_from_shuffle()
+	# Same-direction peer (NPC walking the same way as the player): no
+	# shuffle, no knockdown — get_move_speed caps us at their speed so we
+	# trail them. Knockback should only fire on head-on collisions.
+	if other.is_routing_to_finish_point() == pawn.is_routing_to_finish_point():
+		_waiting_for = null
 		return
+	# Busy NPC (already in another shuffle): stop and wait until they free up.
+	# Pawn.start_shuffle would no-op via its hard guard, but we want the
+	# visible halt and the run_speed reset so the player doesn't accelerate
+	# during the wait.
+	if other.is_runner_paused():
+		_waiting_for = other
+		pawn.run_speed = pawn.start_speed
+		return
+	_waiting_for = null
 	pawn.start_shuffle(other)
 
 

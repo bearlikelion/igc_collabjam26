@@ -945,6 +945,157 @@ func _clear_lane_candidates(runner: Runner, blocked_lane: int, lookahead: float)
 	return clear
 
 
+# Public: nearest other Pawn ahead of `querier` in `lane` (querier's
+# direction-relative frame), within [0, lookahead] rail-meters. Null if none.
+# Internally compares physical (world-side) lanes so FORWARD vs REVERSE doesn't
+# false-match. Used by AIBrain for clearance-aware lane choice.
+func find_lane_occupant_ahead(querier: Pawn, lane: int, lookahead: float) -> Pawn:
+	var querier_runner: Runner = _find_runner_for(querier)
+	if querier_runner == null:
+		return null
+	var query_physical_lane: int = _physical_lane_for(querier_runner, lane)
+	var querier_centerline: float = _runner_centerline_position(querier_runner)
+	var nearest: Pawn = null
+	var nearest_distance: float = INF
+	for other: Runner in _runners:
+		if other == querier_runner:
+			continue
+		if not is_instance_valid(other.node):
+			continue
+		if _runner_physical_lane(other) != query_physical_lane:
+			continue
+		var ahead: float = _signed_distance_ahead(
+			querier_centerline,
+			_runner_centerline_position(other),
+			querier_runner.toward_finish
+		)
+		if ahead <= 0.0 or ahead > lookahead:
+			continue
+		if ahead < nearest_distance:
+			nearest_distance = ahead
+			nearest = other.node
+	return nearest
+
+
+# Public: lanes other than `exclude_lane` (use -1 to include all), sorted
+# descending by clearance — most-clear first. Clearance is min(distance to
+# nearest occupant ahead, lookahead) with obstacle-blocked lanes pinned to
+# clearance 0 so they sort last but stay candidates. Ties broken by random
+# shuffle so AI choices stay non-deterministic.
+func rank_lanes_by_clearance(querier: Pawn, exclude_lane: int, lookahead: float) -> Array[int]:
+	var querier_runner: Runner = _find_runner_for(querier)
+	if querier_runner == null:
+		return []
+	var querier_centerline: float = _runner_centerline_position(querier_runner)
+
+	# Pre-collect nearest occupant per physical lane so we don't re-scan _runners
+	# inside the per-candidate loop.
+	var occupants_by_physical_lane: Dictionary[int, float] = {}
+	for other: Runner in _runners:
+		if other == querier_runner or not is_instance_valid(other.node):
+			continue
+		var ahead: float = _signed_distance_ahead(
+			querier_centerline,
+			_runner_centerline_position(other),
+			querier_runner.toward_finish
+		)
+		if ahead <= 0.0 or ahead > lookahead:
+			continue
+		var phys: int = _runner_physical_lane(other)
+		var prev: float = occupants_by_physical_lane.get(phys, INF)
+		if ahead < prev:
+			occupants_by_physical_lane[phys] = ahead
+
+	# Build (lane, clearance) tuples for every candidate.
+	var entries: Array[Vector2] = []
+	for lane: int in range(Pawn.LANE_COUNT):
+		if lane == exclude_lane:
+			continue
+		var phys: int = _physical_lane_for(querier_runner, lane)
+		var occupant_distance: float = occupants_by_physical_lane.get(phys, lookahead)
+		var obstacle_blocked: bool = _scan_lane_for_obstacle(querier_runner, lane, lookahead) != null
+		var clearance: float = 0.0 if obstacle_blocked else occupant_distance
+		entries.append(Vector2(float(lane), clearance))
+
+	# Random shuffle first so equal clearances tie-break non-deterministically.
+	entries.shuffle()
+	entries.sort_custom(func(a: Vector2, b: Vector2) -> bool: return a.y > b.y)
+
+	var result: Array[int] = []
+	for entry: Vector2 in entries:
+		result.append(int(entry.x))
+	return result
+
+
+# Public: every RUNNING peer ahead of `querier` within `lookahead` rail-meters
+# in ANY lane. Excludes querier itself, parked / finished / disabled pawns,
+# and any pawn currently in querier's `shuffle_ignored` slot. Brains read
+# peers' `lean_direction` and `get_current_lane()` directly to bias lane
+# choices against pawns committing into the same lane.
+func get_runners_near(querier: Pawn, lookahead: float) -> Array[Pawn]:
+	var querier_runner: Runner = _find_runner_for(querier)
+	if querier_runner == null:
+		return []
+	var querier_centerline: float = _runner_centerline_position(querier_runner)
+	var ignored: Pawn = querier_runner.shuffle_ignored
+	var result: Array[Pawn] = []
+	for other: Runner in _runners:
+		if other == querier_runner:
+			continue
+		if not is_instance_valid(other.node):
+			continue
+		if other.finished:
+			continue
+		if other.node == ignored:
+			continue
+		# Skip non-RUNNING peers: their lean / target_lane is stale (they're
+		# parked, knocked down, sidestepping, etc.) so factoring them into
+		# clearance just adds noise.
+		if other.node.locomotion != Pawn.LocomotionState.RUNNING:
+			continue
+		var ahead: float = _signed_distance_ahead(
+			querier_centerline,
+			_runner_centerline_position(other),
+			querier_runner.toward_finish
+		)
+		if ahead <= 0.0 or ahead > lookahead:
+			continue
+		result.append(other.node)
+	return result
+
+
+# Public: clearance ahead in `lane` (querier's direction-relative frame), in
+# rail-meters. Returns 0 if the lane has an obstacle within lookahead, else
+# the distance to the nearest occupant ahead, or `lookahead` if the lane is
+# fully clear. Used by AIBrain to apply a min-clearance floor before swerving.
+func get_lane_clearance(querier: Pawn, lane: int, lookahead: float) -> float:
+	var querier_runner: Runner = _find_runner_for(querier)
+	if querier_runner == null:
+		return 0.0
+	if _scan_lane_for_obstacle(querier_runner, lane, lookahead) != null:
+		return 0.0
+	var occupant: Pawn = find_lane_occupant_ahead(querier, lane, lookahead)
+	if occupant == null:
+		return lookahead
+	var occupant_runner: Runner = _find_runner_for(occupant)
+	if occupant_runner == null:
+		return lookahead
+	return _signed_distance_ahead(
+		_runner_centerline_position(querier_runner),
+		_runner_centerline_position(occupant_runner),
+		querier_runner.toward_finish
+	)
+
+
+# Convert a runner's direction-relative lane index to physical (world-side).
+# Symmetric inverse of _runner_physical_lane. Pulled out so external queries
+# can pass direction-relative lanes without knowing the runner's orientation.
+func _physical_lane_for(runner: Runner, direction_relative_lane: int) -> int:
+	if runner.toward_finish:
+		return direction_relative_lane
+	return (Pawn.LANE_COUNT - 1) - direction_relative_lane
+
+
 # Sample positions ahead along the runner's rail in a candidate lane. Returns
 # the first `obstacle` group node in the path, or null if clear.
 func _scan_lane_for_obstacle(runner: Runner, lane: int, lookahead: float) -> Node:
