@@ -75,6 +75,7 @@ func _on_bound() -> void:
 func physics_tick(_delta: float) -> void:
 	_tick_pre_shuffle_staleness()
 	_tick_stance_reroll()
+	_tick_overtake()
 	if not config.random_lane_changes:
 		return
 	if Time.get_ticks_msec() < _next_random_lane_msec:
@@ -83,6 +84,61 @@ func physics_tick(_delta: float) -> void:
 	if clear_lane != pawn.get_current_lane():
 		pawn.request_lane_change(clear_lane)
 	_next_random_lane_msec = Time.get_ticks_msec() + int(_next_random_lane_delay() * 1000.0)
+
+
+# Goal-seeking overtake: when a same-direction peer ahead is throttling our
+# speed, switch to a faster lane. Trigger = `find_lane_occupant_ahead` finds
+# a same-direction peer in our current lane within `encounter_lookahead`
+# (mirrors `Brain.modulate_for_same_direction_peer`'s detection). Decision =
+# pick the best alternative via `_lane_safety_score` and only commit when it
+# beats current clearance by `overtake_clearance_margin` (so we don't bounce
+# between equally congested lanes). Reuses `_avoidance_until_msec` so the
+# obstacle dodge and the overtake share one cooldown — the AI can't ping-pong
+# every frame.
+#
+# Skipped during run-up to an opposing peer (`_pre_shuffle_other != null`):
+# the stance reroll already owns lane intent in that window, and overriding it
+# here would yank the body away from the planned dodge side.
+func _tick_overtake() -> void:
+	if not config.overtake_when_throttled:
+		return
+	if pawn.locomotion != Pawn.LocomotionState.RUNNING:
+		return
+	if pawn._metro_movement == null:
+		return
+	if Time.get_ticks_msec() < _avoidance_until_msec:
+		return
+	if _pre_shuffle_other != null:
+		return
+	if Pawn.LANE_COUNT <= 1:
+		return
+	var lookahead: float = config.encounter_lookahead
+	if lookahead <= 0.0:
+		return
+	var current: int = pawn.get_current_lane()
+	var peer_ahead: Pawn = pawn._metro_movement.find_lane_occupant_ahead(pawn, current, lookahead)
+	if peer_ahead == null:
+		return
+	if peer_ahead.is_routing_to_finish_point() != pawn.is_routing_to_finish_point():
+		return
+	var current_clearance: float = pawn._metro_movement.get_lane_clearance(pawn, current, lookahead)
+	var best_lane: int = current
+	var best_score: float = current_clearance
+	for lane: int in range(Pawn.LANE_COUNT):
+		if lane == current:
+			continue
+		var score: float = _lane_safety_score(lane)
+		if score < config.min_clearance:
+			continue
+		if score > best_score:
+			best_score = score
+			best_lane = lane
+	if best_lane == current:
+		return
+	if best_score - current_clearance < config.overtake_clearance_margin:
+		return
+	pawn.request_lane_change(best_lane)
+	_avoidance_until_msec = Time.get_ticks_msec() + int(config.avoidance_cooldown * 1000.0)
 
 
 func _on_encounter_detected(other: Pawn, distance: float) -> void:

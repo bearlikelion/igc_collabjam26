@@ -5,13 +5,18 @@
 [resource]
 script = ExtResource("1_aibcfg")
 destination_group = &"start"
-move_speed = 2.4
-move_speed_variance = 0.2
-avoidance_cooldown = 1.0
-min_clearance = 1.0
-min_peer_gap = 0.7
+move_speed = 2.8
+move_speed_variance = 0.15
+avoidance_cooldown = 0.6
+min_clearance = 0.8
+min_peer_gap = 0.6
 lean_threat_weight = 0.5
 reaction_period_ms = 30
-stubbornness = 0.2
-stay_chance = 0.1
+inner_shuffle_radius = 1.0
+stubbornness = 0.15
+stay_chance = 0.05
 random_lane_changes = true
+random_lane_interval_min = 1.5
+random_lane_interval_max = 4.0
+overtake_when_throttled = true
+overtake_clearance_margin = 0.3

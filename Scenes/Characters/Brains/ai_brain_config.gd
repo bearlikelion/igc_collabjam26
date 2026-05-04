@@ -24,6 +24,18 @@ extends BrainConfig
 ## distance the AI slows below peer speed so the gap regrows — prevents
 ## convoy stacking. See `Brain.modulate_for_same_direction_peer`.
 @export var min_peer_gap: float = 1.0
+## When a same-direction peer ahead is throttling our speed (within
+## `encounter_lookahead`), evaluate adjacent lanes and switch to the one with
+## meaningfully more clearance. Reuses the obstacle-dodge cooldown so we
+## don't lane-bounce. Disable for archetypes that should patiently trail
+## (e.g. Stubborn parade-followers). See `_tick_overtake`.
+@export var overtake_when_throttled: bool = true
+## Extra clearance (rail-meters) the alternative lane must offer over the
+## current lane before we commit to overtaking. Higher = more conservative
+## swerves; prevents flipping between lanes that are equally congested.
+## Defaults to one comfort gap so we only swap when the new lane is at
+## least one peer-spacing roomier.
+@export_range(0.0, 5.0, 0.1) var overtake_clearance_margin: float = 1.0
 
 @export_group("Encounters")
 ## Rail-meters of clearance penalty applied per peer who is leaning INTO a
