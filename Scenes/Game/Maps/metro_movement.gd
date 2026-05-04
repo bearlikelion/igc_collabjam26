@@ -59,6 +59,8 @@ class RailProjection:
 class EncounterSnap:
 	var runner: Runner
 	var centerline: float = 0.0
+	# Physical (world-side-consistent) lane — see _runner_physical_lane.
+	# NOT the runner's direction-relative get_current_lane().
 	var lane: int = 0
 	var lookahead: float = 0.0  # 0 = does not initiate scans (paused / no brain)
 
@@ -699,6 +701,18 @@ func _advance_length_for_runner(runner: Runner) -> float:
 	return maxf(len_floor, _runner_lane_length_at(runner, lane_ceil))
 
 
+# Convert a runner's direction-relative lane index to a world-side-consistent
+# physical lane. FORWARD runners use the index as-is; REVERSE runners get the
+# index flipped to match the FORWARD frame (mirrors the flip in
+# _runner_lane_segment_start). Encounter scan compares THIS, not raw
+# get_current_lane(), so a FORWARD lane 2 and a REVERSE lane 2 don't falsely
+# match — they're on opposite physical sides of the rail.
+func _runner_physical_lane(runner: Runner) -> int:
+	if runner.toward_finish:
+		return runner.node.get_current_lane()
+	return (Pawn.LANE_COUNT - 1) - runner.node.get_current_lane()
+
+
 # Length of the runner's current segment along a specific lane.
 func _runner_lane_length_at(runner: Runner, lane: int) -> float:
 	var seg_start: Vector3 = _runner_lane_segment_start(runner.segment_index, lane, runner.toward_finish)
@@ -826,7 +840,10 @@ func _scan_encounters_for_all_runners() -> void:
 		var snap: EncounterSnap = EncounterSnap.new()
 		snap.runner = runner
 		snap.centerline = _runner_centerline_position(runner)
-		snap.lane = runner.node.get_current_lane()
+		# Physical (world-side) lane — see _runner_physical_lane. Required so
+		# FORWARD vs REVERSE comparisons aren't false-matched by inverted
+		# direction-relative indices.
+		snap.lane = _runner_physical_lane(runner)
 		# Only RUNNING pawns initiate scans. Paused / knocked-down / disabled
 		# runners stay in the snapshot list as candidate "others" but won't
 		# emit encounter_detected themselves.
