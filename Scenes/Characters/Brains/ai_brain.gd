@@ -47,7 +47,7 @@ func physics_tick(_delta: float) -> void:
 		return
 	var clear_lane: int = _pick_random_other_lane(pawn.get_current_lane())
 	if clear_lane != pawn.get_current_lane():
-		pawn.set_current_lane(clear_lane)
+		pawn.request_lane_change(clear_lane)
 	_next_random_lane_msec = Time.get_ticks_msec() + int(_next_random_lane_delay() * 1000.0)
 
 
@@ -63,7 +63,7 @@ func _on_encounter_detected(other: Pawn, _distance: float) -> void:
 		return
 	var clear_lane: int = _pick_random_other_lane(pawn.get_current_lane())
 	if clear_lane != pawn.get_current_lane():
-		pawn.set_current_lane(clear_lane)
+		pawn.request_lane_change(clear_lane)
 		_avoidance_until_msec = Time.get_ticks_msec() + int(avoidance_cooldown * 1000.0)
 
 
@@ -75,7 +75,7 @@ func _on_obstacle_detected(_blocker: Node, _distance: float, _in_lane: int, cand
 		return
 	if candidate_lanes.is_empty():
 		return
-	pawn.set_current_lane(candidate_lanes[0])
+	pawn.request_lane_change(candidate_lanes[0])
 	_avoidance_until_msec = Time.get_ticks_msec() + int(avoidance_cooldown * 1000.0)
 
 

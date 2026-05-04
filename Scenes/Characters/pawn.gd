@@ -274,16 +274,11 @@ func _input(event: InputEvent) -> void:
 
 # --- Public API: Brain → Pawn (intent in) ---------------------------------
 
-# Brain commits to a discrete lane. Tweens unless instant=true.
-func request_lane_change(target_lane: int, instant: bool = false) -> void:
+# Brain commits to a discrete lane. Tweens via _commit_lane_change.
+func request_lane_change(target_lane: int) -> void:
 	if not can_move() or _movement_blocked or _goal_reached or _shuffle_active or is_knocked_down():
 		return
-	if instant:
-		_target_lane = clampi(target_lane, 0, LANE_COUNT - 1)
-		_lane_position = float(_target_lane)
-		_tween_active = false
-	else:
-		_commit_lane_change(target_lane)
+	_commit_lane_change(target_lane)
 
 
 # Brain initiates a shuffle encounter. This Pawn becomes the initiator.
@@ -379,6 +374,8 @@ func get_current_lane() -> int:
 	return _target_lane
 
 
+# Teleport: snap to a lane bypassing all gates. For respawn / level setup only.
+# Gameplay lane changes go through request_lane_change() so they tween.
 func set_current_lane(lane: int) -> void:
 	_target_lane = clampi(lane, 0, LANE_COUNT - 1)
 	_lane_position = float(_target_lane)
