@@ -222,7 +222,7 @@ func _destagger_runner_spawn(runner: Runner, min_gap: float) -> void:
 			runner.segment_index -= 1
 			runner.distance_along = maxf(
 				0.0,
-				_runner_lane_length_at(runner, runner.node.get_current_lane()) - leftover
+				_runner_segment_length(runner) - leftover
 			)
 			continue
 		runner.distance_along = 0.0
@@ -733,7 +733,7 @@ func _advance_runner(runner: Runner, delta: float) -> void:
 	while true:
 		runner.distance_along = distance
 		runner.segment_index = segment_index
-		var seg_length: float = _advance_length_for_runner(runner)
+		var seg_length: float = _runner_segment_length(runner)
 		if distance < seg_length:
 			break
 		distance -= seg_length
@@ -750,22 +750,6 @@ func _advance_runner(runner: Runner, delta: float) -> void:
 	_apply_runner_yaw(runner, delta)
 
 
-# Segment length to use when deciding whether to advance to the next segment.
-# During a lane-change tween, use the longer of the two lanes so neither
-# snaps early at a corner. When tween is inactive get_lane_position() returns
-# the integer target lane exactly (t == 0), so this collapses to a single
-# lane-length lookup — same result as the prior NPC-only path.
-func _advance_length_for_runner(runner: Runner) -> float:
-	var lane_pos: float = runner.node.get_lane_position()
-	var lane_floor: int = clampi(floori(lane_pos), 0, LANE_OFFSETS.size() - 1)
-	var t: float = clampf(lane_pos - float(lane_floor), 0.0, 1.0)
-	var len_floor: float = _runner_lane_length_at(runner, lane_floor)
-	if t <= 0.001:
-		return len_floor
-	var lane_ceil: int = clampi(lane_floor + 1, 0, LANE_OFFSETS.size() - 1)
-	return maxf(len_floor, _runner_lane_length_at(runner, lane_ceil))
-
-
 # Convert a runner's direction-relative lane index to a world-side-consistent
 # physical lane. FORWARD runners use the index as-is; REVERSE runners get the
 # index flipped to match the FORWARD frame (mirrors the flip in
@@ -778,10 +762,13 @@ func _runner_physical_lane(runner: Runner) -> int:
 	return (Pawn.LANE_COUNT - 1) - runner.node.get_current_lane()
 
 
-# Length of the runner's current segment along a specific lane.
-func _runner_lane_length_at(runner: Runner, lane: int) -> float:
-	var seg_start: Vector3 = _runner_lane_segment_start(runner.segment_index, lane, runner.toward_finish)
-	var seg_end: Vector3 = _runner_lane_segment_end(runner.segment_index, lane, runner.toward_finish)
+# Length of the runner's current segment. Lane-independent now that lane
+# offsets are perpendicular-only — every lane in a segment has the same
+# centerline length. Uses lane 0 internally as an arbitrary anchor; the
+# perpendicular offset cancels in seg_end - seg_start.
+func _runner_segment_length(runner: Runner) -> float:
+	var seg_start: Vector3 = _runner_lane_segment_start(runner.segment_index, 0, runner.toward_finish)
+	var seg_end: Vector3 = _runner_lane_segment_end(runner.segment_index, 0, runner.toward_finish)
 	return seg_start.distance_to(seg_end)
 
 
@@ -837,7 +824,7 @@ func _finish_runner_at_goal(runner: Runner) -> void:
 func _park_runner_at_finish(runner: Runner) -> void:
 	runner.finished = true
 	runner.segment_index = _corners.size() - 2
-	runner.distance_along = _runner_lane_length_at(runner, runner.node.get_current_lane())
+	runner.distance_along = _runner_segment_length(runner)
 	var slot: int = _parked_npc_count
 	_parked_npc_count += 1
 	runner.node.park_at_finish(_compute_park_offset(slot))
@@ -1223,32 +1210,25 @@ func _apply_runner_position(runner: Runner) -> void:
 	runner.node.global_position = pos
 
 
-# Smoothly rotate the runner toward its current rail direction. Lane-tween
-# interpolation is universal: t == 0 when no tween is active, collapsing to a
-# single yaw lookup.
+# Smoothly rotate the runner toward its current rail direction. Yaw is
+# lane-independent now (every lane in a segment shares forward direction), so
+# this is a single lookup + frame-rate smoothing.
 func _apply_runner_yaw(runner: Runner, delta: float) -> void:
 	var turn_weight: float = clampf(TURN_WEIGHT * delta, 0.0, 1.0)
-	var lane_pos: float = runner.node.get_lane_position()
-	var lane_floor: int = clampi(floori(lane_pos), 0, LANE_OFFSETS.size() - 1)
-	var t: float = clampf(lane_pos - float(lane_floor), 0.0, 1.0)
-	var target_yaw: float = _runner_yaw_for_lane(runner, lane_floor)
-	if t > 0.001:
-		var lane_ceil: int = clampi(lane_floor + 1, 0, LANE_OFFSETS.size() - 1)
-		target_yaw = lerp_angle(target_yaw, _runner_yaw_for_lane(runner, lane_ceil), t)
-	runner.node.rotation.y = lerp_angle(runner.node.rotation.y, target_yaw, turn_weight)
+	runner.node.rotation.y = lerp_angle(runner.node.rotation.y, _runner_segment_yaw(runner), turn_weight)
 
 
 # Snap the runner's yaw to the current rail direction without easing.
 func _apply_runner_yaw_instant(runner: Runner) -> void:
-	var lane: int = runner.node.get_current_lane()
-	runner.node.rotation.y = _runner_yaw_for_lane(runner, lane)
+	runner.node.rotation.y = _runner_segment_yaw(runner)
 
 
-# Yaw direction the runner should face at a given lane in its current segment.
-# Returns pawn's current yaw on a degenerate segment so lerp_angle doesn't snap.
-func _runner_yaw_for_lane(runner: Runner, lane: int) -> float:
-	var seg_start: Vector3 = _runner_lane_segment_start(runner.segment_index, lane, runner.toward_finish)
-	var seg_end: Vector3 = _runner_lane_segment_end(runner.segment_index, lane, runner.toward_finish)
+# Yaw direction the runner should face in its current segment. Lane-independent
+# (see _runner_segment_length). Returns pawn's current yaw on a degenerate
+# segment so lerp_angle doesn't snap.
+func _runner_segment_yaw(runner: Runner) -> float:
+	var seg_start: Vector3 = _runner_lane_segment_start(runner.segment_index, 0, runner.toward_finish)
+	var seg_end: Vector3 = _runner_lane_segment_end(runner.segment_index, 0, runner.toward_finish)
 	var fwd: Vector3 = seg_end - seg_start
 	fwd.y = 0.0
 	if fwd.length_squared() < 0.001:
@@ -1342,7 +1322,7 @@ func _rewind_runner(runner: Runner, distance: float) -> void:
 			runner.distance_along = 0.0
 			return
 		runner.segment_index -= 1
-		runner.distance_along = _runner_lane_length_at(runner, runner.node.get_current_lane())
+		runner.distance_along = _runner_segment_length(runner)
 
 
 # Clamp `distance` to the rail-distance to the nearest same-physical-lane
