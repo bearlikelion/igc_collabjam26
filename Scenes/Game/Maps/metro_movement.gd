@@ -75,7 +75,6 @@ class Runner:
 		if Engine.is_editor_hint():
 			_editor_rebuild_debug()
 
-@onready var _player: Pawn = %Player
 @onready var _finish: Marker3D = %Finish
 
 
@@ -85,22 +84,28 @@ var _start_position: Vector3 = Vector3.ZERO
 var _finish_position: Vector3 = Vector3.ZERO
 
 var _runners: Array[Runner] = []
-var _player_runner: Runner  # set in _register_player
 var _parked_npc_count: int = 0
+# Resolved during _wait_for_nav by querying the "player" group, which
+# PlayerBrain populates at bind time. Used only to anchor the rail and seed
+# the first runner — every other Pawn (player or NPC) flows through the same
+# registration path.
+var _player: Pawn
 
 
 # Start runtime path setup.
 func _ready() -> void:
 	if Engine.is_editor_hint():
 		return
-	_player.lane_change_started.connect(_on_lane_change_started)
-	_player.knocked_down.connect(_on_player_knocked_down)
 	_wait_for_nav.call_deferred()
 
 
 # Wait for the navigation map, then cache the processed path.
 func _wait_for_nav() -> void:
 	print("Wait for nav")
+	_player = get_tree().get_first_node_in_group("player") as Pawn
+	if _player == null:
+		push_error("MetroMovement: no Pawn in group \"player\" — PlayerBrain.add_to_group must run before _wait_for_nav.")
+		return
 	var params: NavigationPathQueryParameters3D = NavigationPathQueryParameters3D.new()
 	var result: NavigationPathQueryResult3D = NavigationPathQueryResult3D.new()
 	var map_rid: RID = get_world_3d().navigation_map
@@ -127,7 +132,7 @@ func _wait_for_nav() -> void:
 func _register_player() -> void:
 	var runner: Runner = Runner.new(_player, 0, 0.0, true)
 	_runners.append(runner)
-	_player_runner = runner
+	_wire_runner_signals(runner)
 	_apply_runner_position(runner)
 	_apply_runner_yaw_instant(runner)
 
@@ -146,8 +151,16 @@ func _register_npc(npc: Pawn) -> void:
 	var proj: RailProjection = _project_onto_rail(npc.global_position, toward_finish)
 	var runner: Runner = Runner.new(npc, proj.segment_index, proj.distance_along, toward_finish)
 	_runners.append(runner)
+	_wire_runner_signals(runner)
 	_apply_runner_position(runner)
 	_apply_runner_yaw_instant(runner)
+
+
+# Connect Pawn → MetroMovement signals for any runner. The runner is bound
+# into the callable so the handler doesn't have to look it up.
+func _wire_runner_signals(runner: Runner) -> void:
+	runner.node.lane_change_started.connect(_on_runner_lane_change_started.bind(runner))
+	runner.node.knocked_down.connect(_on_runner_knocked_down.bind(runner))
 
 
 # Find the rail segment closest to world_pos and return runner coordinates
@@ -572,10 +585,8 @@ func _choose_axis_bend(result: Array[Vector3], curr: Vector3) -> Vector3:
 	return Vector3(curr.x, prev.y, prev.z)
 
 
-func _on_lane_change_started(_from_lane: int, _to_lane: int) -> void:
-	if _player_runner == null:
-		return
-	_apply_runner_position(_player_runner)
+func _on_runner_lane_change_started(_from_lane: int, _to_lane: int, runner: Runner) -> void:
+	_apply_runner_position(runner)
 
 
 func _physics_process(delta: float) -> void:
@@ -587,29 +598,28 @@ func _physics_process(delta: float) -> void:
 		_advance_runner(runner, delta)
 
 
-# Advance one runner along the rail. Player and NPCs share this path;
-# per-actor obstacle and end-of-rail behavior dispatch via the node reference.
+# Advance one runner along the rail. Single code path for player + NPCs;
+# obstacle response is decided by the runner's Brain via obstacle_detected.
 func _advance_runner(runner: Runner, delta: float) -> void:
 	if not is_instance_valid(runner.node):
 		return
 	if runner.finished:
 		return
-
-	if runner.node == _player:
-		if runner.node.is_runner_paused():
-			runner.node.set_movement_blocked(false)
-			return
-		if _is_player_lane_blocked(runner):
-			runner.node.knock_down_from_shuffle()
-			return
+	if runner.node.is_runner_paused():
 		runner.node.set_movement_blocked(false)
-	else:
+		return
+
+	# MetroMovement detects, Brain decides. The signal handler runs
+	# synchronously, so by the next line the pawn may be knocked down or
+	# may have switched lanes.
+	if runner.node.should_avoid_obstacles():
+		_detect_obstacle_and_notify_brain(runner)
 		if runner.node.is_runner_paused():
 			return
-		if runner.node.should_avoid_obstacles():
-			_runner_avoid_obstacle(runner)
 
-	var speed: float = runner.node.run_speed if runner.node == _player else runner.node.get_rail_speed()
+	runner.node.set_movement_blocked(false)
+
+	var speed: float = runner.node.get_rail_speed()
 	var distance: float = runner.distance_along + speed * delta
 	var segment_index: int = runner.segment_index
 
@@ -634,19 +644,19 @@ func _advance_runner(runner: Runner, delta: float) -> void:
 
 
 # Segment length to use when deciding whether to advance to the next segment.
-# For the player during a lane-change tween, use the longer of the two lanes
-# so neither snaps early at a corner.
+# During a lane-change tween, use the longer of the two lanes so neither
+# snaps early at a corner. When tween is inactive get_lane_position() returns
+# the integer target lane exactly (t == 0), so this collapses to a single
+# lane-length lookup — same result as the prior NPC-only path.
 func _advance_length_for_runner(runner: Runner) -> float:
-	if runner.node == _player:
-		var lane_pos: float = _player.get_lane_position()
-		var lane_floor: int = clampi(floori(lane_pos), 0, LANE_OFFSETS.size() - 1)
-		var t: float = clampf(lane_pos - float(lane_floor), 0.0, 1.0)
-		var len_floor: float = _runner_lane_length_at(runner, lane_floor)
-		if t <= 0.001:
-			return len_floor
-		var lane_ceil: int = clampi(lane_floor + 1, 0, LANE_OFFSETS.size() - 1)
-		return maxf(len_floor, _runner_lane_length_at(runner, lane_ceil))
-	return _runner_lane_length_at(runner, runner.node.get_current_lane())
+	var lane_pos: float = runner.node.get_lane_position()
+	var lane_floor: int = clampi(floori(lane_pos), 0, LANE_OFFSETS.size() - 1)
+	var t: float = clampf(lane_pos - float(lane_floor), 0.0, 1.0)
+	var len_floor: float = _runner_lane_length_at(runner, lane_floor)
+	if t <= 0.001:
+		return len_floor
+	var lane_ceil: int = clampi(lane_floor + 1, 0, LANE_OFFSETS.size() - 1)
+	return maxf(len_floor, _runner_lane_length_at(runner, lane_ceil))
 
 
 # Length of the runner's current segment along a specific lane.
@@ -656,29 +666,43 @@ func _runner_lane_length_at(runner: Runner, lane: int) -> float:
 	return seg_start.distance_to(seg_end)
 
 
-# Handle a runner reaching the end of its rail.
-# Player → reach_goal. Reverse NPC → respawn at finish. Forward NPC → park.
+# Handle a runner reaching the end of its rail. Brain decides what kind of
+# end this is — finish line, parking spot, or loop-back — and MetroMovement
+# performs the rail-state bookkeeping to make it happen.
 func _handle_end_of_rail(runner: Runner) -> void:
-	if runner.node == _player:
-		runner.finished = true
-		print("REACHED DESTINATION at %s" % runner.node.global_position)
-		runner.node.reach_goal()
-		return
+	var action: int = Brain.EndOfRailAction.RESPAWN
+	if runner.node.brain != null:
+		action = runner.node.brain.get_end_of_rail_action()
+	match action:
+		Brain.EndOfRailAction.GOAL:
+			_finish_runner_at_goal(runner)
+		Brain.EndOfRailAction.PARK:
+			_park_runner_at_finish(runner)
+		Brain.EndOfRailAction.RESPAWN:
+			_respawn_runner_at_start(runner)
 
-	if not runner.toward_finish:
-		runner.segment_index = 0
-		runner.distance_along = randf() * NPC_RESPAWN_STAGGER
-		runner.node.set_current_lane(randi() % Pawn.LANE_COUNT)
-		_apply_runner_position(runner)
-		_apply_runner_yaw_instant(runner)
-		return
 
+func _finish_runner_at_goal(runner: Runner) -> void:
+	runner.finished = true
+	print("REACHED DESTINATION at %s" % runner.node.global_position)
+	runner.node.reach_goal()
+
+
+func _park_runner_at_finish(runner: Runner) -> void:
 	runner.finished = true
 	runner.segment_index = _corners.size() - 2
 	runner.distance_along = _runner_lane_length_at(runner, runner.node.get_current_lane())
 	var slot: int = _parked_npc_count
 	_parked_npc_count += 1
 	runner.node.park_at_finish(_compute_park_offset(slot))
+	_apply_runner_position(runner)
+	_apply_runner_yaw_instant(runner)
+
+
+func _respawn_runner_at_start(runner: Runner) -> void:
+	runner.segment_index = 0
+	runner.distance_along = randf() * NPC_RESPAWN_STAGGER
+	runner.node.set_current_lane(randi() % Pawn.LANE_COUNT)
 	_apply_runner_position(runner)
 	_apply_runner_yaw_instant(runner)
 
@@ -710,57 +734,40 @@ func _compute_park_offset(slot: int) -> Vector3:
 	return lateral + depth
 
 
-# Return true if the player's target lane has an obstacle within stop distance.
-func _is_player_lane_blocked(runner: Runner) -> bool:
-	var lane: int = _player.get_current_lane()
-	var seg_start: Vector3 = _runner_lane_segment_start(runner.segment_index, lane, true)
-	var seg_end: Vector3 = _runner_lane_segment_end(runner.segment_index, lane, true)
-	var seg_dir: Vector3 = seg_end - seg_start
-	seg_dir.y = 0.0
-	if seg_dir.length_squared() < 0.001:
-		return false
-	seg_dir = seg_dir.normalized()
-	var space_state: PhysicsDirectSpaceState3D = _player.get_world_3d().direct_space_state
-	var origin: Vector3 = _player.global_position + Vector3.UP * OBSTACLE_RAY_HEIGHT
-	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(
-		origin,
-		origin + seg_dir * OBSTACLE_STOP_DISTANCE
-	)
-	query.exclude = [_player.get_rid()]
-	query.collide_with_bodies = true
-	var result: Dictionary = space_state.intersect_ray(query)
-	if result.is_empty():
-		return false
-	var collider: Object = result.get("collider")
-	return collider != null and collider is Node and (collider as Node).is_in_group("obstacle")
-
-
-# Switch the runner's lane to a clear one if its current lane has an obstacle
-# within the lookahead distance. NPCs only — player obstacle is handled separately.
-func _runner_avoid_obstacle(runner: Runner) -> void:
+# Scan the runner's current lane for an obstacle within their lookahead.
+# When something is hit, pre-compute the clear-lane candidates and emit
+# obstacle_detected on the pawn. The runner's Brain decides what to do.
+func _detect_obstacle_and_notify_brain(runner: Runner) -> void:
 	var lookahead: float = runner.node.get_obstacle_lookahead()
 	if lookahead <= 0.0:
 		return
 	var current_lane: int = runner.node.get_current_lane()
-	if not _runner_lane_blocked(runner, current_lane, lookahead):
+	var blocker: Node = _scan_lane_for_obstacle(runner, current_lane, lookahead)
+	if blocker == null:
 		return
-	var candidates: Array[int] = []
+	var candidates: Array[int] = _clear_lane_candidates(runner, current_lane, lookahead)
+	runner.node.obstacle_detected.emit(blocker, lookahead, current_lane, candidates)
+
+
+# Lanes other than `blocked_lane` that the runner could swerve into right now,
+# already shuffled so brains can just pick the first.
+func _clear_lane_candidates(runner: Runner, blocked_lane: int, lookahead: float) -> Array[int]:
+	var clear: Array[int] = []
 	for lane: int in range(Pawn.LANE_COUNT):
-		if lane != current_lane:
-			candidates.append(lane)
-	candidates.shuffle()
-	for lane: int in candidates:
-		if not _runner_lane_blocked(runner, lane, lookahead):
-			runner.node.set_current_lane(lane)
-			return
+		if lane == blocked_lane:
+			continue
+		if _scan_lane_for_obstacle(runner, lane, lookahead) == null:
+			clear.append(lane)
+	clear.shuffle()
+	return clear
 
 
-# Sample positions ahead along the runner's rail in a candidate lane and
-# return whether any of them sits inside an obstacle.
-func _runner_lane_blocked(runner: Runner, lane: int, lookahead: float) -> bool:
+# Sample positions ahead along the runner's rail in a candidate lane. Returns
+# the first `obstacle` group node in the path, or null if clear.
+func _scan_lane_for_obstacle(runner: Runner, lane: int, lookahead: float) -> Node:
 	var space_state: PhysicsDirectSpaceState3D = runner.node.get_world_3d().direct_space_state
 	if space_state == null:
-		return false
+		return null
 	var sample_count: int = 4
 	var step: float = lookahead / float(sample_count)
 	var base_distance: float = runner.distance_along
@@ -778,8 +785,8 @@ func _runner_lane_blocked(runner: Runner, lane: int, lookahead: float) -> bool:
 			continue
 		var collider: Object = hit.get("collider")
 		if collider is Node and (collider as Node).is_in_group("obstacle"):
-			return true
-	return false
+			return collider as Node
+	return null
 
 
 # Project a world position for a runner walking a given lane at a given
@@ -798,45 +805,38 @@ func _runner_position_at(runner: Runner, lane: int, distance_along: float) -> Ve
 
 
 # Write the runner's world position from its segment + distance + lane.
-# For the player, interpolates between lane floor and ceil during a tween.
-# For NPCs, snaps to the current integer lane; parked NPCs add their offset.
+# Lane floor/ceil interpolation works for any runner — when the lane tween is
+# inactive get_lane_position() returns the integer target lane (t == 0), so
+# the ceil branch is skipped and the result matches a clean snap. Parked
+# pawns layer their authored offset on top.
 func _apply_runner_position(runner: Runner) -> void:
 	var distance_along: float = runner.distance_along
-	if runner.node == _player:
-		var lane_pos: float = _player.get_lane_position()
-		var lane_floor: int = clampi(floori(lane_pos), 0, LANE_OFFSETS.size() - 1)
-		var t: float = clampf(lane_pos - float(lane_floor), 0.0, 1.0)
-		var pos: Vector3 = _runner_position_at(runner, lane_floor, distance_along)
-		if t > 0.001:
-			var lane_ceil: int = clampi(lane_floor + 1, 0, LANE_OFFSETS.size() - 1)
-			pos = pos.lerp(_runner_position_at(runner, lane_ceil, distance_along), t)
-		pos.y = runner.node.global_position.y
-		runner.node.global_position = pos
-	else:
-		var lane: int = runner.node.get_current_lane()
-		var pos: Vector3 = _runner_position_at(runner, lane, distance_along)
-		if runner.node.is_parked_at_finish():
-			pos += runner.node.get_parked_offset()
-		pos.y = runner.node.global_position.y
-		runner.node.global_position = pos
+	var lane_pos: float = runner.node.get_lane_position()
+	var lane_floor: int = clampi(floori(lane_pos), 0, LANE_OFFSETS.size() - 1)
+	var t: float = clampf(lane_pos - float(lane_floor), 0.0, 1.0)
+	var pos: Vector3 = _runner_position_at(runner, lane_floor, distance_along)
+	if t > 0.001:
+		var lane_ceil: int = clampi(lane_floor + 1, 0, LANE_OFFSETS.size() - 1)
+		pos = pos.lerp(_runner_position_at(runner, lane_ceil, distance_along), t)
+	if runner.node.is_parked_at_finish():
+		pos += runner.node.get_parked_offset()
+	pos.y = runner.node.global_position.y
+	runner.node.global_position = pos
 
 
-# Smoothly rotate the runner toward its current rail direction.
-# For the player, interpolates yaw between tween lanes.
+# Smoothly rotate the runner toward its current rail direction. Lane-tween
+# interpolation is universal: t == 0 when no tween is active, collapsing to a
+# single yaw lookup.
 func _apply_runner_yaw(runner: Runner, delta: float) -> void:
 	var turn_weight: float = clampf(TURN_WEIGHT * delta, 0.0, 1.0)
-	if runner.node == _player:
-		var lane_pos: float = _player.get_lane_position()
-		var lane_floor: int = clampi(floori(lane_pos), 0, LANE_OFFSETS.size() - 1)
-		var t: float = clampf(lane_pos - float(lane_floor), 0.0, 1.0)
-		var target_yaw: float = _runner_yaw_for_lane(runner, lane_floor)
-		if t > 0.001:
-			var lane_ceil: int = clampi(lane_floor + 1, 0, LANE_OFFSETS.size() - 1)
-			target_yaw = lerp_angle(target_yaw, _runner_yaw_for_lane(runner, lane_ceil), t)
-		runner.node.rotation.y = lerp_angle(runner.node.rotation.y, target_yaw, turn_weight)
-	else:
-		var lane: int = runner.node.get_current_lane()
-		runner.node.rotation.y = lerp_angle(runner.node.rotation.y, _runner_yaw_for_lane(runner, lane), turn_weight)
+	var lane_pos: float = runner.node.get_lane_position()
+	var lane_floor: int = clampi(floori(lane_pos), 0, LANE_OFFSETS.size() - 1)
+	var t: float = clampf(lane_pos - float(lane_floor), 0.0, 1.0)
+	var target_yaw: float = _runner_yaw_for_lane(runner, lane_floor)
+	if t > 0.001:
+		var lane_ceil: int = clampi(lane_floor + 1, 0, LANE_OFFSETS.size() - 1)
+		target_yaw = lerp_angle(target_yaw, _runner_yaw_for_lane(runner, lane_ceil), t)
+	runner.node.rotation.y = lerp_angle(runner.node.rotation.y, target_yaw, turn_weight)
 
 
 # Snap the runner's yaw to the current rail direction without easing.
@@ -858,12 +858,12 @@ func _runner_yaw_for_lane(runner: Runner, lane: int) -> float:
 	return atan2(-fwd.x, -fwd.z)
 
 
-# Rewind the player along the rail whenever they are knocked down.
-func _on_player_knocked_down() -> void:
-	if _player_runner == null:
-		return
-	_rewind_runner(_player_runner, _player.shuffle_knockback_distance)
-	_apply_runner_position(_player_runner)
+# Rewind any runner along the rail when they are knocked down. The pawn's
+# own knockback_distance config governs how far back they end up, so the
+# player and NPCs can have different recoil tuning.
+func _on_runner_knocked_down(runner: Runner) -> void:
+	_rewind_runner(runner, runner.node.shuffle_knockback_distance)
+	_apply_runner_position(runner)
 
 
 # Rewind a runner backward along the rail by the given distance.

@@ -24,9 +24,10 @@ extends CharacterBody3D
 #   - PlayerBrain reads keyboard via process_input forwarded from Pawn;
 #     AIBrain ticks msec timers via physics_tick forwarded from Pawn.
 #
-# Brain is a Resource (not a Node). Pawn._ready calls brain.bind(self), which
+# Brain is a child Node (one per Pawn instance, no cross-actor state sharing).
+# Pawn._ready locates the first Brain child and calls brain.bind(self), which
 # stores the pawn ref and connects to Pawn's signal protocol. metro_1.tscn
-# assigns the brain export per Pawn instance (PlayerBrain.tres / AIBrain.tres).
+# attaches a PlayerBrain or AIBrain script to each Pawn's Brain child node.
 
 # Lane geometry — single source of truth, also read by MetroMovement.
 const LANE_OFFSETS: Array[float] = [-1.0, 0.0, 1.0]
@@ -52,8 +53,12 @@ signal knocked_down()
 signal recovery_started()
 signal recovered()
 
-# Planning events.
-signal obstacle_detected(other: Pawn, distance: float, in_lane: int)
+# Planning events. Emitted by MetroMovement when its forward scan finds an
+# `obstacle` group node in the runner's lane. Brain decides the response —
+# PlayerBrain knocks the pawn down; AIBrain swerves to a candidate lane.
+# `candidate_lanes` is the pre-filtered list of clear lanes (already
+# shuffled), so AI brains can just pick the first.
+signal obstacle_detected(blocker: Node, distance: float, in_lane: int, candidate_lanes: Array[int])
 
 # Game state lifecycle.
 signal game_state_changed(old_state: int, new_state: int)
@@ -61,19 +66,17 @@ signal game_state_changed(old_state: int, new_state: int)
 
 # --- Exports ---------------------------------------------------------------
 
-@export_group("Brain")
-## The Brain Resource that decides intent for this Pawn. Player Pawn instances
-## point this at PlayerBrain.tres; NPC instances at AIBrain.tres. Pawn calls
-## brain.bind(self) on _ready to wire up signals + give Brain its pawn ref.
-@export var brain: Brain
+# The Brain that decides intent for this Pawn. Brains are child Nodes — each
+# Pawn instance owns its own Brain (PlayerBrain on the player, AIBrain on
+# NPCs). Pawn._ready locates the first Brain child and calls brain.bind(self).
+# Resolved in _ready (not @onready) so editor-tool Pawns ignore it.
+var brain: Brain
 
-@export_group("Camera")
-## When true, Pawn marks its Camera3D as current and captures the mouse on
-## _ready. NPCs leave this false; only the player Pawn instance enables it.
-@export var is_active_camera: bool = false
-## When true, Pawn applies Engine.time_scale = shuffle_time_scale on shuffle
-## start and restores it on resolve. Player-only effect; NPCs leave it false.
-@export var apply_bullet_time: bool = false
+# Brain claims these at bind time via set_camera_active / set_bullet_time_owner.
+# Off by default; PlayerBrain turns them on. Kept as plain fields (not exports)
+# so the Pawn's authored surface stays role-agnostic.
+var is_active_camera: bool = false
+var apply_bullet_time: bool = false
 
 @export_group("Run Speed")
 @export var start_speed: float = 0.5
@@ -189,18 +192,38 @@ func _ready() -> void:
 	if Engine.is_editor_hint():
 		return
 	run_speed = start_speed
-	# Activate camera if this Pawn is the player.
-	if is_active_camera and camera_rig != null:
-		var cam: Camera3D = camera_rig.get_node_or_null("Camera3D")
-		if cam != null:
-			cam.current = true
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-		if visual != null:
-			visual.hide()  # Hide own body in first-person.
-	# Bind the brain (Brain is a Resource; bind stores the pawn ref and wires
-	# signal handlers).
+	# Find the Brain child node and bind. Each Pawn instance owns its own
+	# Brain — PlayerBrain on the player, AIBrain on NPCs. Brain decides
+	# whether this Pawn claims the camera and bullet-time during _on_bound.
+	brain = _find_brain_child()
 	if brain != null:
 		brain.bind(self)
+
+
+func _find_brain_child() -> Brain:
+	for child: Node in get_children():
+		if child is Brain:
+			return child as Brain
+	return null
+
+
+# Brain hook: claim this Pawn's Camera3D as the active view, capture the
+# mouse, and hide the visual (first-person). PlayerBrain calls this at bind.
+func set_camera_active(active: bool) -> void:
+	is_active_camera = active
+	if not active or camera_rig == null:
+		return
+	var cam: Camera3D = camera_rig.get_node_or_null("Camera3D")
+	if cam != null:
+		cam.current = true
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	if visual != null:
+		visual.hide()
+
+
+# Brain hook: opt this Pawn in to bullet-time on shuffle. Player-only effect.
+func set_bullet_time_owner(value: bool) -> void:
+	apply_bullet_time = value
 
 
 func _physics_process(delta: float) -> void:
@@ -367,6 +390,9 @@ func get_lane_position() -> float:
 
 
 
+# Current along-rail speed (m/s). MetroMovement queries this for every runner.
+# Player → PlayerBrain returns pawn.run_speed (the start_speed→max_speed curve).
+# NPC    → AIBrain returns its jittered _actual_move_speed.
 func get_rail_speed() -> float:
 	if brain == null:
 		return 0.0

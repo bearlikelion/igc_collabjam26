@@ -6,11 +6,47 @@ extends Brain
 # set_shuffle_telegraph / lean). The Pawn owns the camera, headbob, lane-lean
 # spring, bullet-time, and visual show/hide — Brain doesn't touch any of that.
 
+@export_group("Obstacles")
+## Forward distance the runner sense scans for `obstacle` group nodes. The
+## player's response is an instant knockdown — the value should match the
+## stop distance the player can react within.
+@export var obstacle_lookahead: float = 0.75
+
 var _lane_intent: int = 0
 
 
 func _on_bound() -> void:
 	pawn.add_to_group("player")
+	# The player Pawn owns the active camera and bullet-time. NPC brains
+	# leave both off — Pawn stays role-agnostic until a brain claims it.
+	pawn.set_camera_active(true)
+	pawn.set_bullet_time_owner(true)
+
+
+# Player wants MetroMovement to scan for environment obstacles every frame.
+# When something is in the lane, _on_obstacle_detected handles the response.
+func should_avoid_obstacles() -> bool:
+	return true
+
+
+func get_obstacle_lookahead() -> float:
+	return obstacle_lookahead
+
+
+func _on_obstacle_detected(_blocker: Node, _distance: float, _in_lane: int, _candidate_lanes: Array[int]) -> void:
+	pawn.knock_down_from_shuffle()
+
+
+func get_end_of_rail_action() -> int:
+	return EndOfRailAction.GOAL
+
+
+# Player's current speed lives on Pawn (start_speed → max_speed acceleration
+# curve, mutated by knockdown / movement_blocked / goal_reached). MetroMovement
+# queries every runner through this method, so PlayerBrain forwards Pawn's
+# physical speed instead of owning a separate value.
+func get_move_speed() -> float:
+	return pawn.run_speed
 
 
 # Called by Pawn._input for every input event. During an active shuffle, route

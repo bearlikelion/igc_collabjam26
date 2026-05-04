@@ -1,13 +1,20 @@
 class_name Brain
-extends Resource
+extends Node
 
-# Base class for Pawn brains. Brains are Resources, not Nodes — assigned
-# directly via @export on Pawn (no PackedScene indirection, no scene tree
-# pollution). Each Pawn instance carries its own Brain Resource.
+# Base class for Pawn brains. Brains are Nodes parented to their owning Pawn —
+# one Brain instance per Pawn instance, so per-pawn state and signal
+# connections never bleed across actors. Each Pawn finds its Brain by
+# iterating children in _ready.
+#
+# (Earlier this type was a Resource, which Godot shares by reference: 6 NPCs
+# pointed at the same AIBrain.tres, every bind() clobbered the prior pawn
+# field, and _actual_move_speed / timers were shared across actors. Switching
+# to Node fixes that with no extra per-instance bookkeeping.)
 #
 # Lifecycle:
-#   1. Pawn._ready calls brain.bind(self). Brain stores the pawn reference,
-#      wires up to the pawn's signal protocol, and runs _on_bound().
+#   1. Pawn._ready locates its Brain child and calls brain.bind(self). Brain
+#      stores the pawn reference, wires up to the pawn's signal protocol, and
+#      runs _on_bound().
 #   2. Pawn forwards input to brain via process_input(event) on every _input.
 #   3. Pawn forwards physics ticks to brain via physics_tick(delta) on every
 #      _physics_process — for time-based decisions that don't fit signals
@@ -16,6 +23,13 @@ extends Resource
 # Subclasses (PlayerBrain, AIBrain) override the handlers they care about and
 # call the Pawn's intent methods (request_lane_change / start_shuffle /
 # set_shuffle_telegraph / lean) to drive the body.
+
+# What MetroMovement should do when a runner reaches the end of the rail.
+# GOAL    — finish the run (used by the player).
+# PARK    — stop at the finish marker (forward NPCs greeting the player).
+# RESPAWN — wrap to the start of the rail with a stagger (oncoming NPCs).
+enum EndOfRailAction { GOAL, PARK, RESPAWN }
+
 
 var pawn: Pawn
 
@@ -99,7 +113,7 @@ func _on_recovered() -> void:
 	pass
 
 
-func _on_obstacle_detected(_other: Pawn, _distance: float, _in_lane: int) -> void:
+func _on_obstacle_detected(_blocker: Node, _distance: float, _in_lane: int, _candidate_lanes: Array[int]) -> void:
 	pass
 
 
@@ -133,3 +147,10 @@ func should_avoid_obstacles() -> bool:
 # Lookahead distance (m) for obstacle sampling.
 func get_obstacle_lookahead() -> float:
 	return 0.0
+
+
+# What should happen when this pawn reaches the end of the rail. Default is
+# RESPAWN (loop back to start) — fits oncoming NPCs. PlayerBrain returns GOAL;
+# AIBrain returns PARK or RESPAWN based on its destination.
+func get_end_of_rail_action() -> int:
+	return EndOfRailAction.RESPAWN

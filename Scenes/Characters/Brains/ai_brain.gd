@@ -67,6 +67,18 @@ func _on_encounter_detected(other: Pawn, _distance: float) -> void:
 		_avoidance_until_msec = Time.get_ticks_msec() + int(avoidance_cooldown * 1000.0)
 
 
+# Environment obstacle in the current lane — swerve to a candidate lane.
+# Candidates arrive pre-shuffled and pre-filtered to clear lanes only, so
+# picking the first one is a uniform random choice among the safe options.
+func _on_obstacle_detected(_blocker: Node, _distance: float, _in_lane: int, candidate_lanes: Array[int]) -> void:
+	if Time.get_ticks_msec() < _avoidance_until_msec:
+		return
+	if candidate_lanes.is_empty():
+		return
+	pawn.set_current_lane(candidate_lanes[0])
+	_avoidance_until_msec = Time.get_ticks_msec() + int(avoidance_cooldown * 1000.0)
+
+
 func _on_shuffle_began(_other: Pawn, _other_telegraph: int, _deadline_msec: int) -> void:
 	# Roll a random direction. Future archetypes can override for variety.
 	var direction: int = -1 if randf() < 0.5 else 1
@@ -96,6 +108,15 @@ func should_avoid_obstacles() -> bool:
 
 func get_obstacle_lookahead() -> float:
 	return obstacle_lookahead
+
+
+# Forward NPCs (destination = "finish") park as greeters at the end of the
+# rail. Reverse NPCs (destination = "player" or anything else) loop back to
+# the start so a fresh oncoming runner appears.
+func get_end_of_rail_action() -> int:
+	if destination_group == &"finish":
+		return EndOfRailAction.PARK
+	return EndOfRailAction.RESPAWN
 
 
 

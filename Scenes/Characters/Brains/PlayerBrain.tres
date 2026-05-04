@@ -1,6 +1,0 @@
-[gd_resource type="Resource" script_class="PlayerBrain" load_steps=2 format=3]
-
-[ext_resource type="Script" path="res://Scenes/Characters/Brains/player_brain.gd" id="1_brain"]
-
-[resource]
-script = ExtResource("1_brain")
