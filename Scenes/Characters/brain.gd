@@ -149,6 +149,13 @@ func get_obstacle_lookahead() -> float:
 	return 0.0
 
 
+# Lookahead distance (m) for runner-vs-runner encounter detection along the
+# rail. MetroMovement scans for other runners ahead in this pawn's lane within
+# this distance and emits encounter_detected. 0.0 disables.
+func get_encounter_lookahead() -> float:
+	return 0.0
+
+
 # What should happen when this pawn reaches the end of the rail. Default is
 # RESPAWN (loop back to start) — fits oncoming NPCs. PlayerBrain returns GOAL;
 # AIBrain returns PARK or RESPAWN based on its destination.

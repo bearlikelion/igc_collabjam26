@@ -12,7 +12,7 @@ extends CharacterBody3D
 #   - Knockdown / recovery lifecycle (KnockdownPhase sub-enum)
 #   - Subway-shuffle resolver (initiator-side: deadline timer + world-side compare)
 #   - Subway-shuffle participant state (callee-side: telegraph + side-step)
-#   - ShuffleCast forward detection (a "sense": emits encounter_detected)
+#   - Encounter sense (rail-coord scan in MetroMovement: emits encounter_detected)
 #   - Camera (a "sense": mouse pitch input, headbob, lane-lean spring,
 #     shuffle camera tilt, mode flip on knockdown — all owned by Pawn)
 #   - Bullet-time on shuffle (player-flagged via apply_bullet_time)
@@ -159,12 +159,15 @@ var apply_bullet_time: bool = false
 @export var visual: CharacterVisual
 
 
-@onready var shuffle_cast: RayCast3D = get_node_or_null("ShuffleCast")
-
 # The camera rig — singleton, lives at level scene root in group "player_camera".
 # PlayerBrain resolves it on bind and assigns it here. Stays null on NPCs.
 # Every camera_rig usage in this file is null-guarded.
 var camera_rig: PawnCamera
+
+# MetroMovement back-reference, written during runner registration. Pawn uses
+# it to forward set_shuffle_ignored into the rail-coord encounter scan. Null
+# until registration completes; null-guarded at the call site.
+var _metro_movement: MetroMovement
 
 
 # --- State ----------------------------------------------------------------
@@ -192,12 +195,6 @@ var _recovery_time_left: float = 0.0
 
 # Active shuffle bookkeeping. Non-null iff locomotion == SHUFFLING.
 var shuffle: Shuffle
-
-# Pawn the forward cast should ignore until the cast no longer hits it. Lives
-# beyond a single shuffle — set when a shuffle resolves (so the cast doesn't
-# re-trigger the same encounter on recovery), cleared by _check_shuffle_cast
-# when the cast no longer points at it.
-var _shuffle_ignored_other: Pawn
 
 # Side-step state (lateral lerp during SIDESTEPPING).
 var _shuffle_lane_start_position: Vector3 = Vector3.ZERO
@@ -274,7 +271,6 @@ func _physics_process(delta: float) -> void:
 # any auto-transitions (e.g. SIDESTEPPING → RUNNING when the lerp completes).
 
 func _tick_running(delta: float) -> void:
-	_check_shuffle_cast()
 	_update_lane_tween(delta)
 	_update_run_speed(delta)
 	if visual != null:
@@ -343,11 +339,13 @@ func start_shuffle(other: Pawn) -> void:
 	shuffle.time_left = shuffle_choice_time
 	_set_locomotion(LocomotionState.SHUFFLING)
 	run_speed = 0.0
-	if _tween_active:
-		_target_lane = clampi(roundi(_lane_position), 0, LANE_COUNT - 1)
-		_lane_position = float(_target_lane)
-		_tween_active = false
-		lane_change_canceled.emit()
+	# Complete (don't cancel) the in-flight tween so the player's pressed lane
+	# intent is honored before shuffle math. Previously this rounded to the
+	# nearest integer of `_lane_position`, which silently dropped the press
+	# whenever the tween was less than half-way (e.g. 1 → 2 at pos 1.4 landed
+	# back at 1). Shuffle direction (`_target_lane + direction` in
+	# `_complete_subway_shuffle`) now operates from the intended lane.
+	_snap_tween_to_target_if_active()
 	if apply_bullet_time:
 		shuffle.previous_time_scale = Engine.time_scale
 		Engine.time_scale = shuffle_time_scale
@@ -386,12 +384,15 @@ func lean(direction: int) -> void:
 		visual.play_interact_right()
 
 
-# Mark a Pawn as ignored for forward-cast detection until the cast no longer
-# hits it. Used by PlayerBrain on same-direction-collision instant-knockdown
-# so the cast doesn't re-trigger the same encounter on recovery.
-# Cleared by _check_shuffle_cast when the cast no longer hits this Pawn.
+# Mark a Pawn as ignored for the rail-coord encounter scan until it drifts
+# past the hysteresis margin (see MetroMovement.ENCOUNTER_IGNORE_HYSTERESIS).
+# Used by PlayerBrain on same-direction-collision instant-knockdown so the
+# scan doesn't re-trigger the same encounter on recovery. Cleared by
+# MetroMovement._maybe_clear_runner_ignore.
 func set_shuffle_ignored(other: Pawn) -> void:
-	_shuffle_ignored_other = other
+	if _metro_movement == null:
+		return
+	_metro_movement.set_runner_shuffle_ignored(self, other)
 
 
 # --- Subway-shuffle participant hooks (called by initiator on callee) -----
@@ -402,6 +403,9 @@ func begin_subway_shuffle(from: Pawn, deadline_msec: int) -> int:
 	shuffle.other = from
 	shuffle.deadline_msec = deadline_msec
 	_set_locomotion(LocomotionState.SHUFFLING)
+	# Same rationale as start_shuffle: complete any in-flight tween to honor
+	# the callee's pressed intent before the shuffle freezes its motion.
+	_snap_tween_to_target_if_active()
 	if camera_rig != null:
 		camera_rig.engage_shuffle_tilt(0)
 	shuffle_began.emit(from, 0, deadline_msec)
@@ -495,6 +499,12 @@ func get_obstacle_lookahead() -> float:
 	if brain == null:
 		return 0.0
 	return brain.get_obstacle_lookahead()
+
+
+func get_encounter_lookahead() -> float:
+	if brain == null:
+		return 0.0
+	return brain.get_encounter_lookahead()
 
 
 func reach_goal() -> void:
@@ -708,6 +718,17 @@ func _update_lane_tween(delta: float) -> void:
 		lane_change_completed.emit(_target_lane)
 
 
+# Force-complete an in-flight lane tween to its `_target_lane`. Used when a
+# locomotion change (shuffle entry) needs the lane state to settle on an
+# integer without losing the player's pressed target.
+func _snap_tween_to_target_if_active() -> void:
+	if not _tween_active:
+		return
+	_lane_position = float(_target_lane)
+	_tween_active = false
+	lane_change_completed.emit(_target_lane)
+
+
 func _resolve_subway_shuffle() -> void:
 	if shuffle == null:
 		return
@@ -728,7 +749,7 @@ func _complete_subway_shuffle(direction: int) -> void:
 	var other: Pawn = shuffle.other
 	if other != null:
 		other.end_subway_shuffle()
-		_shuffle_ignored_other = other
+		set_shuffle_ignored(other)
 	shuffle = null
 	if camera_rig != null:
 		camera_rig.disengage_shuffle_tilt()
@@ -749,7 +770,7 @@ func _fail_subway_shuffle() -> void:
 	if other != null:
 		other.apply_knockback_from(global_position)
 		other.knock_down_from_shuffle()
-		_shuffle_ignored_other = other
+		set_shuffle_ignored(other)
 	shuffle = null
 	# camera_rig stays engaged in shuffle tilt — knock_down_from_shuffle below
 	# re-engages it with target=0 so the camera rolls upright as we fall.
@@ -769,22 +790,6 @@ func _shuffle_choices_collide() -> bool:
 		return shuffle.my_telegraph != shuffle.their_telegraph
 	var side_dot: float = my_side.normalized().dot(their_side.normalized())
 	return side_dot > 0.0
-
-
-func _check_shuffle_cast() -> void:
-	if shuffle_cast == null:
-		return
-	shuffle_cast.force_raycast_update()
-	if not shuffle_cast.is_colliding():
-		_shuffle_ignored_other = null
-		return
-	var collider: Object = shuffle_cast.get_collider()
-	if collider is Pawn:
-		var other: Pawn = collider as Pawn
-		if other == _shuffle_ignored_other or other == self:
-			return
-		var distance: float = global_position.distance_to(other.global_position)
-		encounter_detected.emit(other, distance)
 
 
 # Only called from _tick_running, so the goal_reached / movement_blocked

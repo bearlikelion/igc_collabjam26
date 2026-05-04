@@ -22,7 +22,7 @@
 [ext_resource type="Script" uid="uid://b0kdqdyh2br7w" path="res://Scenes/Game/Maps/Metro1/end_camera.gd" id="13_akkrs"]
 [ext_resource type="Shader" uid="uid://t6b0t5n4jabv" path="res://Shaders/cctv.gdshader" id="14_0rra6"]
 [ext_resource type="Script" uid="uid://di4oo53chm4l7" path="res://Scenes/Characters/Brains/ai_brain.gd" id="19_m7ql2"]
-[ext_resource type="Script" path="res://Scenes/Characters/pawn_camera.gd" id="20_pcam"]
+[ext_resource type="Script" uid="uid://c7ob6aflnt2jl" path="res://Scenes/Characters/pawn_camera.gd" id="20_pcam"]
 
 [sub_resource type="AudioStreamRandomizer" id="AudioStreamRandomizer_et2qy"]
 streams_count = 3
@@ -320,6 +320,7 @@ _data = {
 
 [node name="Metro1" type="Node3D" unique_id=1736708119]
 script = ExtResource("1_drku4")
+debug_show_corners = false
 
 [node name="Ambiance" type="AudioStreamPlayer" parent="." unique_id=1301785252]
 stream = SubResource("AudioStreamRandomizer_et2qy")
@@ -475,60 +476,61 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0, -1)
 shuffle_choice_time = 0.75
 shuffle_knockback_distance = 1.5
 
-[node name="Brain" type="Node" parent="NavigationRegion3D/Player"]
+[node name="Brain" type="Node" parent="NavigationRegion3D/Player" unique_id=436571780]
 script = ExtResource("12_pbrn")
 
-[node name="CameraTracker" type="RemoteTransform3D" parent="NavigationRegion3D/Player"]
+[node name="CameraTracker" type="RemoteTransform3D" parent="NavigationRegion3D/Player" unique_id=685892083]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.711, 0)
 remote_path = NodePath("../../PlayerCamera")
 update_rotation = false
 update_scale = false
 
-[node name="PlayerCamera" type="SpringArm3D" parent="NavigationRegion3D" groups=["player_camera"]]
+[node name="PlayerCamera" type="SpringArm3D" parent="NavigationRegion3D" unique_id=590537522 groups=["player_camera"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 1.711, -1)
 spring_length = 0.0
 script = ExtResource("20_pcam")
 
-[node name="Camera3D" type="Camera3D" parent="NavigationRegion3D/PlayerCamera"]
+[node name="Camera3D" type="Camera3D" parent="NavigationRegion3D/PlayerCamera" unique_id=1179018285]
 fov = 90.0
 
 [node name="NPCCharacter" parent="NavigationRegion3D" unique_id=1919134681 instance=ExtResource("8_svs80")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0, -24)
 
-[node name="Brain" type="Node" parent="NavigationRegion3D/NPCCharacter"]
+[node name="Brain" type="Node" parent="NavigationRegion3D/NPCCharacter" unique_id=1339451774]
 script = ExtResource("19_m7ql2")
 
 [node name="NPCCharacter2" parent="NavigationRegion3D" unique_id=2133715270 instance=ExtResource("8_svs80")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0, -39)
 
-[node name="Brain" type="Node" parent="NavigationRegion3D/NPCCharacter2"]
+[node name="Brain" type="Node" parent="NavigationRegion3D/NPCCharacter2" unique_id=324579119]
 script = ExtResource("19_m7ql2")
 destination_group = &"start"
 
 [node name="NPCCharacter3" parent="NavigationRegion3D" unique_id=1641043877 instance=ExtResource("8_svs80")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0, -52.5)
 
-[node name="Brain" type="Node" parent="NavigationRegion3D/NPCCharacter3"]
+[node name="Brain" type="Node" parent="NavigationRegion3D/NPCCharacter3" unique_id=817689988]
 script = ExtResource("19_m7ql2")
 destination_group = &"start"
 
 [node name="NPCCharacter4" parent="NavigationRegion3D" unique_id=957812564 instance=ExtResource("8_svs80")]
 transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 9.5, 0, -52.5)
 
-[node name="Brain" type="Node" parent="NavigationRegion3D/NPCCharacter4"]
+[node name="Brain" type="Node" parent="NavigationRegion3D/NPCCharacter4" unique_id=1604361335]
 script = ExtResource("19_m7ql2")
 destination_group = &"start"
 
 [node name="NPCCharacter5" parent="NavigationRegion3D" unique_id=214608436 instance=ExtResource("8_svs80")]
 transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 23.5, 0, -52.5)
 
-[node name="Brain" type="Node" parent="NavigationRegion3D/NPCCharacter5"]
+[node name="Brain" type="Node" parent="NavigationRegion3D/NPCCharacter5" unique_id=2014586776]
 script = ExtResource("19_m7ql2")
 destination_group = &"start"
 
 [node name="NPCCharacter6" parent="NavigationRegion3D" unique_id=1201259432 instance=ExtResource("8_svs80")]
 transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 15, 0, -53.5)
 
-[node name="Brain" type="Node" parent="NavigationRegion3D/NPCCharacter6"]
+[node name="Brain" type="Node" parent="NavigationRegion3D/NPCCharacter6" unique_id=1633935554]
 script = ExtResource("19_m7ql2")
 destination_group = &"start"
 

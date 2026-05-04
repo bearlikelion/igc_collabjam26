@@ -12,6 +12,12 @@ extends Brain
 ## stop distance the player can react within.
 @export var obstacle_lookahead: float = 0.75
 
+@export_group("Encounters")
+## Rail-distance the encounter scan looks ahead for other Pawns in the same
+## lane. Replaces the legacy 2 m forward ShuffleCast — value mirrors the
+## old cast length.
+@export var encounter_lookahead: float = 2.0
+
 var _lane_intent: int = 0
 
 
@@ -40,6 +46,10 @@ func should_avoid_obstacles() -> bool:
 
 func get_obstacle_lookahead() -> float:
 	return obstacle_lookahead
+
+
+func get_encounter_lookahead() -> float:
+	return encounter_lookahead
 
 
 func _on_obstacle_detected(_blocker: Node, _distance: float, _in_lane: int, _candidate_lanes: Array[int]) -> void:

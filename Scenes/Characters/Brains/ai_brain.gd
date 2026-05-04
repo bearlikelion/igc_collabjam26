@@ -19,6 +19,12 @@ extends Brain
 @export var obstacle_lookahead: float = 2.0
 @export var avoidance_cooldown: float = 2.0
 
+@export_group("Encounters")
+## Rail-distance the encounter scan looks ahead for other Pawns in the same
+## lane. NPCs use this to swerve around paused / NPC traffic; active players
+## are passed through (see _on_encounter_detected).
+@export var encounter_lookahead: float = 2.0
+
 @export_group("Random Lane")
 @export var random_lane_changes: bool = false
 @export_range(0.5, 30.0, 0.5) var random_lane_interval_min: float = 3.0
@@ -108,6 +114,10 @@ func should_avoid_obstacles() -> bool:
 
 func get_obstacle_lookahead() -> float:
 	return obstacle_lookahead
+
+
+func get_encounter_lookahead() -> float:
+	return encounter_lookahead
 
 
 # Forward NPCs (destination = "finish") park as greeters at the end of the

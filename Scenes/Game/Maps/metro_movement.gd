@@ -42,11 +42,25 @@ const NPC_PARK_DEPTH_STEP: float = 1.1
 const NPC_PARK_SLOTS_PER_ROW: int = 4
 ## Max distance spread when a reverse NPC respawns so they don't pile up.
 const NPC_RESPAWN_STAGGER: float = 10.0
+## Extra rail-meters past `encounter_lookahead` before clearing a runner's
+## shuffle_ignored field. Small dead-band prevents flapping when the runner
+## and the ignored pawn travel at near-identical speeds.
+const ENCOUNTER_IGNORE_HYSTERESIS: float = 0.5
 
 
 class RailProjection:
 	var segment_index: int = 0
 	var distance_along: float = 0.0
+
+
+# Per-frame snapshot used by the encounter scan. Built once at the start of
+# _scan_encounters_for_all_runners so every pair-check reads the same positions
+# regardless of runner array order.
+class EncounterSnap:
+	var runner: Runner
+	var centerline: float = 0.0
+	var lane: int = 0
+	var lookahead: float = 0.0  # 0 = does not initiate scans (paused / no brain)
 
 
 class Runner:
@@ -55,6 +69,11 @@ class Runner:
 	var distance_along: float = 0.0
 	var toward_finish: bool = true
 	var finished: bool = false
+	# Pawn the encounter scan should skip until it drifts past
+	# (encounter_lookahead + IGNORE_HYSTERESIS) rail-meters ahead. Set by
+	# PlayerBrain on same-direction instant-knockdown so the scan doesn't
+	# re-trigger the same encounter on recovery. Cleared by the scan itself.
+	var shuffle_ignored: Pawn
 
 	func _init(p_node: Pawn, p_segment_index: int, p_distance_along: float, p_toward_finish: bool) -> void:
 		node = p_node
@@ -132,6 +151,7 @@ func _wait_for_nav() -> void:
 func _register_player() -> void:
 	var runner: Runner = Runner.new(_player, 0, 0.0, true)
 	_runners.append(runner)
+	_player._metro_movement = self
 	_wire_runner_signals(runner)
 	_apply_runner_position(runner)
 	_apply_runner_yaw_instant(runner)
@@ -151,6 +171,7 @@ func _register_npc(npc: Pawn) -> void:
 	var proj: RailProjection = _project_onto_rail(npc.global_position, toward_finish)
 	var runner: Runner = Runner.new(npc, proj.segment_index, proj.distance_along, toward_finish)
 	_runners.append(runner)
+	npc._metro_movement = self
 	_wire_runner_signals(runner)
 	_apply_runner_position(runner)
 	_apply_runner_yaw_instant(runner)
@@ -161,6 +182,24 @@ func _register_npc(npc: Pawn) -> void:
 func _wire_runner_signals(runner: Runner) -> void:
 	runner.node.lane_change_started.connect(_on_runner_lane_change_started.bind(runner))
 	runner.node.knocked_down.connect(_on_runner_knocked_down.bind(runner))
+
+
+# Public: mark `other` as ignored by `pawn`'s encounter scan. Routed through
+# Pawn.set_shuffle_ignored so brains don't need a MetroMovement reference.
+# Cleared by the encounter scan when `other` drifts past the hysteresis margin.
+func set_runner_shuffle_ignored(pawn: Pawn, other: Pawn) -> void:
+	var runner: Runner = _find_runner_for(pawn)
+	if runner == null:
+		return
+	runner.shuffle_ignored = other
+
+
+# Internal lookup: find the Runner wrapping a given Pawn, or null.
+func _find_runner_for(pawn: Pawn) -> Runner:
+	for runner: Runner in _runners:
+		if runner.node == pawn:
+			return runner
+	return null
 
 
 # Find the rail segment closest to world_pos and return runner coordinates
@@ -596,6 +635,7 @@ func _physics_process(delta: float) -> void:
 		return
 	for runner: Runner in _runners:
 		_advance_runner(runner, delta)
+	_scan_encounters_for_all_runners()
 
 
 # Advance one runner along the rail. Single code path for player + NPCs;
@@ -666,6 +706,33 @@ func _runner_lane_length_at(runner: Runner, lane: int) -> float:
 	return seg_start.distance_to(seg_end)
 
 
+# Signed centerline distance from corners[0] along the rail. Direction-agnostic
+# scalar — FORWARD runners increase, REVERSE runners decrease. Encounter scan
+# uses the difference between two runners' centerline positions to decide who
+# is ahead of whom on the rail. Centerline (not per-lane) is used because the
+# scan only needs ~corner-fuzziness accuracy to gate same-lane encounters.
+func _runner_centerline_position(runner: Runner) -> float:
+	if _corners.size() < 2:
+		return 0.0
+	var pos: float = 0.0
+	if runner.toward_finish:
+		for i: int in range(runner.segment_index):
+			pos += _corners[i].distance_to(_corners[i + 1])
+		pos += runner.distance_along
+		return pos
+	# Reverse runner: segment_index counts from the finish end. Total rail length
+	# minus distance walked from the finish gives the equivalent forward scalar.
+	var total: float = 0.0
+	for i: int in range(_corners.size() - 1):
+		total += _corners[i].distance_to(_corners[i + 1])
+	var reverse_walked: float = 0.0
+	var last_idx: int = _corners.size() - 1
+	for i: int in range(runner.segment_index):
+		reverse_walked += _corners[last_idx - i].distance_to(_corners[last_idx - i - 1])
+	reverse_walked += runner.distance_along
+	return total - reverse_walked
+
+
 # Handle a runner reaching the end of its rail. Brain decides what kind of
 # end this is — finish line, parking spot, or loop-back — and MetroMovement
 # performs the rail-state bookkeeping to make it happen.
@@ -732,6 +799,105 @@ func _compute_park_offset(slot: int) -> Vector3:
 	var lateral: Vector3 = perpendicular * lateral_units * NPC_PARK_LATERAL_STEP
 	var depth: Vector3 = -last_forward * float(row + 1) * NPC_PARK_DEPTH_STEP
 	return lateral + depth
+
+
+# Rail-coordinate encounter scan. Replaces the per-pawn forward RayCast3D that
+# used to live on Pawn (ShuffleCast). For every RUNNING runner with a non-zero
+# encounter_lookahead, finds the nearest other runner that is:
+#   - on the same target lane (matches the obstacle scan's lane convention),
+#   - ahead along the runner's travel direction,
+#   - within encounter_lookahead rail-meters,
+#   - not the runner's `shuffle_ignored` Pawn.
+# Emits encounter_detected on the runner's Pawn with the rail-distance.
+# Also clears `shuffle_ignored` once the ignored pawn is past the hysteresis
+# margin (different lane / behind / further than lookahead + ENCOUNTER_IGNORE_HYSTERESIS).
+func _scan_encounters_for_all_runners() -> void:
+	if _runners.size() < 2:
+		# Still try to clear stale ignores even with a single runner.
+		for runner: Runner in _runners:
+			if runner.shuffle_ignored != null:
+				runner.shuffle_ignored = null
+		return
+
+	var snaps: Array[EncounterSnap] = []
+	for runner: Runner in _runners:
+		if not is_instance_valid(runner.node):
+			continue
+		var snap: EncounterSnap = EncounterSnap.new()
+		snap.runner = runner
+		snap.centerline = _runner_centerline_position(runner)
+		snap.lane = runner.node.get_current_lane()
+		# Only RUNNING pawns initiate scans. Paused / knocked-down / disabled
+		# runners stay in the snapshot list as candidate "others" but won't
+		# emit encounter_detected themselves.
+		snap.lookahead = runner.node.get_encounter_lookahead() if runner.node.can_move() else 0.0
+		snaps.append(snap)
+
+	for self_snap: EncounterSnap in snaps:
+		if self_snap.lookahead > 0.0:
+			var nearest_other: EncounterSnap = null
+			var nearest_distance: float = INF
+			for other_snap: EncounterSnap in snaps:
+				if other_snap == self_snap:
+					continue
+				if other_snap.runner.node == self_snap.runner.shuffle_ignored:
+					continue
+				if other_snap.lane != self_snap.lane:
+					continue
+				var ahead: float = _signed_distance_ahead(
+					self_snap.centerline,
+					other_snap.centerline,
+					self_snap.runner.toward_finish
+				)
+				if ahead <= 0.0 or ahead > self_snap.lookahead:
+					continue
+				if ahead < nearest_distance:
+					nearest_distance = ahead
+					nearest_other = other_snap
+			if nearest_other != null:
+				self_snap.runner.node.encounter_detected.emit(nearest_other.runner.node, nearest_distance)
+		_maybe_clear_runner_ignore(self_snap, snaps)
+
+
+# Distance from `self_pos` to `other_pos` along the runner's travel direction.
+# Positive = `other` is ahead; <= 0 = behind or coincident.
+func _signed_distance_ahead(self_pos: float, other_pos: float, self_toward_finish: bool) -> float:
+	if self_toward_finish:
+		return other_pos - self_pos
+	return self_pos - other_pos
+
+
+# Clear `runner.shuffle_ignored` when the ignored pawn is no longer a same-lane
+# threat. Conditions for clearing:
+#   - ignored pawn no longer in the active runner set,
+#   - different lane,
+#   - behind us (ahead <= 0),
+#   - or further than encounter_lookahead + ENCOUNTER_IGNORE_HYSTERESIS.
+func _maybe_clear_runner_ignore(self_snap: EncounterSnap, snaps: Array[EncounterSnap]) -> void:
+	if self_snap.runner.shuffle_ignored == null:
+		return
+	var ignored_pawn: Pawn = self_snap.runner.shuffle_ignored
+	var ignored_snap: EncounterSnap = null
+	for s: EncounterSnap in snaps:
+		if s.runner.node == ignored_pawn:
+			ignored_snap = s
+			break
+	if ignored_snap == null:
+		self_snap.runner.shuffle_ignored = null
+		return
+	if ignored_snap.lane != self_snap.lane:
+		self_snap.runner.shuffle_ignored = null
+		return
+	var ahead: float = _signed_distance_ahead(
+		self_snap.centerline,
+		ignored_snap.centerline,
+		self_snap.runner.toward_finish
+	)
+	if ahead <= 0.0:
+		self_snap.runner.shuffle_ignored = null
+		return
+	if ahead > self_snap.lookahead + ENCOUNTER_IGNORE_HYSTERESIS:
+		self_snap.runner.shuffle_ignored = null
 
 
 # Scan the runner's current lane for an obstacle within their lookahead.
