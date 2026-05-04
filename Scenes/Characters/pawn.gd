@@ -196,6 +196,14 @@ var _tween_from: float = float(START_LANE)
 var _tween_elapsed: float = 0.0
 var _tween_active: bool = false
 
+# Pending lane-change request that failed the occupancy gate. Retried every
+# physics frame in _tick_running — clears as soon as it commits or another
+# request_lane_change supersedes it. -1 = no pending request. Drives the
+# "expand and commit when clear" UX for player input AND shared by AI brains
+# (single retry path, identical surface). Cleared on locomotion exit from
+# RUNNING so stale intent doesn't leak across shuffle / knockdown.
+var _queued_lane_change: int = -1
+
 # Knockdown timing. _recovery_time_left ticks down inside KNOCKED_DOWN; the
 # transition DOWN → RECOVERING fires when it reaches shuffle_get_up_time and
 # the visual can begin the recover animation.
@@ -272,6 +280,7 @@ func _physics_process(delta: float) -> void:
 
 func _tick_running(delta: float) -> void:
 	_update_lane_tween(delta)
+	_try_commit_queued_lane_change()
 	_update_run_speed(delta)
 	if visual != null:
 		visual.set_move_speed(run_speed)
@@ -316,12 +325,57 @@ func _input(event: InputEvent) -> void:
 
 # --- Public API: Brain → Pawn (intent in) ---------------------------------
 
-# Brain commits to a discrete lane. Tweens via _commit_lane_change. Lane
-# changes are only allowed while RUNNING (tween is a substate of RUNNING).
+# Brain commits to a discrete lane. Lane changes are only allowed while
+# RUNNING (tween is a substate of RUNNING). Gated by `_is_lane_change_safe` —
+# if the target lane has a same-direction occupant within the brain's
+# `min_peer_gap` ahead, the request queues and retries every physics frame
+# until safe. A subsequent `request_lane_change` overwrites the queue with
+# the new target. Calling with `target_lane == _target_lane` clears any
+# pending queue (cancel intent).
 func request_lane_change(target_lane: int) -> void:
 	if locomotion != LocomotionState.RUNNING:
 		return
-	_commit_lane_change(target_lane)
+	var clamped: int = clampi(target_lane, 0, LANE_COUNT - 1)
+	if clamped == _target_lane and not _tween_active:
+		_queued_lane_change = -1
+		return
+	if _is_lane_change_safe(clamped):
+		_queued_lane_change = -1
+		_commit_lane_change(clamped)
+		return
+	_queued_lane_change = clamped
+
+
+# Per-frame retry for a queued lane change. Called from _tick_running so the
+# pawn auto-commits the moment the target lane clears. No-ops when nothing is
+# queued; clears the queue if it has been satisfied externally (e.g., a
+# direct shuffle resolution moved us to the requested lane).
+func _try_commit_queued_lane_change() -> void:
+	if _queued_lane_change < 0:
+		return
+	if _queued_lane_change == _target_lane and not _tween_active:
+		_queued_lane_change = -1
+		return
+	if not _is_lane_change_safe(_queued_lane_change):
+		return
+	var target: int = _queued_lane_change
+	_queued_lane_change = -1
+	_commit_lane_change(target)
+
+
+# Returns true when the runner-coord scan reports `target_lane` clear of
+# same-direction peers within `min_peer_gap` ahead AND no `obstacle` group
+# node within the same window. Defensive defaults: no MetroMovement back-ref
+# (pre-registration / unit-test scenarios) → assume safe so brains can drive
+# tween tests without a registry. Same-lane request → trivially safe.
+func _is_lane_change_safe(target_lane: int) -> bool:
+	if target_lane == _target_lane:
+		return true
+	if _metro_movement == null:
+		return true
+	var min_gap: float = brain.get_min_peer_gap() if brain != null else 1.0
+	var clearance: float = _metro_movement.get_lane_clearance(self, target_lane, min_gap)
+	return clearance >= min_gap
 
 
 # Brain initiates a shuffle encounter. This Pawn becomes the initiator.
@@ -373,14 +427,20 @@ func set_shuffle_telegraph(direction: int) -> void:
 
 
 # Brain announces a visible body lean — held lane intent during RUNNING, or
-# committed shuffle telegraph during SHUFFLING. Three side effects:
+# committed shuffle telegraph during SHUFFLING. Pure body-angle intent: no
+# animation clip is played here. The interact (punch) clip fires only at
+# shuffle resolution — see `_complete_subway_shuffle` / `end_subway_shuffle`.
+# Three side effects:
 #   1. Updates `lean_direction` and emits `lean_changed` (only on actual
 #      change, so observers don't churn on no-op repeats from brain ticks).
 #   2. Routes to the camera rig's lane-lean spring (player-only; null on NPCs).
 #      Harmless during shuffle: the rig suppresses lane lean while shuffle
 #      tilt is engaged, so this only updates the dormant target until shuffle
 #      ends.
-#   3. Plays the corresponding interact animation on the visual.
+#   3. Bone-lean on the torso so peers can read intent while the body keeps
+#      walking. Shared by PlayerBrain (held lane key) and AIBrain (run-up tell
+#      + reactive shuffle telegraph). Same surface for both — no AI-specific
+#      detour.
 func lean(direction: int) -> void:
 	var clamped: int = clampi(direction, -1, 1)
 	if clamped != lean_direction:
@@ -388,12 +448,8 @@ func lean(direction: int) -> void:
 		lean_changed.emit(clamped)
 	if camera_rig != null:
 		camera_rig.set_lean_direction(clamped)
-	if visual == null:
-		return
-	if clamped < 0:
-		visual.play_interact_left()
-	elif clamped > 0:
-		visual.play_interact_right()
+	if visual != null:
+		visual.set_torso_lean_only(clamped)
 
 
 # Mark a Pawn as ignored for the rail-coord encounter scan until it drifts
@@ -432,8 +488,10 @@ func end_subway_shuffle() -> void:
 	# Symmetric with initiator's _complete_subway_shuffle: callee actually
 	# lane-changes by its committed direction (no more world-space side-step
 	# that snapped back). _set_locomotion(RUNNING) → lean(0) reset → visual
-	# interact cue → tween. Direction == 0 means we never committed (passive
-	# resolve where the OTHER party stepped aside) — just walk on.
+	# interact cue → request_lane_change (gated by safety + queue, so we
+	# never resolve onto an already-occupied lane). Direction == 0 means we
+	# never committed (passive resolve where the OTHER party stepped aside)
+	# — just walk on.
 	_set_locomotion(LocomotionState.RUNNING)
 	if visual != null:
 		if direction < 0:
@@ -443,7 +501,7 @@ func end_subway_shuffle() -> void:
 		else:
 			visual.play_walk()
 	if direction != 0:
-		_commit_lane_change(_target_lane + direction)
+		request_lane_change(_target_lane + direction)
 
 
 func stop_subway_shuffle() -> void:
@@ -684,6 +742,11 @@ func _set_locomotion(new_state: int) -> void:
 			old_state == LocomotionState.SHUFFLING
 			or old_state == LocomotionState.KNOCKED_DOWN):
 		lean(0)
+	# Clear queued lane change on RUNNING exit — stale intent shouldn't leak
+	# across shuffle / knockdown / parked / finished. Brain re-issues if it
+	# still wants the change after returning to RUNNING.
+	if old_state == LocomotionState.RUNNING and new_state != LocomotionState.RUNNING:
+		_queued_lane_change = -1
 
 
 func can_move() -> bool:
@@ -789,7 +852,10 @@ func _complete_subway_shuffle(direction: int) -> void:
 	if camera_rig != null:
 		camera_rig.disengage_shuffle_tilt()
 	_set_locomotion(LocomotionState.RUNNING)
-	_commit_lane_change(_target_lane + direction)
+	# Gated lane change — request_lane_change queues if the resolved target
+	# lane is occupied by a same-direction peer. Pawn stays put until safe
+	# rather than overlapping.
+	request_lane_change(_target_lane + direction)
 	if direction < 0 and visual != null:
 		visual.play_interact_left()
 	elif direction > 0 and visual != null:

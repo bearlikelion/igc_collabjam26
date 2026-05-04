@@ -120,6 +120,13 @@ func play_interact_right() -> void:
 	_lock_state_for_animation(MotionState.INTERACT_RIGHT)
 
 
+# Set just the torso lean direction without changing animation state. Used by
+# AI brains to broadcast a pre-shuffle tell during run-up — body keeps walking
+# while the spine angles toward the side the AI plans to dodge.
+func set_torso_lean_only(direction: int) -> void:
+	_torso_lean_direction = clampi(direction, -1, 1)
+
+
 # Play the death animation.
 func play_die() -> void:
 	if _state == MotionState.DIE and _is_recovery_state_locked():

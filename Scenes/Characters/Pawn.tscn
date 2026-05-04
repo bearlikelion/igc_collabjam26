@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://cfbedqf0p215d"]
 
-[ext_resource type="Script" path="res://Scenes/Characters/pawn.gd" id="1_pawn"]
+[ext_resource type="Script" uid="uid://cr0npsa6kw2u3" path="res://Scenes/Characters/pawn.gd" id="1_pawn"]
 [ext_resource type="PackedScene" uid="uid://c1sd4qbsm8bge" path="res://Scenes/Characters/CharacterVisual.tscn" id="2_visual"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_pawn"]
@@ -9,6 +9,8 @@ size = Vector3(0.813, 1.5, 0.813)
 [node name="Pawn" type="CharacterBody3D" unique_id=71114608 node_paths=PackedStringArray("visual")]
 script = ExtResource("1_pawn")
 acceleration_time = 2.0
+shuffle_choice_time = 2.5
+shuffle_debug_enabled = true
 visual = NodePath("CharacterVisual")
 
 [node name="Collision" type="CollisionShape3D" parent="." unique_id=184064025]
@@ -19,24 +21,25 @@ shape = SubResource("BoxShape3D_pawn")
 playback_fade_time = 0.3
 torso_lean_amount = 0.8
 
-[node name="Skeleton3D" parent="CharacterVisual/ModelRoot/AuxScene/Scene/NPC1_standard_DEF_rig" parent_id_path=PackedInt32Array(905364963, 1374843997, 50584899) index="1" unique_id=1831316121]
-bones/1/rotation = Quaternion(0.79045546, 2.1175826e-22, 0, 0.6125196)
-bones/3/rotation = Quaternion(-0.07746413, -2.3283067e-10, -4.6566134e-10, 0.9969952)
-bones/4/rotation = Quaternion(-0.015610873, -2.3283062e-10, 3.492459e-10, 0.99987817)
-bones/5/rotation = Quaternion(0.24518801, 1.8626451e-09, 1.3969839e-09, 0.9694756)
-bones/6/rotation = Quaternion(-0.18098277, -3.8417056e-09, -2.3283064e-10, 0.9834863)
-bones/8/rotation = Quaternion(-0.01896388, -0.0453634, -0.23340231, 0.97113645)
-bones/9/rotation = Quaternion(2.3283064e-09, 0, -9.313226e-10, 1)
-bones/10/rotation = Quaternion(-1.1175871e-08, 0.03579781, -0.00041484926, 0.999359)
-bones/12/rotation = Quaternion(-0.018963922, 0.04536337, 0.23339894, 0.9711373)
-bones/13/rotation = Quaternion(1.8626451e-09, 0, 4.656613e-10, 1)
-bones/14/rotation = Quaternion(0, -0.035797738, 0.0004181555, 0.999359)
-bones/15/rotation = Quaternion(0.9922857, 0.055364214, 0.019766299, 0.10914762)
-bones/16/rotation = Quaternion(0.034121208, -3.6921356e-05, 0.0036070351, 0.9994113)
-bones/17/rotation = Quaternion(-0.56027347, -0.07406688, 0.05973784, 0.8228239)
-bones/19/rotation = Quaternion(0.9922857, -0.05536417, -0.019766286, 0.10914769)
-bones/20/rotation = Quaternion(0.034121227, 3.6891553e-05, -0.0036070016, 0.9994112)
-bones/21/rotation = Quaternion(-0.5602734, 0.074066885, -0.05973785, 0.8228239)
+[node name="Skeleton3D" parent="CharacterVisual/ModelRoot/AuxScene/Scene/NPC1_standard_DEF_rig" parent_id_path=PackedInt32Array(905364963, 1374843997, 1247741337) index="1" unique_id=1001076991]
+bones/1/rotation = Quaternion(0.970091, -4.7161875e-15, -3.654548e-15, 0.24274161)
+bones/2/rotation = Quaternion(0.027375078, -0.005165265, -0.0073384875, 0.999585)
+bones/3/rotation = Quaternion(0.080737665, -0.012534967, -0.01021322, 0.9966042)
+bones/4/rotation = Quaternion(0.14251685, -0.0074213995, -0.014370355, 0.98966026)
+bones/5/rotation = Quaternion(0.31791377, 0.05215024, 0.0037442083, 0.9466769)
+bones/6/rotation = Quaternion(-0.1139448, 0.032796156, 0.009123811, 0.9929037)
+bones/8/rotation = Quaternion(-0.4998409, 0.1538853, 0.07676641, 0.84887296)
+bones/9/rotation = Quaternion(-0.21333776, -0.009298455, -0.6852597, 0.69628996)
+bones/10/rotation = Quaternion(0.14576481, -0.04172893, -0.28471324, 0.9465462)
+bones/12/rotation = Quaternion(-0.51094115, 0.06282665, 0.030413229, 0.85677713)
+bones/13/rotation = Quaternion(-0.17861362, 0.007784982, 0.57372487, 0.7992974)
+bones/14/rotation = Quaternion(0.07298233, 0.09311228, 0.14578784, 0.98221666)
+bones/15/rotation = Quaternion(0.57940626, 0.13937195, -0.10831666, 0.79569554)
+bones/16/rotation = Quaternion(0.52421135, 0.051876795, 0.051740363, 0.84843045)
+bones/17/rotation = Quaternion(-0.6002483, -0.14870015, 0.09964459, 0.7795263)
+bones/19/rotation = Quaternion(0.68125856, -0.12193696, 0.15870231, 0.7041532)
+bones/20/rotation = Quaternion(0.59104466, -0.05904836, -0.05829782, 0.8023596)
+bones/21/rotation = Quaternion(-0.7635242, 0.11912967, -0.11075418, 0.62495804)
 
 [editable path="CharacterVisual"]
 [editable path="CharacterVisual/ModelRoot/AuxScene"]

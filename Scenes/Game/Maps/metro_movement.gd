@@ -46,6 +46,10 @@ const NPC_RESPAWN_STAGGER: float = 10.0
 ## shuffle_ignored field. Small dead-band prevents flapping when the runner
 ## and the ignored pawn travel at near-identical speeds.
 const ENCOUNTER_IGNORE_HYSTERESIS: float = 0.5
+## Buffer (rail-meters) left between a knocked-back runner and the nearest
+## same-lane peer behind them, so the rewind doesn't land coincident with the
+## rear pawn (mutual speed-modulation would otherwise lock both at zero).
+const KNOCKBACK_REAR_BUFFER: float = 0.1
 
 
 class RailProjection:
@@ -167,6 +171,10 @@ func _register_existing_npcs() -> void:
 
 # Project the NPC's authored world position onto the rail and use that as its
 # starting coordinate so NPCs appear where the level designer placed them.
+# After projection, run a de-stagger pass — if another runner already occupies
+# the same physical lane within the new NPC's `min_peer_gap`, push the new
+# runner backward along its travel direction until clear (or we walk off the
+# rail's start, in which case overlap is accepted as an authoring problem).
 func _register_npc(npc: Pawn) -> void:
 	var toward_finish: bool = _npc_toward_finish(npc)
 	npc.set_rail_forward(toward_finish)
@@ -175,8 +183,52 @@ func _register_npc(npc: Pawn) -> void:
 	_runners.append(runner)
 	npc._metro_movement = self
 	_wire_runner_signals(runner)
+	var min_gap: float = npc.brain.get_min_peer_gap() if npc.brain != null else 1.0
+	_destagger_runner_spawn(runner, min_gap)
 	_apply_runner_position(runner)
 	_apply_runner_yaw_instant(runner)
+
+
+# Walk a freshly-spawned runner backward along its rail direction in
+# min_gap-sized steps until no other runner sits within `min_gap` rail-meters
+# in the same physical lane. Bounded iteration so a fully-packed start lane
+# can't loop forever — clamps at segment 0, distance 0 and accepts the
+# remaining overlap. Distance comparison is signed centerline-based so it
+# works for both FORWARD and REVERSE runners.
+func _destagger_runner_spawn(runner: Runner, min_gap: float) -> void:
+	var max_iter: int = _runners.size() + 5
+	while max_iter > 0:
+		max_iter -= 1
+		if _spawn_overlap_pawn(runner, min_gap) == null:
+			return
+		if runner.distance_along >= min_gap:
+			runner.distance_along -= min_gap
+			continue
+		if runner.segment_index > 0:
+			var leftover: float = min_gap - runner.distance_along
+			runner.segment_index -= 1
+			runner.distance_along = maxf(
+				0.0,
+				_runner_lane_length_at(runner, runner.node.get_current_lane()) - leftover
+			)
+			continue
+		runner.distance_along = 0.0
+		return
+
+
+# Find another runner in the same physical lane whose centerline distance is
+# within `min_gap` of the spawning runner. Null = clear.
+func _spawn_overlap_pawn(runner: Runner, min_gap: float) -> Pawn:
+	var phys_lane: int = _runner_physical_lane(runner)
+	var center: float = _runner_centerline_position(runner)
+	for other: Runner in _runners:
+		if other == runner or not is_instance_valid(other.node):
+			continue
+		if _runner_physical_lane(other) != phys_lane:
+			continue
+		if absf(_runner_centerline_position(other) - center) < min_gap:
+			return other.node
+	return null
 
 
 # Connect Pawn → MetroMovement signals for any runner. The runner is bound
@@ -1200,9 +1252,15 @@ func _on_runner_knocked_down(runner: Runner) -> void:
 	_apply_runner_position(runner)
 
 
-# Rewind a runner backward along the rail by the given distance.
+# Rewind a runner backward along the rail by the given distance, clamped so
+# we don't pass through (or land on top of) a same-physical-lane pawn behind
+# us. If a peer is closer behind than the requested rewind, the rewind is
+# capped at that peer's distance minus a small buffer (KNOCKBACK_REAR_BUFFER)
+# so the two pawns don't end up coincident and lock each other via mutual
+# speed-modulation.
 func _rewind_runner(runner: Runner, distance: float) -> void:
-	var remaining: float = maxf(distance, 0.0)
+	var clamped: float = _clamp_rewind_to_rear_pawn(runner, distance)
+	var remaining: float = maxf(clamped, 0.0)
 	while remaining > 0.0:
 		if runner.distance_along >= remaining:
 			runner.distance_along -= remaining
@@ -1213,6 +1271,35 @@ func _rewind_runner(runner: Runner, distance: float) -> void:
 			return
 		runner.segment_index -= 1
 		runner.distance_along = _runner_lane_length_at(runner, runner.node.get_current_lane())
+
+
+# Clamp `distance` to the rail-distance to the nearest same-physical-lane
+# pawn BEHIND `runner` (in runner's travel direction), minus
+# KNOCKBACK_REAR_BUFFER so the post-rewind position isn't coincident. Returns
+# `distance` unchanged when no rear pawn is within the requested rewind.
+func _clamp_rewind_to_rear_pawn(runner: Runner, distance: float) -> float:
+	if distance <= 0.0:
+		return 0.0
+	var phys_lane: int = _runner_physical_lane(runner)
+	var center: float = _runner_centerline_position(runner)
+	var nearest_behind: float = INF
+	for other: Runner in _runners:
+		if other == runner or not is_instance_valid(other.node):
+			continue
+		if _runner_physical_lane(other) != phys_lane:
+			continue
+		var ahead: float = _signed_distance_ahead(
+			center, _runner_centerline_position(other), runner.toward_finish
+		)
+		# Negative `ahead` = peer is behind us along travel direction.
+		if ahead >= 0.0:
+			continue
+		var behind: float = -ahead
+		if behind < nearest_behind:
+			nearest_behind = behind
+	if nearest_behind == INF:
+		return distance
+	return minf(distance, maxf(0.0, nearest_behind - KNOCKBACK_REAR_BUFFER))
 
 
 # Lane start point on a directed segment.
