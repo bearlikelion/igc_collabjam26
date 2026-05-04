@@ -24,12 +24,12 @@
 [ext_resource type="Material" uid="uid://doyt74p2tw1sq" path="res://Assets/Textures/dev/roof.tres" id="16_0ynle"]
 [ext_resource type="Script" uid="uid://di4oo53chm4l7" path="res://Scenes/Characters/Brains/ai_brain.gd" id="19_m7ql2"]
 [ext_resource type="Script" uid="uid://c7ob6aflnt2jl" path="res://Scenes/Characters/pawn_camera.gd" id="20_pcam"]
-[ext_resource type="Resource" uid="uid://b0u5cgxlaxnpc" path="res://Scenes/Characters/Brains/Configs/DefaultPlayer.tres" id="21_plycfg"]
+[ext_resource type="Resource" uid="uid://b0u5cgxlaxnpc" path="res://Resources/Brains/DefaultPlayer.tres" id="21_plycfg"]
 [ext_resource type="Shader" uid="uid://ca6h0hj5fdy7x" path="res://Shaders/psx.gdshader" id="22_3q7nn"]
-[ext_resource type="Resource" uid="uid://cfrk4dk0b01m1" path="res://Scenes/Characters/Brains/Configs/Greeter.tres" id="22_greeter"]
-[ext_resource type="Resource" uid="uid://chxk7vqqad2m1" path="res://Scenes/Characters/Brains/Configs/Commuter.tres" id="23_commuter"]
-[ext_resource type="Resource" uid="uid://djsb4mqe2tpvg" path="res://Scenes/Characters/Brains/Configs/Aggressive.tres" id="24_aggr"]
-[ext_resource type="Resource" uid="uid://b6vlhpe8r7m4l" path="res://Scenes/Characters/Brains/Configs/Stubborn.tres" id="25_stubb"]
+[ext_resource type="Resource" uid="uid://cfrk4dk0b01m1" path="res://Resources/Brains/Greeter.tres" id="22_greeter"]
+[ext_resource type="Resource" uid="uid://chxk7vqqad2m1" path="res://Resources/Brains/Commuter.tres" id="23_commuter"]
+[ext_resource type="Resource" uid="uid://djsb4mqe2tpvg" path="res://Resources/Brains/Aggressive.tres" id="24_aggr"]
+[ext_resource type="Resource" uid="uid://b6vlhpe8r7m4l" path="res://Resources/Brains/Stubborn.tres" id="25_stubb"]
 
 [sub_resource type="AudioStreamRandomizer" id="AudioStreamRandomizer_et2qy"]
 streams_count = 3
@@ -554,7 +554,7 @@ spring_length = 0.0
 script = ExtResource("20_pcam")
 
 [node name="Camera3D" type="Camera3D" parent="NavigationRegion3D/PlayerCamera" unique_id=1179018285]
-fov = 90.0
+fov = 38.8
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="NavigationRegion3D/PlayerCamera/Camera3D" unique_id=773972041]
 transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, -0.100000024)
