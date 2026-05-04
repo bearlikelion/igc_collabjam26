@@ -2,17 +2,20 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://6tqvbfa74b3x"
-path.s3tc="res://.godot/imported/colormap.png-7797631e00834e36046a488ce5eb4a30.s3tc.ctex"
+uid="uid://5hhwjqs5a8bu"
+path.s3tc="res://.godot/imported/doctor_0.png-9424fba8be54c0d7f07ce2fbea316906.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
 }
+generator_parameters={
+"md5": "d76bf0794509c4b57c5ff32d772bfd98"
+}
 
 [deps]
 
-source_file="res://Assets/Models/Characters/KenneyNL/Textures/colormap.png"
-dest_files=["res://.godot/imported/colormap.png-7797631e00834e36046a488ce5eb4a30.s3tc.ctex"]
+source_file="res://Assets/Models/Characters/LowPoly/Male/Doctor/doctor_0.png"
+dest_files=["res://.godot/imported/doctor_0.png-9424fba8be54c0d7f07ce2fbea316906.s3tc.ctex"]
 
 [params]
 

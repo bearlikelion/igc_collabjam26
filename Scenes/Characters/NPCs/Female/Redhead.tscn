@@ -1,0 +1,79 @@
+[gd_scene format=3 uid="uid://dpjup8pb7028d"]
+
+[ext_resource type="Script" uid="uid://71t2vdl7u1v5" path="res://Scenes/Characters/character_visual.gd" id="1_ugk5y"]
+[ext_resource type="PackedScene" uid="uid://d2h72s0thuux6" path="res://Assets/Models/Characters/LowPoly/Female/Redhead1/redhead_1.glb" id="2_ugk5y"]
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_die"]
+animation = &"Hit_Knockback RT"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_interact_left"]
+animation = &"Fighting Left Jab RT"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_interact_right"]
+animation = &"Fighting Right Jab RT"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_recover"]
+animation = &"Idle_FoldArms_Loop RT"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_sprint"]
+animation = &"Walk_Loop RT"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_walk"]
+animation = &"Walk_Loop RT"
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_blend"]
+
+[sub_resource type="AnimationNodeStateMachine" id="AnimationNodeStateMachine_character"]
+states/End/position = Vector2(700, 100)
+states/Start/position = Vector2(76.66667, 99.25824)
+states/die/node = SubResource("AnimationNodeAnimation_die")
+states/die/position = Vector2(444, 211.33334)
+states/interact-left/node = SubResource("AnimationNodeAnimation_interact_left")
+states/interact-left/position = Vector2(252.66666, -42)
+states/interact-right/node = SubResource("AnimationNodeAnimation_interact_right")
+states/interact-right/position = Vector2(345.33334, 304.66666)
+states/recover/node = SubResource("AnimationNodeAnimation_recover")
+states/recover/position = Vector2(520, 100)
+states/sprint/node = SubResource("AnimationNodeAnimation_sprint")
+states/sprint/position = Vector2(471.3333, -24)
+states/walk/node = SubResource("AnimationNodeAnimation_walk")
+states/walk/position = Vector2(224.66666, 108.69136)
+transitions = ["Start", "walk", SubResource("AnimationNodeStateMachineTransition_blend"), "walk", "sprint", SubResource("AnimationNodeStateMachineTransition_blend"), "sprint", "walk", SubResource("AnimationNodeStateMachineTransition_blend"), "walk", "interact-left", SubResource("AnimationNodeStateMachineTransition_blend"), "walk", "interact-right", SubResource("AnimationNodeStateMachineTransition_blend"), "walk", "die", SubResource("AnimationNodeStateMachineTransition_blend"), "walk", "recover", SubResource("AnimationNodeStateMachineTransition_blend"), "sprint", "interact-left", SubResource("AnimationNodeStateMachineTransition_blend"), "sprint", "interact-right", SubResource("AnimationNodeStateMachineTransition_blend"), "sprint", "die", SubResource("AnimationNodeStateMachineTransition_blend"), "sprint", "recover", SubResource("AnimationNodeStateMachineTransition_blend"), "interact-left", "walk", SubResource("AnimationNodeStateMachineTransition_blend"), "interact-right", "walk", SubResource("AnimationNodeStateMachineTransition_blend"), "recover", "walk", SubResource("AnimationNodeStateMachineTransition_blend"), "recover", "sprint", SubResource("AnimationNodeStateMachineTransition_blend"), "die", "recover", SubResource("AnimationNodeStateMachineTransition_blend"), "die", "walk", SubResource("AnimationNodeStateMachineTransition_blend")]
+graph_offset = Vector2(-187, -69)
+
+[node name="CharacterVisual" type="Node3D" unique_id=876488184 node_paths=PackedStringArray("skeleton", "animation_player")]
+script = ExtResource("1_ugk5y")
+skeleton = NodePath("ModelRoot/AuxScene/Scene/root/Skeleton3D")
+animation_player = NodePath("ModelRoot/AuxScene/AnimationPlayer")
+
+[node name="ModelRoot" type="Node3D" parent="." unique_id=1016427824]
+transform = Transform3D(-2, 0, 3.019916e-07, 0, 2, 0, -3.019916e-07, 0, -2, 0, 0, 0)
+
+[node name="AuxScene" parent="ModelRoot" unique_id=953365347 instance=ExtResource("2_ugk5y")]
+
+[node name="Skeleton3D" parent="ModelRoot/AuxScene/Scene/root" parent_id_path=PackedInt32Array(953365347, 1718085772) index="0" unique_id=1635058458]
+bones/1/position = Vector3(0.032632545, 0.89519286, -0.011083305)
+bones/1/rotation = Quaternion(0.0015346595, -0.013784483, 0.021115262, 0.9996808)
+bones/2/rotation = Quaternion(0.89441806, -0.0046557784, 0.44484466, -0.045911096)
+bones/3/rotation = Quaternion(0.11117707, 0.009341212, 0.18824786, 0.97576386)
+bones/4/rotation = Quaternion(0.18539953, 0.76805055, -0.43631092, 0.4305325)
+bones/8/rotation = Quaternion(0.8680767, -0.19399396, -0.41240674, 0.19679926)
+bones/9/rotation = Quaternion(0.06912717, -0.014551222, -0.1302344, 0.9889635)
+bones/10/rotation = Quaternion(-0.18033381, 0.7682691, -0.45609292, -0.41136545)
+bones/14/rotation = Quaternion(0.014786652, 1.641456e-06, -2.4068868e-08, 0.99989074)
+bones/15/rotation = Quaternion(0.02874099, -0.008138303, -0.011378813, 0.999489)
+bones/16/rotation = Quaternion(0.15953937, 0.0044182786, 0.017848942, 0.9870204)
+bones/17/rotation = Quaternion(-0.11637958, 0.008939184, -0.02603715, 0.9928233)
+bones/19/rotation = Quaternion(-0.59309834, -0.04597768, -0.048693046, 0.8023399)
+bones/20/rotation = Quaternion(-0.07736132, -0.03569705, 0.32050455, 0.9434076)
+bones/21/rotation = Quaternion(-0.083071835, 0.35834068, 0.10745201, 0.9236585)
+bones/25/rotation = Quaternion(-0.495856, 0.1339984, -0.2787099, 0.8114753)
+bones/26/rotation = Quaternion(-0.033355515, -0.16230088, -0.39518127, 0.9035362)
+bones/27/rotation = Quaternion(-0.08808878, -0.35757414, -0.117967784, 0.92220646)
+
+[node name="AnimationTree" type="AnimationTree" parent="." unique_id=10839786]
+root_node = NodePath("../ModelRoot/AuxScene")
+tree_root = SubResource("AnimationNodeStateMachine_character")
+anim_player = NodePath("../ModelRoot/AuxScene/AnimationPlayer")
+
+[editable path="ModelRoot/AuxScene"]

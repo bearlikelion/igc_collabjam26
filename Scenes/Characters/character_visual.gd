@@ -53,7 +53,7 @@ var _torso_lean_direction: int = 0
 func _ready() -> void:
 	process_priority = 100
 	if skeleton != null:
-		_torso_bone_index = skeleton.find_bone("DEF-spine001")
+		_torso_bone_index = skeleton.find_bone("Hips")
 	if _torso_bone_index < 0:
 		push_warning("CharacterVisual could not find torso bone for lean.")
 	_force_locomotion_loop()
