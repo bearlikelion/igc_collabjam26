@@ -1,34 +1,33 @@
 [gd_scene format=3 uid="uid://c1sd4qbsm8bge"]
 
 [ext_resource type="Script" uid="uid://71t2vdl7u1v5" path="res://Scenes/Characters/character_visual.gd" id="1_visual"]
-[ext_resource type="PackedScene" uid="uid://d0xqrivp0c4i7" path="res://Assets/Models/Characters/character-male-d.glb" id="2_model"]
+[ext_resource type="PackedScene" uid="uid://fa8xqa7apbt4" path="res://Assets/Models/Characters/LowPoly/Male/mNPC1.glb" id="3_j0lyd"]
 
 [sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_die"]
-animation = &"die"
+animation = &"Hit_Knockback RT"
 
 [sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_interact_left"]
-animation = &"interact-left"
+animation = &"Fighting Left Jab RT"
 
 [sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_interact_right"]
-animation = &"interact-right"
+animation = &"Fighting Right Jab RT"
 
 [sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_recover"]
-animation = &"recover"
+animation = &"Idle_FoldArms_Loop RT"
 
 [sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_sprint"]
-animation = &"sprint"
+animation = &"Walk_Loop RT"
 
 [sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_walk"]
-animation = &"walk"
+animation = &"Walk_Loop RT"
 
 [sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_blend"]
-xfade_time = 0.15
 
 [sub_resource type="AnimationNodeStateMachine" id="AnimationNodeStateMachine_character"]
 states/End/position = Vector2(700, 100)
-states/Start/position = Vector2(100, 100)
+states/Start/position = Vector2(76.66667, 99.25824)
 states/die/node = SubResource("AnimationNodeAnimation_die")
-states/die/position = Vector2(436, 214.00002)
+states/die/position = Vector2(444, 211.33334)
 states/interact-left/node = SubResource("AnimationNodeAnimation_interact_left")
 states/interact-left/position = Vector2(252.66666, -42)
 states/interact-right/node = SubResource("AnimationNodeAnimation_interact_right")
@@ -38,22 +37,47 @@ states/recover/position = Vector2(520, 100)
 states/sprint/node = SubResource("AnimationNodeAnimation_sprint")
 states/sprint/position = Vector2(471.3333, -24)
 states/walk/node = SubResource("AnimationNodeAnimation_walk")
-states/walk/position = Vector2(235.33333, 100.88889)
+states/walk/position = Vector2(224.66666, 107.358025)
 transitions = ["Start", "walk", SubResource("AnimationNodeStateMachineTransition_blend"), "walk", "sprint", SubResource("AnimationNodeStateMachineTransition_blend"), "sprint", "walk", SubResource("AnimationNodeStateMachineTransition_blend"), "walk", "interact-left", SubResource("AnimationNodeStateMachineTransition_blend"), "walk", "interact-right", SubResource("AnimationNodeStateMachineTransition_blend"), "walk", "die", SubResource("AnimationNodeStateMachineTransition_blend"), "walk", "recover", SubResource("AnimationNodeStateMachineTransition_blend"), "sprint", "interact-left", SubResource("AnimationNodeStateMachineTransition_blend"), "sprint", "interact-right", SubResource("AnimationNodeStateMachineTransition_blend"), "sprint", "die", SubResource("AnimationNodeStateMachineTransition_blend"), "sprint", "recover", SubResource("AnimationNodeStateMachineTransition_blend"), "interact-left", "walk", SubResource("AnimationNodeStateMachineTransition_blend"), "interact-right", "walk", SubResource("AnimationNodeStateMachineTransition_blend"), "recover", "walk", SubResource("AnimationNodeStateMachineTransition_blend"), "recover", "sprint", SubResource("AnimationNodeStateMachineTransition_blend"), "die", "recover", SubResource("AnimationNodeStateMachineTransition_blend"), "die", "walk", SubResource("AnimationNodeStateMachineTransition_blend")]
 graph_offset = Vector2(-187, -69)
 
-[node name="CharacterVisual" type="Node3D" unique_id=876488184 node_paths=PackedStringArray("skeleton")]
+[node name="CharacterVisual" type="Node3D" unique_id=876488184 node_paths=PackedStringArray("skeleton", "animation_player")]
 script = ExtResource("1_visual")
-skeleton = NodePath("ModelRoot/suit_male/character-male-d/Skeleton3D")
+skeleton = NodePath("ModelRoot/AuxScene/Scene/NPC1_standard_DEF_rig/Skeleton3D")
+animation_player = NodePath("ModelRoot/AuxScene/AnimationPlayer")
 
 [node name="ModelRoot" type="Node3D" parent="." unique_id=1016427824]
 transform = Transform3D(-2, 0, 3.019916e-07, 0, 2, 0, -3.019916e-07, 0, -2, 0, 0, 0)
 
-[node name="suit_male" parent="ModelRoot" unique_id=1874892762 instance=ExtResource("2_model")]
+[node name="AuxScene" parent="ModelRoot" unique_id=1374843997 instance=ExtResource("3_j0lyd")]
+transform = Transform3D(0.5, 0, 0, 0, 0.5, 0, 0, 0, 0.5, 0, 0, 0)
+
+[node name="Skeleton3D" parent="ModelRoot/AuxScene/Scene/NPC1_standard_DEF_rig" parent_id_path=PackedInt32Array(1374843997, 50584899) index="1" unique_id=1831316121]
+bones/1/rotation = Quaternion(0.79012024, 0.02129091, -0.005544329, 0.6125569)
+bones/2/rotation = Quaternion(-0.06447645, 1.1641532e-10, 6.693881e-10, 0.99791926)
+bones/3/rotation = Quaternion(-0.005821542, 0.0046931026, -0.0048525273, 0.9999603)
+bones/4/rotation = Quaternion(0.056032017, 0.0056992527, -0.0036193796, 0.99840623)
+bones/5/rotation = Quaternion(0.15842475, -0.0071147354, 0.011471024, 0.9872788)
+bones/6/rotation = Quaternion(-0.13738509, -0.0012314429, 0.014197324, 0.9904152)
+bones/8/rotation = Quaternion(-0.5942512, 0.1679136, -0.08514584, 0.781934)
+bones/9/rotation = Quaternion(-0.060383536, 0.011947604, -0.26158318, 0.9632162)
+bones/10/rotation = Quaternion(-0.019504046, 0.011446902, -0.16317736, 0.9863375)
+bones/12/rotation = Quaternion(-0.54354286, -0.18721594, 0.30991158, 0.7572755)
+bones/13/rotation = Quaternion(-0.03329832, 0.13810946, 0.29769418, 0.9440314)
+bones/14/rotation = Quaternion(-0.020406142, -0.015112262, 0.10309556, 0.99434733)
+bones/15/rotation = Quaternion(0.8956011, 0.09660522, 0.018247372, 0.43385834)
+bones/16/rotation = Quaternion(0.354609, 0.041269306, 0.03162921, 0.9335678)
+bones/17/rotation = Quaternion(-0.5622739, -0.08801686, 0.06797856, 0.81943893)
+bones/19/rotation = Quaternion(0.9972047, -0.02106926, -0.053463735, 0.04775623)
+bones/20/rotation = Quaternion(0.14529754, -0.0076416167, -0.015121403, 0.989243)
+bones/21/rotation = Quaternion(-0.57022345, 0.10749054, -0.054274574, 0.81261635)
+
+[node name="AnimationPlayer" parent="ModelRoot/AuxScene" index="1" unique_id=1335838975]
+autoplay = &"Rest Pose RT"
 
 [node name="AnimationTree" type="AnimationTree" parent="." unique_id=10839786]
-root_node = NodePath("../ModelRoot/suit_male")
+root_node = NodePath("../ModelRoot/AuxScene")
 tree_root = SubResource("AnimationNodeStateMachine_character")
-anim_player = NodePath("../ModelRoot/suit_male/AnimationPlayer")
+anim_player = NodePath("../ModelRoot/AuxScene/AnimationPlayer")
 
-[editable path="ModelRoot/suit_male"]
+[editable path="ModelRoot/AuxScene"]

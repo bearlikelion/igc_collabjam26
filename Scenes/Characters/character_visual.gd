@@ -3,7 +3,7 @@ extends Node3D
 
 enum MotionState { WALK, SPRINT, INTERACT_LEFT, INTERACT_RIGHT, DIE, RECOVER }
 
-const ANIMATION_NAMES: Dictionary[int, String] = {
+const STATE_NAMES: Dictionary[int, String] = {
 	MotionState.WALK: "walk",
 	MotionState.SPRINT: "sprint",
 	MotionState.INTERACT_LEFT: "interact-left",
@@ -11,6 +11,16 @@ const ANIMATION_NAMES: Dictionary[int, String] = {
 	MotionState.DIE: "die",
 	MotionState.RECOVER: "recover",
 }
+
+const ANIMATION_NAMES: Dictionary[int, String] = {
+	MotionState.WALK: "Walk_Loop RT",
+	MotionState.SPRINT: "Walk_Loop RT",
+	MotionState.INTERACT_LEFT: "Fighting Left Jab RT",
+	MotionState.INTERACT_RIGHT: "Fighting Right Jab RT",
+	MotionState.DIE: "Hit_Knockback RT",
+	MotionState.RECOVER: "Idle_FoldArms_Loop RT",
+}
+
 const MOTION_STATES: Array[int] = [
 	MotionState.WALK,
 	MotionState.SPRINT,
@@ -25,8 +35,8 @@ const MOTION_STATES: Array[int] = [
 @export var torso_lean_amount: float = 0.15
 @export var torso_lean_speed: float = 3.0
 @export var skeleton: Skeleton3D
+@export var animation_player: AnimationPlayer
 
-@onready var animation_player: AnimationPlayer = $ModelRoot/suit_male/AnimationPlayer
 @onready var animation_tree: AnimationTree = $AnimationTree
 @onready var model_root: Node3D = $ModelRoot
 
@@ -43,7 +53,7 @@ var _torso_lean_direction: int = 0
 func _ready() -> void:
 	process_priority = 100
 	if skeleton != null:
-		_torso_bone_index = skeleton.find_bone("torso")
+		_torso_bone_index = skeleton.find_bone("DEF-spine001")
 	if _torso_bone_index < 0:
 		push_warning("CharacterVisual could not find torso bone for lean.")
 	_force_locomotion_loop()
@@ -54,7 +64,8 @@ func _ready() -> void:
 # Walk and sprint must loop. GLB clips import without loop_mode set by default;
 # set it here so the AnimationTree state machine never freezes on either clip.
 func _force_locomotion_loop() -> void:
-	for anim_name: String in ["walk", "sprint"]:
+	for state: int in [MotionState.WALK, MotionState.SPRINT]:
+		var anim_name: String = _get_animation_name(state)
 		if animation_player.has_animation(anim_name):
 			animation_player.get_animation(anim_name).loop_mode = Animation.LOOP_LINEAR
 
@@ -180,11 +191,11 @@ func _create_animation_state_machine() -> AnimationNodeStateMachine:
 
 # Move to a state if the target clip is available.
 func _travel(state: int) -> void:
+	var state_name: StringName = _get_state_name(state)
 	var animation_name: String = _get_animation_name(state)
-	if not animation_player.has_animation(animation_name):
-		animation_name = ""
-	if _playback != null and animation_name != "":
-		_playback.travel(animation_name)
+
+	if _playback != null:
+		_playback.travel(state_name)
 	elif animation_player.has_animation(animation_name):
 		animation_player.play(animation_name)
 	_state = state
@@ -225,10 +236,11 @@ func _update_torso_lean(delta: float) -> void:
 
 
 # Return the state name used in the blend tree.
-func _get_state_name(state: int) -> StringName:
-	return StringName(_get_animation_name(state))
+func _get_state_name(state: int) -> String:
+	var state_name: String = STATE_NAMES.get(state, "walk")
+	return state_name
 
 
 # Return the animation clip name for a state.
 func _get_animation_name(state: int) -> String:
-	return ANIMATION_NAMES.get(state, "walk")
+	return ANIMATION_NAMES.get(state, "Walk_Loop RT")

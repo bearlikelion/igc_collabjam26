@@ -146,10 +146,6 @@ _surfaces = [{
 "vertex_data": PackedByteArray("AABIQgAAAD0AAFjCAABGQgAAAD0AAFjCAABGQgAAAAAAAFjCAABIQgAAAAAAAFjCAABGQgAAAAAAAKDBAABGQgAAAAAAAFjCAABGQgAAAD0AAFjCAABGQgAAAD0AAKDBAABGQgAAAAAAAKDBAABIQgAAAAAAAKDBAABIQgAAAAAAAFjCAABGQgAAAAAAAFjCAABGQgAAAD0AAKDBAABGQgAAAD0AAFjCAABIQgAAAD0AAFjCAABIQgAAAD0AAKDBAABIQgAAAD0AAKDBAABIQgAAAD0AAFjCAABIQgAAAAAAAFjCAABIQgAAAAAAAKDBAABIQgAAAAAAAKDBAABGQgAAAAAAAKDBAABGQgAAAD0AAKDBAABIQgAAAD0AAKDBAABiQgAAAD0AAFjCAABgQgAAAD0AAFjCAABgQgAAAAAAAFjCAABiQgAAAAAAAFjCAABgQgAAAAAAAKDBAABgQgAAAAAAAFjCAABgQgAAAD0AAFjCAABgQgAAAD0AAKDBAABgQgAAAAAAAKDBAABiQgAAAAAAAKDBAABiQgAAAAAAAFjCAABgQgAAAAAAAFjCAABgQgAAAD0AAKDBAABgQgAAAD0AAFjCAABiQgAAAD0AAFjCAABiQgAAAD0AAKDBAABiQgAAAD0AAKDBAABiQgAAAD0AAFjCAABiQgAAAAAAAFjCAABiQgAAAAAAAKDBAABiQgAAAAAAAKDBAABgQgAAAAAAAKDBAABgQgAAAD0AAKDBAABiQgAAAD0AAKDB/////wAA/7//////AAD/v/////8AAP+//////wAA/78AAP9//3//vwAA/3//f/+/AAD/f/9//78AAP9//3//v/9/AAD//////38AAP//////fwAA//////9/AAD//////3////9//7//f////3//v/9/////f/+//3////9//7////9//////////3//////////f/////////9///////9//3////+//3//f////7//f/9/////v/9//3////+//////wAA/7//////AAD/v/////8AAP+//////wAA/78AAP9//3//vwAA/3//f/+/AAD/f/9//78AAP9//3//v/9/AAD//////38AAP//////fwAA//////9/AAD//////3////9//7//f////3//v/9/////f/+//3////9//7////9//////////3//////////f/////////9///////9//3////+//3//f////7//f/9/////v/9//3////+/")
 }]
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_h2wfe"]
-transparency = 1
-albedo_color = Color(1, 1, 1, 0)
-
 [sub_resource type="ConvexPolygonShape3D" id="ConvexPolygonShape3D_agc11"]
 points = PackedVector3Array(2, 4, 0, 2, -1, 0, 1, 4, 0, 1, -1, 0, 2, 4, -51, 2, -1, -51, 1, 4, -51, 1, -1, -51)
 
@@ -328,7 +324,6 @@ _data = {
 
 [node name="Metro1" type="Node3D" unique_id=1736708119]
 script = ExtResource("1_drku4")
-debug_show_corners = false
 
 [node name="Ambiance" type="AudioStreamPlayer" parent="." unique_id=1301785252]
 stream = SubResource("AudioStreamRandomizer_et2qy")
@@ -371,7 +366,6 @@ collision_mask = 0
 
 [node name="entity_0_mesh_instance" type="MeshInstance3D" parent="NavigationRegion3D/FuncGodotMap/entity_0_worldspawn" unique_id=1059534458]
 mesh = SubResource("ArrayMesh_h2wfe")
-surface_material_override/4 = SubResource("StandardMaterial3D_h2wfe")
 
 [node name="entity_0_brush_0_collision_shape" type="CollisionShape3D" parent="NavigationRegion3D/FuncGodotMap/entity_0_worldspawn" unique_id=134975071]
 shape = SubResource("ConvexPolygonShape3D_agc11")
