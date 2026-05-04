@@ -82,7 +82,7 @@ func physics_tick(_delta: float) -> void:
 		return
 	var clear_lane: int = _pick_clear_lane(pawn.get_current_lane())
 	if clear_lane != pawn.get_current_lane():
-		pawn.request_lane_change(clear_lane)
+		_request_adjacent_lane_change(clear_lane)
 	_next_random_lane_msec = Time.get_ticks_msec() + int(_next_random_lane_delay() * 1000.0)
 
 
@@ -137,7 +137,7 @@ func _tick_overtake() -> void:
 		return
 	if best_score - current_clearance < config.overtake_clearance_margin:
 		return
-	pawn.request_lane_change(best_lane)
+	_request_adjacent_lane_change(best_lane)
 	_avoidance_until_msec = Time.get_ticks_msec() + int(config.avoidance_cooldown * 1000.0)
 
 
@@ -151,11 +151,16 @@ func _on_encounter_detected(other: Pawn, distance: float) -> void:
 		_waiting_for = null
 		_clear_pre_shuffle_tell()
 		return
-	# Busy opposing NPC (shuffling with someone else): stop and wait.
-	# get_move_speed zeros out until the peer is RUNNING again. Encounter scan
-	# keeps firing, so once the peer frees up the next call hits the active
-	# branch.
-	if other.is_in_group("npc") and other.is_runner_paused():
+	# Transiently busy opposing NPC (currently in another shuffle, will resolve
+	# in <0.5s): stop and wait. get_move_speed zeros out until the peer is
+	# RUNNING again. Encounter scan keeps firing, so once the peer frees up the
+	# next call hits the active branch.
+	#
+	# Other paused states (KNOCKED_DOWN ~2.5s, PARKED forever) do NOT halt — we
+	# fall through to the stance-roll branch and swerve around the body.
+	# `_roll_stance` suppresses stay_chance for paused peers so the AI commits
+	# to ±1 instead of phasing through.
+	if other.is_in_group("npc") and other.locomotion == Pawn.LocomotionState.SHUFFLING:
 		_waiting_for = other
 		pawn.run_speed = config.start_speed
 		return
@@ -195,7 +200,7 @@ func _on_obstacle_detected(_blocker: Node, _distance: float, in_lane: int, _cand
 		return
 	var clear_lane: int = _pick_clear_lane(in_lane)
 	if clear_lane != in_lane:
-		pawn.request_lane_change(clear_lane)
+		_request_adjacent_lane_change(clear_lane)
 		_avoidance_until_msec = Time.get_ticks_msec() + int(config.avoidance_cooldown * 1000.0)
 
 
@@ -242,8 +247,13 @@ func _on_shuffle_resolved(_succeeded: bool, _direction: int) -> void:
 
 # Roll a fresh stance (-1 / 0 / +1) against the opposing peer. Weighted pick:
 #   - Both adjacents blocked or out of bounds → forced 0 (must claim).
-#   - Otherwise, weights = {0: stay_chance, -1: 1.0 if left clear,
+#   - Otherwise, weights = {0: stay_weight, -1: 1.0 if left clear,
 #                            +1: 1.0 if right clear}.
+#   - `stay_weight` = 0 when `other` is paused (knocked-down, parked, etc.).
+#     A non-RUNNING peer is geometry — they won't move out of our way, so the
+#     telegraph game collapses: stance MUST commit to a side or the AI walks
+#     through the body. RUNNING peer = `stay_weight` = config.stay_chance
+#     (the negotiable case).
 #   - Peer-tell bias: if the peer is broadcasting a non-zero lean, the
 #     anti-collision world-side gets a 2× weight boost — but stay still
 #     remains a real option (unlike the old hard-oppose loop).
@@ -255,7 +265,10 @@ func _roll_stance(other: Pawn) -> int:
 	var right_clear: bool = current < Pawn.LANE_COUNT - 1 and _is_dodge_lane_clear(current + 1)
 	if not left_clear and not right_clear:
 		return 0
-	var weights: Dictionary[int, float] = {0: config.stay_chance}
+	var stay_weight: float = config.stay_chance
+	if other != null and other.is_runner_paused():
+		stay_weight = 0.0
+	var weights: Dictionary[int, float] = {0: stay_weight}
 	if left_clear:
 		weights[-1] = 1.0
 	if right_clear:
@@ -310,6 +323,22 @@ func _set_stance(value: int) -> void:
 			pawn.request_lane_change(target)
 		Pawn.LocomotionState.SHUFFLING:
 			pawn.set_shuffle_telegraph(clamped)
+
+
+# Picker-side lane changes (overtake, obstacle dodge, random-lane wander) score
+# every lane and may pick a target two lanes away from current. Forwarding that
+# straight to `pawn.request_lane_change` makes the body sweep across both lanes
+# in one 0.30s tween — visually a "double lane jump" with no detent at the
+# middle lane. Routing through this helper clamps the *step* to ±1 without
+# discarding the picker's judgment: the next picker tick re-evaluates from the
+# new lane and steps again if the goal lane is still further. The stance system
+# (`_set_stance`) already produces ±1 targets and bypasses this helper.
+func _request_adjacent_lane_change(target_lane: int) -> void:
+	var current: int = pawn.get_current_lane()
+	var step: int = clampi(target_lane - current, -1, 1)
+	if step == 0:
+		return
+	pawn.request_lane_change(current + step)
 
 
 # Lane is "clear enough" for an AI dodge if its clearance meets min_clearance.
