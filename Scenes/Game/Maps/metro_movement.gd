@@ -124,6 +124,18 @@ func _ready() -> void:
 	_wait_for_nav.call_deferred()
 
 
+# Level-root meta-input. Reset blows the scene away and reloads it; restoring
+# `Engine.time_scale` first matters because it's the only piece of state that
+# survives `reload_current_scene()` (a leftover of any active subway-shuffle
+# bullet-time would otherwise carry into the new run).
+func _unhandled_input(event: InputEvent) -> void:
+	if Engine.is_editor_hint():
+		return
+	if event.is_action_pressed("reset"):
+		Engine.time_scale = 1.0
+		get_tree().reload_current_scene()
+
+
 # Wait for the navigation map, then cache the processed path.
 func _wait_for_nav() -> void:
 	print("Wait for nav")

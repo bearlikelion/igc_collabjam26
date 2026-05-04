@@ -8,7 +8,6 @@ size = Vector3(0.813, 1.5, 0.813)
 
 [node name="Pawn" type="CharacterBody3D" unique_id=71114608 node_paths=PackedStringArray("visual")]
 script = ExtResource("1_pawn")
-acceleration_time = 2.0
 shuffle_choice_time = 2.5
 shuffle_debug_enabled = true
 visual = NodePath("CharacterVisual")
