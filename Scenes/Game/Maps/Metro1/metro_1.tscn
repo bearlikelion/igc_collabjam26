@@ -24,6 +24,11 @@
 [ext_resource type="Material" uid="uid://doyt74p2tw1sq" path="res://Assets/textures/dev/roof.tres" id="16_0ynle"]
 [ext_resource type="Script" uid="uid://di4oo53chm4l7" path="res://Scenes/Characters/Brains/ai_brain.gd" id="19_m7ql2"]
 [ext_resource type="Script" uid="uid://c7ob6aflnt2jl" path="res://Scenes/Characters/pawn_camera.gd" id="20_pcam"]
+[ext_resource type="Resource" uid="uid://b0u5cgxlaxnpc" path="res://Scenes/Characters/Brains/Configs/DefaultPlayer.tres" id="21_plycfg"]
+[ext_resource type="Resource" uid="uid://cfrk4dkzbz1m1" path="res://Scenes/Characters/Brains/Configs/Greeter.tres" id="22_greeter"]
+[ext_resource type="Resource" uid="uid://chxk7vqp9d2m1" path="res://Scenes/Characters/Brains/Configs/Commuter.tres" id="23_commuter"]
+[ext_resource type="Resource" uid="uid://djsb4mqe2tpvg" path="res://Scenes/Characters/Brains/Configs/Aggressive.tres" id="24_aggr"]
+[ext_resource type="Resource" uid="uid://b6vlhpe8r7m4l" path="res://Scenes/Characters/Brains/Configs/Stubborn.tres" id="25_stubb"]
 
 [sub_resource type="AudioStreamRandomizer" id="AudioStreamRandomizer_et2qy"]
 streams_count = 3
@@ -514,16 +519,10 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.41108003, 0.22435647, -0.3
 [node name="Player" parent="NavigationRegion3D" unique_id=759156532 instance=ExtResource("8_svs80")]
 unique_name_in_owner = true
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0, -1)
-start_speed = null
-max_speed = null
-lane_tween_duration = null
-shuffle_debug_enabled = null
-shuffle_recovery_time = null
-shuffle_get_up_time = null
-shuffle_knockback_distance = 1.5
 
 [node name="Brain" type="Node" parent="NavigationRegion3D/Player" unique_id=436571780]
 script = ExtResource("12_pbrn")
+config = ExtResource("21_plycfg")
 
 [node name="CameraTracker" type="RemoteTransform3D" parent="NavigationRegion3D/Player" unique_id=685892083]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.711, 0)
@@ -541,96 +540,45 @@ fov = 90.0
 
 [node name="NPCCharacter" parent="NavigationRegion3D" unique_id=1919134681 instance=ExtResource("8_svs80")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0, -24)
-start_speed = null
-max_speed = null
-lane_tween_duration = null
-shuffle_choice_time = null
-shuffle_time_scale = null
-shuffle_debug_enabled = null
-shuffle_recovery_time = null
-shuffle_get_up_time = null
-shuffle_knockback_distance = null
 
 [node name="Brain" type="Node" parent="NavigationRegion3D/NPCCharacter" unique_id=1339451774]
 script = ExtResource("19_m7ql2")
+config = ExtResource("22_greeter")
 
 [node name="NPCCharacter2" parent="NavigationRegion3D" unique_id=2133715270 instance=ExtResource("8_svs80")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0, -39)
-lane_tween_duration = null
-shuffle_choice_time = null
-shuffle_time_scale = null
-shuffle_debug_enabled = null
-shuffle_recovery_time = null
-shuffle_get_up_time = null
-shuffle_knockback_distance = null
 
 [node name="Brain" type="Node" parent="NavigationRegion3D/NPCCharacter2" unique_id=324579119]
 script = ExtResource("19_m7ql2")
-destination_group = &"start"
+config = ExtResource("23_commuter")
 
 [node name="NPCCharacter3" parent="NavigationRegion3D" unique_id=1641043877 instance=ExtResource("8_svs80")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0, -52.5)
-start_speed = null
-max_speed = null
-lane_tween_duration = null
-shuffle_choice_time = null
-shuffle_time_scale = null
-shuffle_debug_enabled = null
-shuffle_recovery_time = null
-shuffle_get_up_time = null
-shuffle_knockback_distance = null
 
 [node name="Brain" type="Node" parent="NavigationRegion3D/NPCCharacter3" unique_id=817689988]
 script = ExtResource("19_m7ql2")
-destination_group = &"start"
+config = ExtResource("23_commuter")
 
 [node name="NPCCharacter4" parent="NavigationRegion3D" unique_id=957812564 instance=ExtResource("8_svs80")]
 transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 9.5, 0, -52.5)
-start_speed = null
-max_speed = null
-lane_tween_duration = null
-shuffle_choice_time = null
-shuffle_time_scale = null
-shuffle_debug_enabled = null
-shuffle_recovery_time = null
-shuffle_get_up_time = null
-shuffle_knockback_distance = null
 
 [node name="Brain" type="Node" parent="NavigationRegion3D/NPCCharacter4" unique_id=1604361335]
 script = ExtResource("19_m7ql2")
-destination_group = &"start"
+config = ExtResource("24_aggr")
 
 [node name="NPCCharacter5" parent="NavigationRegion3D" unique_id=214608436 instance=ExtResource("8_svs80")]
 transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 23.5, 0, -52.5)
-start_speed = null
-max_speed = null
-lane_tween_duration = null
-shuffle_choice_time = null
-shuffle_time_scale = null
-shuffle_debug_enabled = null
-shuffle_recovery_time = null
-shuffle_get_up_time = null
-shuffle_knockback_distance = null
 
 [node name="Brain" type="Node" parent="NavigationRegion3D/NPCCharacter5" unique_id=2014586776]
 script = ExtResource("19_m7ql2")
-destination_group = &"start"
+config = ExtResource("25_stubb")
 
 [node name="NPCCharacter6" parent="NavigationRegion3D" unique_id=1201259432 instance=ExtResource("8_svs80")]
 transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 15, 0, -53.5)
-start_speed = null
-max_speed = null
-lane_tween_duration = null
-shuffle_choice_time = null
-shuffle_time_scale = null
-shuffle_debug_enabled = null
-shuffle_recovery_time = null
-shuffle_get_up_time = null
-shuffle_knockback_distance = null
 
 [node name="Brain" type="Node" parent="NavigationRegion3D/NPCCharacter6" unique_id=1633935554]
 script = ExtResource("19_m7ql2")
-destination_group = &"start"
+config = ExtResource("23_commuter")
 
 [node name="ThreeChairBench" parent="NavigationRegion3D" unique_id=1494757051 instance=ExtResource("10_cfpln")]
 transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, -1.8000001, 0.5, -21)

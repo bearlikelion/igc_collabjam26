@@ -5,67 +5,18 @@ extends Brain
 # avoidance. MetroMovement queries these via the Brain virtual interface on Pawn.
 # Timer-driven lane decisions tick through physics_tick using msec timestamps —
 # avoids spawning Timer child nodes and keeps all decision state in one place.
+#
+# All tunables live on the assigned `AIBrainConfig` Resource. Different .tres
+# files = different archetypes — see Scenes/Characters/Brains/Configs/.
+# Per-pawn runtime state stays on this Node (every NPC gets its own AIBrain
+# instance via the Brain child node).
 
-@export_group("Rail")
-## Group name of the node this NPC walks toward. "finish" for same-direction
-## runners, "player" for oncoming traffic. Resolved to a Node3D at bind time.
-@export var destination_group: StringName = &"finish"
-@export var spawn_distance: float = 0.0
-@export var move_speed: float = 1.8
-@export_range(0.0, 1.0, 0.01) var move_speed_variance: float = 0.3
-
-@export_group("Lane Behavior")
-@export var avoid_obstacles: bool = true
-@export var obstacle_lookahead: float = 2.0
-@export var avoidance_cooldown: float = 2.0
-## Minimum clearance (rail-meters) a candidate lane must offer before this AI
-## will swerve into it. If no candidate clears the floor, the AI holds its
-## current lane rather than swap into a tighter slot.
-@export var min_clearance: float = 1.5
-## Comfort gap (rail-meters) behind a same-direction peer. Inside this
-## distance the AI slows below peer speed so the gap regrows — prevents
-## convoy stacking. See `Brain.modulate_for_same_direction_peer`.
-@export var min_peer_gap: float = 1.0
-
-@export_group("Encounters")
-## Rail-distance the encounter scan looks ahead for other Pawns in the same
-## lane. NPCs use this to swerve around paused / NPC traffic; active players
-## are passed through (see _on_encounter_detected).
-@export var encounter_lookahead: float = 2.0
-## Rail-meters of clearance penalty applied per peer who is leaning INTO a
-## candidate lane. Higher = more cautious (AI avoids lanes that peers are
-## committing toward, even if currently empty). 0 = ignore peer leans.
-@export_range(0.0, 5.0, 0.1) var lean_threat_weight: float = 1.0
-## Wall-clock period (ms) between stance reroll considerations. Each tick
-## passes through `stubbornness` first (random skip = keep current stance),
-## then re-rolls via `_roll_stance` if not stubborn. Active during both
-## run-up (after encounter detection) and the shuffle window. Lower =
-## snappier reactions; 0 disables the reroll loop entirely (initial roll
-## at encounter time persists).
-@export_range(0, 500, 10, "suffix:ms") var reaction_period_ms: int = 50
-
-## Rail-distance (m) inside which AI-vs-AI engages the shuffle protocol.
-## Outside this radius the AI still rolls and broadcasts its stance via
-## `pawn.lean()` so the peer can read intent during run-up — but doesn't
-## start a shuffle yet. Should be < `encounter_lookahead`.
-@export_range(0.1, 5.0, 0.05) var inner_shuffle_radius: float = 0.8
-
-## 0–1: chance per re-roll tick the AI keeps its current stance instead of
-## reconsidering. High values let peers read intent and exploit it (the
-## telegraph stays committed); low values let the AI flicker between
-## options. Applies during both run-up and the shuffle window.
-@export_range(0.0, 1.0, 0.05) var stubbornness: float = 0.6
-
-## 0–1: relative weight for picking "stay" (lean=0) when at least one
-## adjacent lane is also clear. Bigger = more likely to claim the lane and
-## stand upright instead of dodging. Forced to 1.0 (only choice) when both
-## adjacents are blocked or out of bounds.
-@export_range(0.0, 1.0, 0.05) var stay_chance: float = 0.3
-
-@export_group("Random Lane")
-@export var random_lane_changes: bool = false
-@export_range(0.5, 30.0, 0.5) var random_lane_interval_min: float = 3.0
-@export_range(0.5, 30.0, 0.5) var random_lane_interval_max: float = 7.0
+## Per-archetype tunables. Authored as a .tres under
+## Scenes/Characters/Brains/Configs/ — Greeter.tres (parks at finish),
+## Commuter.tres (oncoming traffic), Aggressive.tres / Stubborn.tres for
+## variant feel. Required; null-config falls back to AIBrainConfig.new()
+## defaults with a push_error.
+@export var config: AIBrainConfig
 
 var destination: Node3D
 var _actual_move_speed: float = 0.0
@@ -111,17 +62,20 @@ var _next_reaction_msec: int = 0
 # --- Brain hooks ----------------------------------------------------------
 
 func _on_bound() -> void:
+	if config == null:
+		push_error("AIBrain on '%s' has no config — using AIBrainConfig.new() defaults." % pawn.name)
+		config = AIBrainConfig.new()
 	pawn.add_to_group("npc")
-	destination = pawn.get_tree().get_first_node_in_group(destination_group)
+	destination = pawn.get_tree().get_first_node_in_group(config.destination_group)
 	_roll_speed()
-	if random_lane_changes:
+	if config.random_lane_changes:
 		_next_random_lane_msec = Time.get_ticks_msec() + int(_next_random_lane_delay() * 1000.0)
 
 
 func physics_tick(_delta: float) -> void:
 	_tick_pre_shuffle_staleness()
 	_tick_stance_reroll()
-	if not random_lane_changes:
+	if not config.random_lane_changes:
 		return
 	if Time.get_ticks_msec() < _next_random_lane_msec:
 		return
@@ -147,7 +101,7 @@ func _on_encounter_detected(other: Pawn, distance: float) -> void:
 	# branch.
 	if other.is_in_group("npc") and other.is_runner_paused():
 		_waiting_for = other
-		pawn.run_speed = pawn.start_speed
+		pawn.run_speed = config.start_speed
 		return
 	_waiting_for = null
 
@@ -163,7 +117,7 @@ func _on_encounter_detected(other: Pawn, distance: float) -> void:
 
 	# Outside the inner radius: keep telegraphing; don't initiate shuffle yet.
 	# Gives both pawns a real run-up window to read each other's tells.
-	if distance > inner_shuffle_radius:
+	if distance > config.inner_shuffle_radius:
 		return
 
 	# Inside the inner radius: AI-vs-AI engages the shuffle protocol. Player
@@ -186,7 +140,7 @@ func _on_obstacle_detected(_blocker: Node, _distance: float, in_lane: int, _cand
 	var clear_lane: int = _pick_clear_lane(in_lane)
 	if clear_lane != in_lane:
 		pawn.request_lane_change(clear_lane)
-		_avoidance_until_msec = Time.get_ticks_msec() + int(avoidance_cooldown * 1000.0)
+		_avoidance_until_msec = Time.get_ticks_msec() + int(config.avoidance_cooldown * 1000.0)
 
 
 func _on_shuffle_began(other: Pawn, _other_telegraph: int, _deadline_msec: int) -> void:
@@ -197,7 +151,7 @@ func _on_shuffle_began(other: Pawn, _other_telegraph: int, _deadline_msec: int) 
 	# stance (stubbornness gates the actual re-roll). Same loop for player
 	# and AI peers — that's what makes telegraphs feel responsive without
 	# being deterministic about who wins.
-	_next_reaction_msec = Time.get_ticks_msec() + reaction_period_ms
+	_next_reaction_msec = Time.get_ticks_msec() + config.reaction_period_ms
 	# Lock the cached run-up stance into the shuffle telegraph. If we never
 	# saw a run-up encounter for this peer (e.g. player initiated the shuffle
 	# inside our scan radius before our scan caught them), roll fresh now.
@@ -245,7 +199,7 @@ func _roll_stance(other: Pawn) -> int:
 	var right_clear: bool = current < Pawn.LANE_COUNT - 1 and _is_dodge_lane_clear(current + 1)
 	if not left_clear and not right_clear:
 		return 0
-	var weights: Dictionary[int, float] = {0: stay_chance}
+	var weights: Dictionary[int, float] = {0: config.stay_chance}
 	if left_clear:
 		weights[-1] = 1.0
 	if right_clear:
@@ -310,9 +264,9 @@ func _is_dodge_lane_clear(lane: int) -> bool:
 	if pawn._metro_movement == null:
 		return true
 	var clearance: float = pawn._metro_movement.get_lane_clearance(
-		pawn, lane, encounter_lookahead
+		pawn, lane, config.encounter_lookahead
 	)
-	return clearance >= min_clearance
+	return clearance >= config.min_clearance
 
 
 # Drop the run-up tell — peer changed (same-direction now), or encounter
@@ -352,7 +306,7 @@ func _tick_pre_shuffle_staleness() -> void:
 # by Engine.time_scale = 0.2 bullet-time), so 50 ms here is 50 ms of peer
 # perception even though physics ticks 5× slower during bullet-time.
 func _tick_stance_reroll() -> void:
-	if reaction_period_ms <= 0:
+	if config.reaction_period_ms <= 0:
 		return
 	var in_runup: bool = (
 		pawn.locomotion == Pawn.LocomotionState.RUNNING
@@ -366,9 +320,9 @@ func _tick_stance_reroll() -> void:
 		return
 	if Time.get_ticks_msec() < _next_reaction_msec:
 		return
-	_next_reaction_msec = Time.get_ticks_msec() + reaction_period_ms
+	_next_reaction_msec = Time.get_ticks_msec() + config.reaction_period_ms
 	# Stubbornness gate: random skip = keep current stance, no re-roll this tick.
-	if randf() < stubbornness:
+	if randf() < config.stubbornness:
 		return
 	var other: Pawn = pawn.shuffle.other if in_shuffle else _pre_shuffle_other
 	if other == null:
@@ -413,18 +367,18 @@ func _opposite_world_side(other: Pawn, other_telegraph: int) -> int:
 # typically same-direction in dense traffic. Good-enough for the jam.
 func _lane_safety_score(candidate_lane: int) -> float:
 	var clearance: float = pawn._metro_movement.get_lane_clearance(
-		pawn, candidate_lane, encounter_lookahead
+		pawn, candidate_lane, config.encounter_lookahead
 	)
-	if lean_threat_weight <= 0.0:
+	if config.lean_threat_weight <= 0.0:
 		return clearance
 	var threat: float = 0.0
 	var nearby: Array[Pawn] = pawn._metro_movement.get_runners_near(
-		pawn, encounter_lookahead
+		pawn, config.encounter_lookahead
 	)
 	for peer: Pawn in nearby:
 		var peer_target: int = peer.get_current_lane() + peer.lean_direction
 		if peer_target == candidate_lane:
-			threat += lean_threat_weight
+			threat += config.lean_threat_weight
 	return clearance - threat
 
 
@@ -447,40 +401,66 @@ func get_move_speed() -> float:
 
 
 func get_min_peer_gap() -> float:
-	return min_peer_gap
+	return config.min_peer_gap
 
 
 func get_spawn_distance() -> float:
-	return spawn_distance
+	return config.spawn_distance
 
 
 func should_avoid_obstacles() -> bool:
-	return avoid_obstacles
+	return config.avoid_obstacles
 
 
 func get_obstacle_lookahead() -> float:
-	return obstacle_lookahead
+	return config.obstacle_lookahead
 
 
 func get_encounter_lookahead() -> float:
-	return encounter_lookahead
+	return config.encounter_lookahead
 
 
 # Forward NPCs (destination = "finish") park as greeters at the end of the
 # rail. Reverse NPCs (destination = "player" or anything else) loop back to
 # the start so a fresh oncoming runner appears.
 func get_end_of_rail_action() -> int:
-	if destination_group == &"finish":
+	if config.destination_group == &"finish":
 		return EndOfRailAction.PARK
 	return EndOfRailAction.RESPAWN
+
+
+# Body feel-tunables — read from the shared BrainConfig fields.
+
+func get_start_speed() -> float:
+	return config.start_speed
+
+
+func get_max_speed() -> float:
+	return config.max_speed
+
+
+func get_acceleration_time() -> float:
+	return config.acceleration_time
+
+
+func get_shuffle_recovery_time() -> float:
+	return config.shuffle_recovery_time
+
+
+func get_shuffle_get_up_time() -> float:
+	return config.shuffle_get_up_time
+
+
+func get_shuffle_knockback_distance() -> float:
+	return config.shuffle_knockback_distance
 
 
 
 # --- Helpers --------------------------------------------------------------
 
 func _roll_speed() -> void:
-	var jitter: float = (randf() * 2.0 - 1.0) * move_speed_variance
-	_actual_move_speed = maxf(0.1, move_speed * (1.0 + jitter))
+	var jitter: float = (randf() * 2.0 - 1.0) * config.move_speed_variance
+	_actual_move_speed = maxf(0.1, config.move_speed * (1.0 + jitter))
 
 
 # Pick the safest lane other than `current`, gated by min_clearance. "Safest"
@@ -502,7 +482,7 @@ func _pick_clear_lane(current: int) -> int:
 		if lane == current:
 			continue
 		var score: float = _lane_safety_score(lane)
-		if score < min_clearance:
+		if score < config.min_clearance:
 			continue
 		if score > best_score:
 			best_score = score
@@ -511,8 +491,8 @@ func _pick_clear_lane(current: int) -> int:
 
 
 func _next_random_lane_delay() -> float:
-	var lo: float = minf(random_lane_interval_min, random_lane_interval_max)
-	var hi: float = maxf(random_lane_interval_min, random_lane_interval_max)
+	var lo: float = minf(config.random_lane_interval_min, config.random_lane_interval_max)
+	var hi: float = maxf(config.random_lane_interval_min, config.random_lane_interval_max)
 	if hi <= 0.0:
 		return 1.0
 	return lo + randf() * maxf(hi - lo, 0.0)

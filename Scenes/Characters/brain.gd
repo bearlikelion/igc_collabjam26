@@ -170,6 +170,34 @@ func get_min_peer_gap() -> float:
 	return 1.0
 
 
+# Body feel-tunables. Live on the brain's config Resource (BrainConfig +
+# subclasses); Pawn reads them through these virtuals so the Pawn↔Brain
+# contract stays narrow and Pawn never touches `brain.config` directly.
+# Subclasses (PlayerBrain, AIBrain) override to return their `config.<field>`.
+func get_start_speed() -> float:
+	return 0.0
+
+
+func get_max_speed() -> float:
+	return 0.0
+
+
+func get_acceleration_time() -> float:
+	return 0.0
+
+
+func get_shuffle_recovery_time() -> float:
+	return 0.0
+
+
+func get_shuffle_get_up_time() -> float:
+	return 0.0
+
+
+func get_shuffle_knockback_distance() -> float:
+	return 0.0
+
+
 # Cap `raw` speed so this Pawn doesn't catch up to a same-direction peer ahead
 # in its lane, AND backs off (drops below peer speed) when inside the comfort
 # gap so the gap can recover instead of compressing into a stack. Returns the

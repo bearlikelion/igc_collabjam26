@@ -5,18 +5,15 @@ extends Brain
 # from Pawn, and translates it into Pawn intent calls (request_lane_change /
 # set_shuffle_telegraph / lean). The Pawn owns the camera, headbob, lane-lean
 # spring, bullet-time, and visual show/hide — Brain doesn't touch any of that.
+#
+# All tunables live on the assigned `PlayerBrainConfig` Resource. PlayerBrain
+# itself has zero @exports beyond the config slot — body feel + sensing
+# lookaheads come from BrainConfig (the base type) via config.<field>.
 
-@export_group("Obstacles")
-## Forward distance the runner sense scans for `obstacle` group nodes. The
-## player's response is an instant knockdown — the value should match the
-## stop distance the player can react within.
-@export var obstacle_lookahead: float = 0.75
-
-@export_group("Encounters")
-## Rail-distance the encounter scan looks ahead for other Pawns in the same
-## lane. Replaces the legacy 2 m forward ShuffleCast — value mirrors the
-## old cast length.
-@export var encounter_lookahead: float = 2.0
+## Per-archetype tunables. Authored as a .tres under
+## Scenes/Characters/Brains/Configs/DefaultPlayer.tres. Required; null-config
+## falls back to PlayerBrainConfig.new() defaults with a push_error.
+@export var config: PlayerBrainConfig
 
 var _lane_intent: int = 0
 
@@ -28,6 +25,9 @@ var _waiting_for: Pawn
 
 
 func _on_bound() -> void:
+	if config == null:
+		push_error("PlayerBrain on '%s' has no config — using PlayerBrainConfig.new() defaults." % pawn.name)
+		config = PlayerBrainConfig.new()
 	pawn.add_to_group("player")
 	# Resolve the singleton PlayerCamera (lives at level scene root, in group
 	# "player_camera"), wire it to this Pawn. NPCs never run this branch, so
@@ -51,11 +51,37 @@ func should_avoid_obstacles() -> bool:
 
 
 func get_obstacle_lookahead() -> float:
-	return obstacle_lookahead
+	return config.obstacle_lookahead
 
 
 func get_encounter_lookahead() -> float:
-	return encounter_lookahead
+	return config.encounter_lookahead
+
+
+# Body feel-tunables — read from the shared BrainConfig fields.
+
+func get_start_speed() -> float:
+	return config.start_speed
+
+
+func get_max_speed() -> float:
+	return config.max_speed
+
+
+func get_acceleration_time() -> float:
+	return config.acceleration_time
+
+
+func get_shuffle_recovery_time() -> float:
+	return config.shuffle_recovery_time
+
+
+func get_shuffle_get_up_time() -> float:
+	return config.shuffle_get_up_time
+
+
+func get_shuffle_knockback_distance() -> float:
+	return config.shuffle_knockback_distance
 
 
 func _on_obstacle_detected(_blocker: Node, _distance: float, _in_lane: int, _candidate_lanes: Array[int]) -> void:
@@ -132,7 +158,7 @@ func _on_encounter_detected(other: Pawn, _distance: float) -> void:
 	# during the wait.
 	if other.is_runner_paused():
 		_waiting_for = other
-		pawn.run_speed = pawn.start_speed
+		pawn.run_speed = config.start_speed
 		return
 	_waiting_for = null
 	pawn.start_shuffle(other)

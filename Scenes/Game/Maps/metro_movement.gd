@@ -1245,10 +1245,11 @@ func _runner_yaw_for_lane(runner: Runner, lane: int) -> float:
 
 
 # Rewind any runner along the rail when they are knocked down. The pawn's
-# own knockback_distance config governs how far back they end up, so the
-# player and NPCs can have different recoil tuning.
+# brain config governs how far back they end up, so the player and NPCs can
+# have different recoil tuning by swapping configs.
 func _on_runner_knocked_down(runner: Runner) -> void:
-	_rewind_runner(runner, runner.node.shuffle_knockback_distance)
+	var knockback: float = runner.node.brain.get_shuffle_knockback_distance() if runner.node.brain != null else 0.0
+	_rewind_runner(runner, knockback)
 	_apply_runner_position(runner)
 
 

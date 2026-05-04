@@ -131,12 +131,6 @@ var brain: Brain
 var is_active_camera: bool = false
 var apply_bullet_time: bool = false
 
-@export_group("Run Speed")
-@export var start_speed: float = 0.5
-@export var max_speed: float = 3.0
-## Time in seconds to accelerate from start_speed to max_speed.
-@export var acceleration_time: float = 10.0
-
 @export_group("Lane Change")
 @export_range(0.05, 1.0, 0.01, "suffix:s") var lane_tween_duration: float = 0.30
 
@@ -146,13 +140,11 @@ var apply_bullet_time: bool = false
 @export_range(0.05, 1.0, 0.01) var shuffle_time_scale: float = 0.2
 @export var shuffle_debug_enabled: bool = false
 
-@export_group("Knockdown")
-## Total knockdown lockout in seconds.
-@export var shuffle_recovery_time: float = 2.5
-## Get-up window inside the lockout — recover anim starts when remaining ≤ this.
-@export var shuffle_get_up_time: float = 1.0
-## Distance to push the pawn away from the impact origin on knockdown.
-@export var shuffle_knockback_distance: float = 2.0
+# Run-speed and knockdown tunables live on the brain's BrainConfig Resource —
+# read via brain.get_start_speed(), brain.get_max_speed(), brain.get_acceleration_time(),
+# brain.get_shuffle_recovery_time(), brain.get_shuffle_get_up_time(),
+# brain.get_shuffle_knockback_distance(). Different config .tres files =
+# different feel per archetype with no Pawn edits.
 
 # Camera config (mouse / headbob / lane lean / shuffle tilt) lives on the
 # PawnCamera rig — Pawn drives intent only.
@@ -226,13 +218,15 @@ var _is_forward_runner: bool = true
 func _ready() -> void:
 	if Engine.is_editor_hint():
 		return
-	run_speed = start_speed
-	# Find the Brain child node and bind. Each Pawn instance owns its own
-	# Brain — PlayerBrain on the player, AIBrain on NPCs. Brain decides
-	# whether this Pawn claims the camera and bullet-time during _on_bound.
+	# Bind the Brain first — initial run_speed reads from brain.get_start_speed()
+	# below, so the brain's config must be wired before that read.
+	# Each Pawn instance owns its own Brain — PlayerBrain on the player, AIBrain
+	# on NPCs. Brain decides whether this Pawn claims the camera and bullet-time
+	# during _on_bound.
 	brain = _find_brain_child()
 	if brain != null:
 		brain.bind(self)
+		run_speed = brain.get_start_speed()
 
 
 func _find_brain_child() -> Brain:
@@ -604,7 +598,7 @@ func set_movement_blocked(blocked: bool) -> void:
 	if blocked:
 		if locomotion == LocomotionState.BLOCKED:
 			return
-		run_speed = start_speed
+		run_speed = brain.get_start_speed() if brain != null else 0.0
 		_set_locomotion(LocomotionState.BLOCKED)
 	else:
 		if locomotion != LocomotionState.BLOCKED:
@@ -642,7 +636,9 @@ func knock_down_from_shuffle() -> void:
 	# the initiator failed and called knock_down_from_shuffle on us before
 	# the caller could null shuffle from this side.
 	shuffle = null
-	_recovery_time_left = maxf(shuffle_recovery_time, shuffle_get_up_time)
+	var recovery_time: float = brain.get_shuffle_recovery_time() if brain != null else 0.0
+	var get_up_time: float = brain.get_shuffle_get_up_time() if brain != null else 0.0
+	_recovery_time_left = maxf(recovery_time, get_up_time)
 	knockdown_phase = KnockdownPhase.DOWN
 	_set_locomotion(LocomotionState.KNOCKED_DOWN)
 	# Hold the camera in shuffle-tilt mode with a zero-degree target so it
@@ -658,7 +654,7 @@ func knock_down_from_shuffle() -> void:
 	knocked_down.emit()
 
 
-# Push this Pawn back from the impact origin by shuffle_knockback_distance.
+# Push this Pawn back from the impact origin by brain.get_shuffle_knockback_distance().
 # NOTE: For rail-driven Pawns this mutation is overwritten the same frame —
 # MetroMovement listens for the `knocked_down` signal and runs its own rewind
 # via `_on_runner_knocked_down` → `_rewind_runner` (mutates `Runner.distance_along`
@@ -673,15 +669,17 @@ func apply_knockback_from(origin: Vector3) -> void:
 	if direction.length_squared() <= 0.001:
 		direction = Vector3.BACK
 	direction = direction.normalized()
-	global_position += direction * shuffle_knockback_distance
+	var knockback: float = brain.get_shuffle_knockback_distance() if brain != null else 0.0
+	global_position += direction * knockback
 
 
 func _update_knockdown_recovery(delta: float) -> void:
 	if _recovery_time_left > 0.0:
 		_recovery_time_left = maxf(0.0, _recovery_time_left - delta)
 	# DOWN → RECOVERING: get-up window opened and visual is ready to play recover.
+	var get_up_time: float = brain.get_shuffle_get_up_time() if brain != null else 0.0
 	if knockdown_phase == KnockdownPhase.DOWN \
-			and _recovery_time_left <= shuffle_get_up_time \
+			and _recovery_time_left <= get_up_time \
 			and _can_start_recover():
 		knockdown_phase = KnockdownPhase.RECOVERING
 		if visual != null:
@@ -698,7 +696,7 @@ func _finish_knockdown_recovery() -> void:
 	knockdown_phase = KnockdownPhase.DOWN
 	if visual != null:
 		visual.play_walk()
-	run_speed = start_speed
+	run_speed = brain.get_start_speed() if brain != null else 0.0
 	_set_locomotion(LocomotionState.RUNNING)
 	# Hand rotation.z back to the lane-lean spring.
 	if camera_rig != null:
@@ -837,7 +835,7 @@ func _resolve_subway_shuffle() -> void:
 
 
 func _complete_subway_shuffle(direction: int) -> void:
-	run_speed = start_speed
+	run_speed = brain.get_start_speed() if brain != null else 0.0
 	if apply_bullet_time:
 		Engine.time_scale = shuffle.previous_time_scale
 	var other: Pawn = shuffle.other
@@ -864,7 +862,7 @@ func _complete_subway_shuffle(direction: int) -> void:
 
 
 func _fail_subway_shuffle() -> void:
-	run_speed = start_speed
+	run_speed = brain.get_start_speed() if brain != null else 0.0
 	if apply_bullet_time:
 		Engine.time_scale = shuffle.previous_time_scale
 	var other: Pawn = shuffle.other
@@ -904,8 +902,12 @@ func _shuffle_choices_collide() -> bool:
 # branches present in the pre-Stage-1 code are no longer reachable here —
 # both are state transitions out of RUNNING and run_speed is set on entry.
 func _update_run_speed(delta: float) -> void:
+	if brain == null:
+		return
+	var max_speed: float = brain.get_max_speed()
+	var acceleration_time: float = brain.get_acceleration_time()
 	if run_speed < max_speed and acceleration_time > 0.0:
-		var rate: float = (max_speed - start_speed) / acceleration_time
+		var rate: float = (max_speed - brain.get_start_speed()) / acceleration_time
 		run_speed = min(max_speed, run_speed + rate * delta)
 
 
