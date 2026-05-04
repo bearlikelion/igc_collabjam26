@@ -1,8 +1,8 @@
-[gd_scene format=3 uid="uid://csm24sanerou1"]
+[gd_scene format=3 uid="uid://brd7cen16a17a"]
 
-[ext_resource type="Script" uid="uid://71t2vdl7u1v5" path="res://Scenes/Characters/character_visual.gd" id="1_u67x6"]
-[ext_resource type="Script" uid="uid://cr0npsa6kw2u3" path="res://Scenes/Characters/pawn.gd" id="1_xhwvd"]
-[ext_resource type="PackedScene" uid="uid://dr1mf06lws83h" path="res://Assets/Models/Characters/LowPoly/Male/Doctor/doctor.glb" id="2_xhwvd"]
+[ext_resource type="Script" uid="uid://cr0npsa6kw2u3" path="res://Scenes/Characters/pawn.gd" id="1_futkh"]
+[ext_resource type="Script" uid="uid://71t2vdl7u1v5" path="res://Scenes/Characters/character_visual.gd" id="2_eboep"]
+[ext_resource type="PackedScene" uid="uid://sin1nikqsums" path="res://Assets/Models/Characters/LowPoly/Male/Hoodie/hoodie.glb" id="3_futkh"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_pawn"]
 size = Vector3(0.813, 1.5, 0.813)
@@ -46,7 +46,7 @@ transitions = ["Start", "walk", SubResource("AnimationNodeStateMachineTransition
 graph_offset = Vector2(-187, -69)
 
 [node name="Pawn" type="CharacterBody3D" unique_id=71114608 node_paths=PackedStringArray("visual")]
-script = ExtResource("1_xhwvd")
+script = ExtResource("1_futkh")
 shuffle_choice_time = 2.5
 shuffle_debug_enabled = true
 visual = NodePath("CharacterVisual")
@@ -56,18 +56,38 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.75, 0)
 shape = SubResource("BoxShape3D_pawn")
 
 [node name="CharacterVisual" type="Node3D" parent="." unique_id=876488184 node_paths=PackedStringArray("skeleton", "animation_player")]
-script = ExtResource("1_u67x6")
-skeleton = NodePath("ModelRoot/DoctorM/Scene/root/Skeleton3D")
-animation_player = NodePath("ModelRoot/DoctorM/AnimationPlayer")
+script = ExtResource("2_eboep")
+skeleton = NodePath("ModelRoot/Hoodie/Scene/root/Skeleton3D")
+animation_player = NodePath("ModelRoot/Hoodie/AnimationPlayer")
 
 [node name="ModelRoot" type="Node3D" parent="CharacterVisual" unique_id=1016427824]
 transform = Transform3D(-2, 0, 3.019916e-07, 0, 2, 0, -3.019916e-07, 0, -2, 0, 0, 0)
 
-[node name="DoctorM" parent="CharacterVisual/ModelRoot" unique_id=1454610418 instance=ExtResource("2_xhwvd")]
+[node name="Hoodie" parent="CharacterVisual/ModelRoot" unique_id=819236129 instance=ExtResource("3_futkh")]
+
+[node name="Skeleton3D" parent="CharacterVisual/ModelRoot/Hoodie/Scene/root" parent_id_path=PackedInt32Array(819236129, 1245528669) index="0" unique_id=1872005534]
+bones/1/position = Vector3(0.014146949, 0.7936963, -0.003549397)
+bones/1/rotation = Quaternion(-0.039577797, -0.122697234, 0.0043544704, 0.99164516)
+bones/2/rotation = Quaternion(0.7741299, 0.18537325, 0.6045034, 0.030582301)
+bones/3/rotation = Quaternion(0.012057757, 0.022239005, 0.3431679, 0.9389333)
+bones/4/rotation = Quaternion(0.36340556, 0.53273433, -0.49654803, 0.58100826)
+bones/8/rotation = Quaternion(0.76403594, -0.18426917, -0.61813766, 0.01413439)
+bones/9/rotation = Quaternion(0.012868683, -0.023734616, -0.3634535, 0.9312211)
+bones/10/rotation = Quaternion(0.3894042, -0.5030992, 0.51052916, 0.5784596)
+bones/14/rotation = Quaternion(0.065083146, -0.16827546, -0.035782773, 0.98293805)
+bones/15/rotation = Quaternion(0.07901936, -0.018851692, -0.053255174, 0.9952711)
+bones/16/rotation = Quaternion(0.11701778, -0.13732132, 0.17463967, 0.96796215)
+bones/17/rotation = Quaternion(-0.15124881, -0.15300311, 0.057756692, 0.97487336)
+bones/19/rotation = Quaternion(-0.35252875, 0.11719814, -0.56199354, 0.7390206)
+bones/20/rotation = Quaternion(0.0059381127, 0.0004890679, 0.06827672, 0.99764866)
+bones/21/rotation = Quaternion(-0.104098976, 0.08513388, 0.47364324, 0.8703894)
+bones/25/rotation = Quaternion(-0.03554336, -0.22444156, -0.25821227, 0.938983)
+bones/26/rotation = Quaternion(-0.27332208, 0.010968171, -0.90184474, 0.3344411)
+bones/27/rotation = Quaternion(0.16463925, -0.55591863, -0.17974655, 0.7946946)
 
 [node name="AnimationTree" type="AnimationTree" parent="CharacterVisual" unique_id=10839786]
-root_node = NodePath("../ModelRoot/DoctorM")
+root_node = NodePath("../ModelRoot/Hoodie")
 tree_root = SubResource("AnimationNodeStateMachine_character")
-anim_player = NodePath("../ModelRoot/DoctorM/AnimationPlayer")
+anim_player = NodePath("../ModelRoot/Hoodie/AnimationPlayer")
 
-[editable path="CharacterVisual/ModelRoot/DoctorM"]
+[editable path="CharacterVisual/ModelRoot/Hoodie"]

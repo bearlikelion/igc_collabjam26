@@ -1,9 +1,9 @@
 [gd_resource type="Resource" script_class="AIBrainConfig" format=3 uid="uid://djsb4mqe2tpvg"]
 
-[ext_resource type="Script" uid="uid://c0ualm8b6ru86" path="res://Scenes/Characters/Brains/ai_brain_config.gd" id="1_aibcfg"]
+[ext_resource type="Script" uid="uid://c0ualm8b6ru86" path="res://Scenes/Characters/Brains/ai_brain_config.gd" id="1_oa66o"]
 
 [resource]
-script = ExtResource("1_aibcfg")
+script = ExtResource("1_oa66o")
 destination_group = &"start"
 move_speed = 2.8
 move_speed_variance = 0.15

@@ -1,7 +1,11 @@
 [gd_scene format=3 uid="uid://dpjup8pb7028d"]
 
 [ext_resource type="Script" uid="uid://71t2vdl7u1v5" path="res://Scenes/Characters/character_visual.gd" id="1_ugk5y"]
+[ext_resource type="Script" uid="uid://cr0npsa6kw2u3" path="res://Scenes/Characters/pawn.gd" id="1_vbdjh"]
 [ext_resource type="PackedScene" uid="uid://d2h72s0thuux6" path="res://Assets/Models/Characters/LowPoly/Female/Redhead1/redhead_1.glb" id="2_ugk5y"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_pawn"]
+size = Vector3(0.813, 1.5, 0.813)
 
 [sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_die"]
 animation = &"Hit_Knockback RT"
@@ -41,39 +45,49 @@ states/walk/position = Vector2(224.66666, 108.69136)
 transitions = ["Start", "walk", SubResource("AnimationNodeStateMachineTransition_blend"), "walk", "sprint", SubResource("AnimationNodeStateMachineTransition_blend"), "sprint", "walk", SubResource("AnimationNodeStateMachineTransition_blend"), "walk", "interact-left", SubResource("AnimationNodeStateMachineTransition_blend"), "walk", "interact-right", SubResource("AnimationNodeStateMachineTransition_blend"), "walk", "die", SubResource("AnimationNodeStateMachineTransition_blend"), "walk", "recover", SubResource("AnimationNodeStateMachineTransition_blend"), "sprint", "interact-left", SubResource("AnimationNodeStateMachineTransition_blend"), "sprint", "interact-right", SubResource("AnimationNodeStateMachineTransition_blend"), "sprint", "die", SubResource("AnimationNodeStateMachineTransition_blend"), "sprint", "recover", SubResource("AnimationNodeStateMachineTransition_blend"), "interact-left", "walk", SubResource("AnimationNodeStateMachineTransition_blend"), "interact-right", "walk", SubResource("AnimationNodeStateMachineTransition_blend"), "recover", "walk", SubResource("AnimationNodeStateMachineTransition_blend"), "recover", "sprint", SubResource("AnimationNodeStateMachineTransition_blend"), "die", "recover", SubResource("AnimationNodeStateMachineTransition_blend"), "die", "walk", SubResource("AnimationNodeStateMachineTransition_blend")]
 graph_offset = Vector2(-187, -69)
 
-[node name="CharacterVisual" type="Node3D" unique_id=876488184 node_paths=PackedStringArray("skeleton", "animation_player")]
+[node name="Pawn" type="CharacterBody3D" unique_id=71114608 node_paths=PackedStringArray("visual")]
+script = ExtResource("1_vbdjh")
+shuffle_choice_time = 2.5
+shuffle_debug_enabled = true
+visual = NodePath("CharacterVisual")
+
+[node name="Collision" type="CollisionShape3D" parent="." unique_id=184064025]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.75, 0)
+shape = SubResource("BoxShape3D_pawn")
+
+[node name="CharacterVisual" type="Node3D" parent="." unique_id=876488184 node_paths=PackedStringArray("skeleton", "animation_player")]
 script = ExtResource("1_ugk5y")
 skeleton = NodePath("ModelRoot/AuxScene/Scene/root/Skeleton3D")
 animation_player = NodePath("ModelRoot/AuxScene/AnimationPlayer")
 
-[node name="ModelRoot" type="Node3D" parent="." unique_id=1016427824]
+[node name="ModelRoot" type="Node3D" parent="CharacterVisual" unique_id=1016427824]
 transform = Transform3D(-2, 0, 3.019916e-07, 0, 2, 0, -3.019916e-07, 0, -2, 0, 0, 0)
 
-[node name="AuxScene" parent="ModelRoot" unique_id=953365347 instance=ExtResource("2_ugk5y")]
+[node name="AuxScene" parent="CharacterVisual/ModelRoot" unique_id=953365347 instance=ExtResource("2_ugk5y")]
 
-[node name="Skeleton3D" parent="ModelRoot/AuxScene/Scene/root" parent_id_path=PackedInt32Array(953365347, 1718085772) index="0" unique_id=1635058458]
-bones/1/position = Vector3(0.032632545, 0.89519286, -0.011083305)
-bones/1/rotation = Quaternion(0.0015346595, -0.013784483, 0.021115262, 0.9996808)
-bones/2/rotation = Quaternion(0.89441806, -0.0046557784, 0.44484466, -0.045911096)
-bones/3/rotation = Quaternion(0.11117707, 0.009341212, 0.18824786, 0.97576386)
-bones/4/rotation = Quaternion(0.18539953, 0.76805055, -0.43631092, 0.4305325)
-bones/8/rotation = Quaternion(0.8680767, -0.19399396, -0.41240674, 0.19679926)
-bones/9/rotation = Quaternion(0.06912717, -0.014551222, -0.1302344, 0.9889635)
-bones/10/rotation = Quaternion(-0.18033381, 0.7682691, -0.45609292, -0.41136545)
-bones/14/rotation = Quaternion(0.014786652, 1.641456e-06, -2.4068868e-08, 0.99989074)
-bones/15/rotation = Quaternion(0.02874099, -0.008138303, -0.011378813, 0.999489)
-bones/16/rotation = Quaternion(0.15953937, 0.0044182786, 0.017848942, 0.9870204)
-bones/17/rotation = Quaternion(-0.11637958, 0.008939184, -0.02603715, 0.9928233)
-bones/19/rotation = Quaternion(-0.59309834, -0.04597768, -0.048693046, 0.8023399)
-bones/20/rotation = Quaternion(-0.07736132, -0.03569705, 0.32050455, 0.9434076)
-bones/21/rotation = Quaternion(-0.083071835, 0.35834068, 0.10745201, 0.9236585)
-bones/25/rotation = Quaternion(-0.495856, 0.1339984, -0.2787099, 0.8114753)
-bones/26/rotation = Quaternion(-0.033355515, -0.16230088, -0.39518127, 0.9035362)
-bones/27/rotation = Quaternion(-0.08808878, -0.35757414, -0.117967784, 0.92220646)
+[node name="Skeleton3D" parent="CharacterVisual/ModelRoot/AuxScene/Scene/root" parent_id_path=PackedInt32Array(953365347, 1718085772) index="0" unique_id=1635058458]
+bones/1/position = Vector3(0.01513764, 0.8492777, -0.008684434)
+bones/1/rotation = Quaternion(-0.03776522, -0.1228617, 0.0045857867, 0.9916944)
+bones/2/rotation = Quaternion(0.9205995, 0.18195309, 0.3373066, 0.07492693)
+bones/3/rotation = Quaternion(0.18662763, 0.026212508, 0.28220204, 0.9406621)
+bones/4/rotation = Quaternion(0.17918967, 0.7156113, -0.55469894, 0.38483846)
+bones/8/rotation = Quaternion(0.9147233, -0.18610768, -0.35375065, 0.059209846)
+bones/9/rotation = Quaternion(0.19917719, -0.027975157, -0.29819295, 0.9330739)
+bones/10/rotation = Quaternion(-0.19998856, 0.68790245, -0.5771466, -0.39204162)
+bones/14/rotation = Quaternion(0.09206091, -0.16913742, -0.030543871, 0.9808081)
+bones/15/rotation = Quaternion(0.029081143, -0.019304514, -0.053092692, 0.99797934)
+bones/16/rotation = Quaternion(0.09473988, -0.14830293, 0.1654158, 0.9703959)
+bones/17/rotation = Quaternion(-0.112844974, -0.15561143, 0.050307482, 0.9800614)
+bones/19/rotation = Quaternion(-0.23149869, 0.072343476, -0.4827805, 0.84148556)
+bones/20/rotation = Quaternion(0.0072464463, 0.00083343685, 0.058651295, 0.998252)
+bones/21/rotation = Quaternion(-0.31236055, 0.4045286, 0.3813489, 0.7702991)
+bones/25/rotation = Quaternion(-0.035334375, -0.12123908, -0.40008003, 0.90773815)
+bones/26/rotation = Quaternion(-0.33398053, 0.026847322, -0.8766715, 0.34522966)
+bones/27/rotation = Quaternion(0.053646207, -0.81711686, -0.24352914, 0.51974595)
 
-[node name="AnimationTree" type="AnimationTree" parent="." unique_id=10839786]
+[node name="AnimationTree" type="AnimationTree" parent="CharacterVisual" unique_id=10839786]
 root_node = NodePath("../ModelRoot/AuxScene")
 tree_root = SubResource("AnimationNodeStateMachine_character")
 anim_player = NodePath("../ModelRoot/AuxScene/AnimationPlayer")
 
-[editable path="ModelRoot/AuxScene"]
+[editable path="CharacterVisual/ModelRoot/AuxScene"]
