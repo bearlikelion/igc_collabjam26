@@ -17,6 +17,15 @@ var _lane_intent: int = 0
 
 func _on_bound() -> void:
 	pawn.add_to_group("player")
+	# Resolve the singleton PlayerCamera (lives at level scene root, in group
+	# "player_camera"), wire it to this Pawn. NPCs never run this branch, so
+	# the rig has exactly one target ever.
+	var rig: PawnCamera = pawn.get_tree().get_first_node_in_group("player_camera") as PawnCamera
+	if rig != null:
+		pawn.camera_rig = rig
+		rig.set_target(pawn)
+	else:
+		push_warning("PlayerBrain: no PawnCamera in group \"player_camera\" — camera intents will no-op.")
 	# The player Pawn owns the active camera and bullet-time. NPC brains
 	# leave both off — Pawn stays role-agnostic until a brain claims it.
 	pawn.set_camera_active(true)

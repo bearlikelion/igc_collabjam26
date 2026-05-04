@@ -2,7 +2,6 @@
 
 [ext_resource type="Script" path="res://Scenes/Characters/pawn.gd" id="1_pawn"]
 [ext_resource type="PackedScene" uid="uid://c1sd4qbsm8bge" path="res://Scenes/Characters/CharacterVisual.tscn" id="2_visual"]
-[ext_resource type="Script" path="res://Scenes/Characters/pawn_camera.gd" id="3_camera"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_pawn"]
 size = Vector3(0.813, 1.5, 0.813)
@@ -15,14 +14,6 @@ visual = NodePath("CharacterVisual")
 [node name="Collision" type="CollisionShape3D" parent="." unique_id=184064025]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.75, 0)
 shape = SubResource("BoxShape3D_pawn")
-
-[node name="CameraRig" type="SpringArm3D" parent="." unique_id=1333856867]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.711, 0)
-spring_length = 0.0
-script = ExtResource("3_camera")
-
-[node name="Camera3D" type="Camera3D" parent="CameraRig" unique_id=1464777529]
-fov = 90.0
 
 [node name="CharacterVisual" parent="." unique_id=905364963 instance=ExtResource("2_visual")]
 playback_fade_time = 0.3

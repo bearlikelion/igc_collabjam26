@@ -22,6 +22,7 @@
 [ext_resource type="Script" uid="uid://b0kdqdyh2br7w" path="res://Scenes/Game/Maps/Metro1/end_camera.gd" id="13_akkrs"]
 [ext_resource type="Shader" uid="uid://t6b0t5n4jabv" path="res://Shaders/cctv.gdshader" id="14_0rra6"]
 [ext_resource type="Script" uid="uid://di4oo53chm4l7" path="res://Scenes/Characters/Brains/ai_brain.gd" id="19_m7ql2"]
+[ext_resource type="Script" path="res://Scenes/Characters/pawn_camera.gd" id="20_pcam"]
 
 [sub_resource type="AudioStreamRandomizer" id="AudioStreamRandomizer_et2qy"]
 streams_count = 3
@@ -476,6 +477,19 @@ shuffle_knockback_distance = 1.5
 
 [node name="Brain" type="Node" parent="NavigationRegion3D/Player"]
 script = ExtResource("12_pbrn")
+
+[node name="CameraTracker" type="RemoteTransform3D" parent="NavigationRegion3D/Player"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.711, 0)
+remote_path = NodePath("../../PlayerCamera")
+update_rotation = false
+update_scale = false
+
+[node name="PlayerCamera" type="SpringArm3D" parent="NavigationRegion3D" groups=["player_camera"]]
+spring_length = 0.0
+script = ExtResource("20_pcam")
+
+[node name="Camera3D" type="Camera3D" parent="NavigationRegion3D/PlayerCamera"]
+fov = 90.0
 
 [node name="NPCCharacter" parent="NavigationRegion3D" unique_id=1919134681 instance=ExtResource("8_svs80")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0, -24)
