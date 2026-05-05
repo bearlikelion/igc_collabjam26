@@ -214,6 +214,14 @@ var _tween_active: bool = false
 # RUNNING so stale intent doesn't leak across shuffle / knockdown.
 var _queued_lane_change: int = -1
 
+# Wall-clock cooldown after _commit_lane_change. While in the past, the
+# committed lane change is settled. While in the future, request_lane_change
+# (the unthrottled path) ignores it; request_lane_change_throttled defers the
+# request to _queued_lane_change instead of preempting the in-flight tween.
+# Used by AIBrain stance reroll to prevent back-to-back retargets from
+# extending the tween indefinitely. Player input is not throttled.
+var _lane_change_until_msec: int = 0
+
 # Knockdown timing. _recovery_time_left ticks down inside KNOCKED_DOWN; the
 # transition DOWN → RECOVERING fires when it reaches shuffle_get_up_time and
 # the visual can begin the recover animation.
@@ -386,6 +394,25 @@ func request_lane_change(target_lane: int) -> void:
 	_queued_lane_change = clamped
 
 
+# Throttled variant for AI stance reroll. Same surface as request_lane_change
+# but defers (queues) the request when `_lane_change_until_msec` has not yet
+# elapsed — i.e. an in-flight tween is still running from a recent commit. The
+# queue retries every physics frame in `_try_commit_queued_lane_change`, which
+# already respects the cooldown via the unthrottled path. Player input goes
+# through `request_lane_change` directly so rapid-tap stays snappy.
+func request_lane_change_throttled(target_lane: int) -> void:
+	if locomotion != LocomotionState.RUNNING and locomotion != LocomotionState.BLOCKED:
+		return
+	var clamped: int = clampi(target_lane, 0, LANE_COUNT - 1)
+	if clamped == _target_lane and not _tween_active:
+		_queued_lane_change = -1
+		return
+	if Time.get_ticks_msec() < _lane_change_until_msec:
+		_queued_lane_change = clamped
+		return
+	request_lane_change(clamped)
+
+
 # Per-frame retry for a queued lane change. Called from _tick_running so the
 # pawn auto-commits the moment the target lane clears. No-ops when nothing is
 # queued; clears the queue if it has been satisfied externally (e.g., a
@@ -395,6 +422,12 @@ func _try_commit_queued_lane_change() -> void:
 		return
 	if _queued_lane_change == _target_lane and not _tween_active:
 		_queued_lane_change = -1
+		return
+	# Respect the lane-change cooldown so a queue drain doesn't preempt the
+	# in-flight tween. The cooldown expires when the tween naturally completes
+	# (same duration as `lane_tween_duration`), so this typically gates the
+	# retry by ~one frame at the tail of the tween.
+	if Time.get_ticks_msec() < _lane_change_until_msec:
 		return
 	if not _is_lane_change_safe(_queued_lane_change):
 		return
@@ -463,6 +496,12 @@ func start_shuffle(other: Pawn, gap: float) -> void:
 	# Pass `gap` so callee computes its own approach speed against the same
 	# time_scale (we just mutated it above).
 	shuffle.their_telegraph = other.begin_subway_shuffle(self, shuffle.deadline_msec, gap)
+	if shuffle_debug_enabled:
+		print("[shuffle-entry] %s target=%d pos=%.3f tween=%s | %s target=%d pos=%.3f tween=%s | gap=%.3f" % [
+			name, _target_lane, _lane_position, _tween_active,
+			other.name, other._target_lane, other._lane_position, other._tween_active,
+			gap,
+		])
 	shuffle_began.emit(other, shuffle.their_telegraph, shuffle.deadline_msec)
 
 
@@ -1013,6 +1052,10 @@ func _commit_lane_change(next_lane: int) -> void:
 	_tween_from = _lane_position
 	_tween_elapsed = 0.0
 	_tween_active = true
+	# Arm the throttle window for request_lane_change_throttled callers (AI
+	# stance reroll). Duration matches lane_tween_duration so the cooldown
+	# expires naturally as the tween completes.
+	_lane_change_until_msec = Time.get_ticks_msec() + int(lane_tween_duration * 1000.0)
 	if locomotion == LocomotionState.BLOCKED:
 		run_speed = brain.get_start_speed() if brain != null else 0.0
 		_set_locomotion(LocomotionState.RUNNING)

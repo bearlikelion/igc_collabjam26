@@ -50,6 +50,13 @@ var _current_stance: int = 0
 # to know who to consult for the peer-tell bias.
 var _pre_shuffle_other: Pawn = null
 var _pre_shuffle_last_msec: int = 0
+# Most recent rail-distance reported by the encounter scan for `_pre_shuffle_other`.
+# Used by `_set_stance` to suppress reroll-driven `request_lane_change` once we're
+# inside `inner_shuffle_radius` — the run-up positioning window is over and any
+# late-stage tween bounce makes the shuffle entry visually mismatch the peer.
+# Lean still broadcasts so peers can read intent; only the lane commit is gated.
+# Reset to INF on `_clear_pre_shuffle_tell` so a stale value doesn't leak.
+var _pre_shuffle_last_distance: float = INF
 const PRE_SHUFFLE_STALE_MS: int = 100
 
 # Wall-clock timestamp of the next stance reroll consideration. Bumped by
@@ -169,10 +176,24 @@ func _on_encounter_detected(other: Pawn, distance: float) -> void:
 	# roll fresh here when the opposing peer changes. _set_stance handles
 	# all three side effects: lean broadcast, run-up preempt, and shuffle
 	# telegraph (whichever applies given current locomotion).
+	#
+	# Stubbornness gate: at high stubbornness the AI skips the first-sight
+	# swerve and holds its lane (stance 0) — the reroll loop will reconsider
+	# every reaction_period_ms, also gated by stubbornness, so the AI may
+	# eventually swerve as the gap closes. We still set `_pre_shuffle_other`
+	# so the reroll loop activates; we just don't commit a stance now.
 	if _pre_shuffle_other != other:
 		_pre_shuffle_other = other
-		_set_stance(_roll_stance(other))
+		# Arm the reroll cadence on peer change so a stubborn first-sight skip
+		# doesn't get re-rolled on the very next physics frame (stale
+		# _next_reaction_msec from a prior peer / staleness clear would
+		# otherwise satisfy the cadence gate immediately). Mirrors
+		# _on_shuffle_began's arming pattern.
+		_next_reaction_msec = Time.get_ticks_msec() + config.reaction_period_ms
+		if randf() >= config.stubbornness:
+			_set_stance(_roll_stance(other))
 	_pre_shuffle_last_msec = Time.get_ticks_msec()
+	_pre_shuffle_last_distance = distance
 
 	# Outside the inner radius: keep telegraphing; don't initiate shuffle yet.
 	# Gives both pawns a real run-up window to read each other's tells.
@@ -245,6 +266,7 @@ func _on_shuffle_resolved(_succeeded: bool, _direction: int) -> void:
 	_pre_shuffle_other = null
 	_current_stance = 0
 	_pre_shuffle_last_msec = 0
+	_pre_shuffle_last_distance = INF
 	_next_reaction_msec = 0
 
 
@@ -320,12 +342,23 @@ func _set_stance(value: int) -> void:
 	pawn.lean(clamped)
 	match pawn.locomotion:
 		Pawn.LocomotionState.RUNNING:
+			# Inside inner_shuffle_radius the run-up positioning window is over;
+			# the shuffle is about to engage and a late lane retarget would
+			# trigger a tween bounce that visually offsets the shuffle entry
+			# from the peer. Lean still broadcasts above (peers can read the
+			# stance shift); only the lane commit is suppressed.
+			if _pre_shuffle_other != null \
+					and _pre_shuffle_last_distance <= config.inner_shuffle_radius:
+				return
 			var current: int = pawn.get_current_lane()
 			# stance 0 → request our own lane to clear a queued swerve from
 			# a prior re-roll. Same call when target == current also no-ops
 			# the lane tween logic itself. See Pawn.request_lane_change.
 			var target: int = clampi(current + clamped, 0, Pawn.LANE_COUNT - 1)
-			pawn.request_lane_change(target)
+			# Throttled: if a prior reroll's tween is still running the request
+			# queues instead of preempting (which would extend the tween and
+			# desync shuffle entry). Queue retries every frame post-cooldown.
+			pawn.request_lane_change_throttled(target)
 		Pawn.LocomotionState.SHUFFLING:
 			pawn.set_shuffle_telegraph(clamped)
 
@@ -343,7 +376,16 @@ func _request_adjacent_lane_change(target_lane: int) -> void:
 	var step: int = clampi(target_lane - current, -1, 1)
 	if step == 0:
 		return
-	pawn.request_lane_change(current + step)
+	# Lean before commit so peers reading `lean_direction` get a one-frame
+	# tell. Pickers (overtake / obstacle / random-lane) used to swerve with
+	# no body tell — same path as the stance reroll now.
+	pawn.lean(step)
+	# Throttled like the stance reroll path: if a prior lane change is still
+	# tweening, queue instead of preempting. Each picker (overtake, obstacle,
+	# random-lane) has its own multi-second avoidance cooldown that's far
+	# longer than lane_tween_duration, so this throttle rarely activates —
+	# but keeps the lane-commit surface uniform with `_set_stance`.
+	pawn.request_lane_change_throttled(current + step)
 
 
 # Lane is "clear enough" for an AI dodge if its clearance meets min_clearance.
@@ -366,6 +408,7 @@ func _clear_pre_shuffle_tell() -> void:
 	_pre_shuffle_other = null
 	_current_stance = 0
 	_pre_shuffle_last_msec = 0
+	_pre_shuffle_last_distance = INF
 	if pawn.locomotion == Pawn.LocomotionState.RUNNING:
 		pawn.lean(0)
 
