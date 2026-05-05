@@ -50,7 +50,7 @@ extends CharacterBody3D
 # Lane geometry — single source of truth, also read by MetroMovement.
 const LANE_OFFSETS: Array[float] = [-1.0, 0.0, 1.0]
 const LANE_COUNT: int = 3
-const START_LANE: int = LANE_COUNT / 2
+const START_LANE: int = int(LANE_COUNT / 2)
 
 # Top-level locomotion state. Mutually exclusive — one of these at a time.
 # Lane tween is a *substate* of RUNNING (tracked by _tween_active separately).
@@ -214,7 +214,7 @@ var _is_forward_runner: bool = true
 # Camera state lives on the PawnCamera rig (rotation, headbob phase, lane-lean
 # spring). Pawn passes intent via setters and per-frame snapshots in _process.
 
-@onready var slow_sound: AudioStreamPlayer = $SlowSound
+var slow_sound: AudioStreamPlayer
 
 func _ready() -> void:
 	if Engine.is_editor_hint():
@@ -228,6 +228,9 @@ func _ready() -> void:
 	if brain != null:
 		brain.bind(self)
 		run_speed = brain.get_start_speed()
+
+	if get_node_or_null("SlowSound"):
+		slow_sound = get_node_or_null("SlowSound")
 
 
 func _find_brain_child() -> Brain:
@@ -265,7 +268,9 @@ func _physics_process(delta: float) -> void:
 			_tick_shuffle(delta)
 		LocomotionState.RUNNING:
 			_tick_running(delta)
-		# BLOCKED / PARKED / FINISHED — no per-state physics work; brain still
+		LocomotionState.BLOCKED:
+			_try_commit_queued_lane_change()
+		# PARKED / FINISHED — no per-state physics work; brain still
 		# ticks below in case it wants to react via timers.
 	if brain != null:
 		brain.physics_tick(delta)
@@ -336,7 +341,7 @@ func _input(event: InputEvent) -> void:
 # the new target. Calling with `target_lane == _target_lane` clears any
 # pending queue (cancel intent).
 func request_lane_change(target_lane: int) -> void:
-	if locomotion != LocomotionState.RUNNING:
+	if locomotion != LocomotionState.RUNNING and locomotion != LocomotionState.BLOCKED:
 		return
 	var clamped: int = clampi(target_lane, 0, LANE_COUNT - 1)
 	if clamped == _target_lane and not _tween_active:
@@ -375,6 +380,10 @@ func _is_lane_change_safe(target_lane: int) -> bool:
 	if target_lane == _target_lane:
 		return true
 	if _metro_movement == null:
+		return true
+	# While blocked by an obstacle the player may freely switch lanes — obstacle
+	# re-detection in _advance_runner will immediately re-block if needed.
+	if locomotion == LocomotionState.BLOCKED:
 		return true
 	var min_gap: float = brain.get_min_peer_gap() if brain != null else 1.0
 	var clearance: float = _metro_movement.get_lane_clearance(self, target_lane, min_gap)
@@ -800,6 +809,9 @@ func _commit_lane_change(next_lane: int) -> void:
 	_tween_from = _lane_position
 	_tween_elapsed = 0.0
 	_tween_active = true
+	if locomotion == LocomotionState.BLOCKED:
+		run_speed = brain.get_start_speed() if brain != null else 0.0
+		_set_locomotion(LocomotionState.RUNNING)
 	lane_change_started.emit(from_lane, clamped_lane)
 
 

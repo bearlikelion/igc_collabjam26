@@ -795,8 +795,16 @@ func _advance_runner(runner: Runner, delta: float) -> void:
 		return
 	if runner.finished:
 		return
-	if runner.node.is_runner_paused():
+	# BLOCKED pawns re-scan each frame and unblock as soon as the lane clears.
+	if runner.node.is_movement_blocked():
+		if runner.node.should_avoid_obstacles():
+			var lookahead: float = runner.node.get_obstacle_lookahead()
+			var still_blocked: bool = _scan_lane_for_obstacle(runner, runner.node.get_current_lane(), lookahead) != null
+			if still_blocked:
+				return
 		runner.node.set_movement_blocked(false)
+
+	if runner.node.is_runner_paused():
 		return
 
 	# MetroMovement detects, Brain decides. The signal handler runs

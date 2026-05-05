@@ -64,6 +64,7 @@ shape = SubResource("BoxShape3D_pawn")
 
 [node name="CharacterVisual" type="Node3D" parent="." unique_id=876488184 node_paths=PackedStringArray("skeleton", "animation_player")]
 script = ExtResource("1_qp2ea")
+lean_ignore_time_scale = false
 skeleton = NodePath("ModelRoot/AuxScene/Scene/root/Skeleton3D")
 animation_player = NodePath("ModelRoot/AuxScene/AnimationPlayer")
 
@@ -72,26 +73,6 @@ transform = Transform3D(-2, 0, 3.019916e-07, 0, 2, 0, -3.019916e-07, 0, -2, 0, 0
 
 [node name="AuxScene" parent="CharacterVisual/ModelRoot" unique_id=1043582231 instance=ExtResource("2_3fsc8")]
 transform = Transform3D(0.5, 0, 0, 0, 0.5, 0, 0, 0, 0.5, 0, 0, 0)
-
-[node name="Skeleton3D" parent="CharacterVisual/ModelRoot/AuxScene/Scene/root" parent_id_path=PackedInt32Array(1043582231, 233427986) index="0" unique_id=1317176473]
-bones/1/position = Vector3(0.013773884, 0.7727658, -0.01993414)
-bones/1/rotation = Quaternion(-0.039577026, -0.12286964, 0.0043613496, 0.99162376)
-bones/2/rotation = Quaternion(0.767709, 0.18746485, 0.61227673, 0.024433132)
-bones/3/rotation = Quaternion(0.0052183843, 0.025162349, 0.33904308, 0.9404198)
-bones/4/rotation = Quaternion(0.33048627, 0.5531978, -0.4644376, 0.60749394)
-bones/8/rotation = Quaternion(0.7571743, -0.18624021, -0.626048, 0.008092328)
-bones/9/rotation = Quaternion(0.005569302, -0.026854407, -0.35935992, 0.93279606)
-bones/10/rotation = Quaternion(0.35694292, -0.5244549, 0.47955543, 0.60627174)
-bones/14/rotation = Quaternion(0.09318488, -0.16906048, -0.030967956, 0.98070186)
-bones/15/rotation = Quaternion(0.05123217, -0.020406853, -0.052678823, 0.9970877)
-bones/16/rotation = Quaternion(0.15188763, -0.13066313, 0.17967552, 0.9631065)
-bones/17/rotation = Quaternion(-0.18705685, -0.15077159, 0.06335363, 0.96864027)
-bones/19/rotation = Quaternion(-0.3104718, 0.04914327, -0.606622, 0.73020685)
-bones/20/rotation = Quaternion(0.0059853783, 0.0015327705, 0.07467652, 0.9971887)
-bones/21/rotation = Quaternion(-0.10798236, 0.059705935, 0.4765387, 0.87045157)
-bones/25/rotation = Quaternion(-0.084790155, -0.1210309, -0.23951691, 0.95958006)
-bones/26/rotation = Quaternion(-0.2757953, 0.05656734, -0.9014114, 0.32892954)
-bones/27/rotation = Quaternion(0.15185446, -0.5485859, -0.20460162, 0.796324)
 
 [node name="AnimationTree" type="AnimationTree" parent="CharacterVisual" unique_id=10839786]
 root_node = NodePath("../ModelRoot/AuxScene")

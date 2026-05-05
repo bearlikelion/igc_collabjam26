@@ -320,7 +320,7 @@ shader_parameter/flicker_strength = 0.04
 shader_parameter/flicker_speed = 12.0
 shader_parameter/rec_pulse_speed = 1.4
 shader_parameter/rec_color = Color(1, 0.15, 0.15, 1)
-shader_parameter/rec_dot_radius = 0.014
+shader_parameter/rec_dot_radius = 0.02000000095
 shader_parameter/rec_dot_uv = Vector2(0.06, 0.06)
 
 [sub_resource type="Animation" id="Animation_sryx3"]
@@ -566,6 +566,8 @@ update_scale = false
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 1.711, -1)
 spring_length = 0.0
 script = ExtResource("20_pcam")
+shuffle_fov_reduction = null
+shuffle_fov_speed = null
 
 [node name="Camera3D" type="Camera3D" parent="NavigationRegion3D/PlayerCamera" unique_id=1179018285]
 fov = 38.8

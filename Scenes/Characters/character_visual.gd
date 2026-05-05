@@ -32,8 +32,11 @@ const MOTION_STATES: Array[int] = [
 
 @export var walk_speed_threshold: float = 2.5
 @export var playback_fade_time: float = 0.15
-@export var torso_lean_amount: float = 0.15
+@export var torso_lean_amount: float = 0.3
 @export var torso_lean_speed: float = 3.0
+## When true, lean ignores Engine.time_scale so it stays snappy during bullet-time.
+## Set false on NPCs so their lean feels slow and dramatic in bullet-time.
+@export var lean_ignore_time_scale: bool = true
 @export var skeleton: Skeleton3D
 @export var animation_player: AnimationPlayer
 
@@ -53,9 +56,10 @@ var _torso_lean_direction: int = 0
 func _ready() -> void:
 	process_priority = 100
 	if skeleton != null:
-		_torso_bone_index = skeleton.find_bone("Hips")
+		_torso_bone_index = skeleton.find_bone("Spine")
 	if _torso_bone_index < 0:
-		push_warning("CharacterVisual could not find torso bone for lean.")
+		pass
+		# push_warning("CharacterVisual for could not find torso bone for lean.")
 	_force_locomotion_loop()
 	_configure_animation_tree()
 	play_walk()
@@ -253,8 +257,8 @@ func _update_torso_lean(delta: float) -> void:
 
 	var target_lean: float = torso_lean_amount * float(_torso_lean_direction)
 
-	var wall_delta: float = delta / maxf(Engine.time_scale, 0.01)
-	var weight: float = clamp(torso_lean_speed * wall_delta, 0.0, 1.0)
+	var effective_delta: float = delta / maxf(Engine.time_scale, 0.01) if lean_ignore_time_scale else delta
+	var weight: float = clamp(torso_lean_speed * effective_delta, 0.0, 1.0)
 	_current_torso_lean = lerp(_current_torso_lean, target_lean, weight)
 	if abs(_current_torso_lean) < 0.001 and is_zero_approx(target_lean):
 		_current_torso_lean = 0.0
