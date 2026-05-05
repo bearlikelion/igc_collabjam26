@@ -2,6 +2,9 @@
 
 [ext_resource type="Script" uid="uid://cr0npsa6kw2u3" path="res://Scenes/Characters/pawn.gd" id="1_pawn"]
 [ext_resource type="PackedScene" uid="uid://c1sd4qbsm8bge" path="res://Scenes/Characters/CharacterVisual.tscn" id="2_visual"]
+[ext_resource type="AudioStream" uid="uid://c8by13377tqbj" path="res://Assets/Audio/SFX/quick-zoom-slow-down.ogg" id="3_xv1kb"]
+[ext_resource type="Script" uid="uid://dwoxgkhyvb4q0" path="res://Scenes/Characters/Brains/player_brain.gd" id="4_eg12w"]
+[ext_resource type="Resource" uid="uid://b0u5cgxlaxnpc" path="res://Resources/Brains/DefaultPlayer.tres" id="5_j5umu"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_pawn"]
 size = Vector3(0.813, 1.5, 0.813)
@@ -11,6 +14,11 @@ script = ExtResource("1_pawn")
 shuffle_debug_enabled = true
 visual = NodePath("CharacterVisual")
 
+[node name="PlayerBrain" type="Node" parent="." unique_id=2049795291]
+script = ExtResource("4_eg12w")
+config = ExtResource("5_j5umu")
+metadata/_custom_type_script = "uid://dwoxgkhyvb4q0"
+
 [node name="Collision" type="CollisionShape3D" parent="." unique_id=184064025]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.75, 0)
 shape = SubResource("BoxShape3D_pawn")
@@ -19,7 +27,7 @@ shape = SubResource("BoxShape3D_pawn")
 playback_fade_time = 0.3
 torso_lean_amount = 0.8
 
-[node name="Skeleton3D" parent="CharacterVisual/ModelRoot/AuxScene/Scene/NPC1_standard_DEF_rig" parent_id_path=PackedInt32Array(905364963, 1374843997, 1247741337) index="1" unique_id=1001076991]
+[node name="Skeleton3D" parent="CharacterVisual/ModelRoot/AuxScene/Scene/NPC1_standard_DEF_rig" parent_id_path=PackedInt32Array(905364963, 1374843997, 50584899) index="1" unique_id=1831316121]
 bones/1/rotation = Quaternion(0.970091, -4.7161875e-15, -3.654548e-15, 0.24274161)
 bones/2/rotation = Quaternion(0.027375078, -0.005165265, -0.0073384875, 0.999585)
 bones/3/rotation = Quaternion(0.080737665, -0.012534967, -0.01021322, 0.9966042)
@@ -38,6 +46,10 @@ bones/17/rotation = Quaternion(-0.6002483, -0.14870015, 0.09964459, 0.7795263)
 bones/19/rotation = Quaternion(0.68125856, -0.12193696, 0.15870231, 0.7041532)
 bones/20/rotation = Quaternion(0.59104466, -0.05904836, -0.05829782, 0.8023596)
 bones/21/rotation = Quaternion(-0.7635242, 0.11912967, -0.11075418, 0.62495804)
+
+[node name="SlowSound" type="AudioStreamPlayer" parent="." unique_id=801907160]
+stream = ExtResource("3_xv1kb")
+volume_db = -10.0
 
 [editable path="CharacterVisual"]
 [editable path="CharacterVisual/ModelRoot/AuxScene"]

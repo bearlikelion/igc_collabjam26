@@ -85,7 +85,7 @@ func get_shuffle_knockback_distance() -> float:
 
 
 func _on_obstacle_detected(_blocker: Node, _distance: float, _in_lane: int, _candidate_lanes: Array[int]) -> void:
-	pawn.knock_down_from_shuffle()
+	pawn.set_movement_blocked(true)
 
 
 func get_end_of_rail_action() -> int:
@@ -123,7 +123,7 @@ func process_input(event: InputEvent) -> void:
 			pawn.set_shuffle_telegraph(held)
 			pawn.lean(held)
 		return
-	if pawn.is_knocked_down() or not pawn.can_move():
+	if pawn.is_knocked_down() or not pawn.can_move() and not pawn.is_movement_blocked():
 		return
 	if event.is_action_pressed("left"):
 		_on_lane_input_press(-1)
@@ -183,7 +183,7 @@ func _on_encounter_detected(other: Pawn, distance: float) -> void:
 
 # Press handler — set lane intent. Cancels intent if both keys are now held.
 func _on_lane_input_press(direction: int) -> void:
-	if not pawn.can_move() or pawn.is_knocked_down() or pawn.is_movement_blocked() or pawn.is_goal_reached():
+	if not (pawn.can_move() or pawn.is_movement_blocked()) or pawn.is_knocked_down() or pawn.is_goal_reached():
 		return
 	var both_held: bool = Input.is_action_pressed("left") and Input.is_action_pressed("right")
 	_lane_intent = 0 if both_held else direction
@@ -197,7 +197,7 @@ func _on_lane_input_release() -> void:
 		_lane_intent = -1 if Input.is_action_pressed("left") else 1
 		pawn.lean(_lane_intent)
 		return
-	if pawn.can_move() and not pawn.is_knocked_down() and not pawn.is_movement_blocked() and not pawn.is_goal_reached():
+	if (pawn.can_move() or pawn.is_movement_blocked()) and not pawn.is_knocked_down() and not pawn.is_goal_reached():
 		var next_lane: int = clampi(pawn.get_current_lane() + _lane_intent, 0, Pawn.LANE_COUNT - 1)
 		if next_lane != pawn.get_current_lane():
 			pawn.request_lane_change(next_lane)

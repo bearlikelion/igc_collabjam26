@@ -32,8 +32,11 @@ const MOTION_STATES: Array[int] = [
 
 @export var walk_speed_threshold: float = 2.5
 @export var playback_fade_time: float = 0.15
-@export var torso_lean_amount: float = 0.15
+@export var torso_lean_amount: float = 0.3
 @export var torso_lean_speed: float = 3.0
+## When true, lean ignores Engine.time_scale so it stays snappy during bullet-time.
+## Set false on NPCs so their lean feels slow and dramatic in bullet-time.
+@export var lean_ignore_time_scale: bool = true
 @export var skeleton: Skeleton3D
 @export var animation_player: AnimationPlayer
 
@@ -53,9 +56,10 @@ var _torso_lean_direction: int = 0
 func _ready() -> void:
 	process_priority = 100
 	if skeleton != null:
-		_torso_bone_index = skeleton.find_bone("DEF-spine001")
+		_torso_bone_index = skeleton.find_bone("Spine")
 	if _torso_bone_index < 0:
-		push_warning("CharacterVisual could not find torso bone for lean.")
+		pass
+		# push_warning("CharacterVisual for could not find torso bone for lean.")
 	_force_locomotion_loop()
 	_configure_animation_tree()
 	play_walk()
@@ -155,6 +159,24 @@ func is_recovery_locked() -> bool:
 	return _is_recovery_state_locked()
 
 
+# Enable use_custom_timeline on the walk AnimationNodeAnimation and set a
+# random timeline_length so each NPC loops at a different rate, breaking sync.
+func randomize_animation_offset(min_length: float = 0.75, max_length: float = 1.25) -> void:
+	if animation_tree == null or animation_tree.tree_root == null:
+		return
+	var state_machine: AnimationNodeStateMachine = animation_tree.tree_root as AnimationNodeStateMachine
+	if state_machine == null:
+		return
+	var walk_state_name: String = _get_state_name(MotionState.WALK)
+	var walk_node: AnimationNodeAnimation = state_machine.get_node(walk_state_name) as AnimationNodeAnimation
+	if walk_node == null:
+		return
+	walk_node.use_custom_timeline = true
+	var walk_speed: float = snappedf(randf_range(min_length, max_length), 0.01)
+	walk_node.timeline_length = walk_speed
+	walk_node.loop_mode = Animation.LOOP_LINEAR
+
+
 # Freeze the animation tree on its current pose (e.g., when an NPC arrives
 # at the train and stands idle). Locomotion state is preserved so a later
 # resume_animation() resumes the same clip.
@@ -235,8 +257,8 @@ func _update_torso_lean(delta: float) -> void:
 
 	var target_lean: float = torso_lean_amount * float(_torso_lean_direction)
 
-	var wall_delta: float = delta / maxf(Engine.time_scale, 0.01)
-	var weight: float = clamp(torso_lean_speed * wall_delta, 0.0, 1.0)
+	var effective_delta: float = delta / maxf(Engine.time_scale, 0.01) if lean_ignore_time_scale else delta
+	var weight: float = clamp(torso_lean_speed * effective_delta, 0.0, 1.0)
 	_current_torso_lean = lerp(_current_torso_lean, target_lean, weight)
 	if abs(_current_torso_lean) < 0.001 and is_zero_approx(target_lean):
 		_current_torso_lean = 0.0

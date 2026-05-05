@@ -1,0 +1,102 @@
+[gd_scene format=3 uid="uid://dpjup8pb7028d"]
+
+[ext_resource type="Script" uid="uid://71t2vdl7u1v5" path="res://Scenes/Characters/character_visual.gd" id="1_ugk5y"]
+[ext_resource type="Script" uid="uid://cr0npsa6kw2u3" path="res://Scenes/Characters/pawn.gd" id="1_vbdjh"]
+[ext_resource type="Script" uid="uid://di4oo53chm4l7" path="res://Scenes/Characters/Brains/ai_brain.gd" id="2_rdelc"]
+[ext_resource type="PackedScene" uid="uid://d2h72s0thuux6" path="res://Assets/Models/Characters/LowPoly/Female/Redhead1/redhead_1.glb" id="2_ugk5y"]
+[ext_resource type="Resource" uid="uid://cfrk4dk0b01m1" path="res://Resources/Brains/Greeter.tres" id="3_hi3te"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_pawn"]
+size = Vector3(0.813, 1.5, 0.813)
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_die"]
+animation = &"Hit_Knockback RT"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_interact_left"]
+animation = &"Fighting Left Jab RT"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_interact_right"]
+animation = &"Fighting Right Jab RT"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_recover"]
+animation = &"Idle_FoldArms_Loop RT"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_sprint"]
+animation = &"Walk_Loop RT"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_walk"]
+animation = &"Walk_Loop RT"
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_blend"]
+
+[sub_resource type="AnimationNodeStateMachine" id="AnimationNodeStateMachine_character"]
+states/End/position = Vector2(700, 100)
+states/Start/position = Vector2(76.66667, 99.25824)
+states/die/node = SubResource("AnimationNodeAnimation_die")
+states/die/position = Vector2(444, 211.33334)
+states/interact-left/node = SubResource("AnimationNodeAnimation_interact_left")
+states/interact-left/position = Vector2(252.66666, -42)
+states/interact-right/node = SubResource("AnimationNodeAnimation_interact_right")
+states/interact-right/position = Vector2(345.33334, 304.66666)
+states/recover/node = SubResource("AnimationNodeAnimation_recover")
+states/recover/position = Vector2(520, 100)
+states/sprint/node = SubResource("AnimationNodeAnimation_sprint")
+states/sprint/position = Vector2(471.3333, -24)
+states/walk/node = SubResource("AnimationNodeAnimation_walk")
+states/walk/position = Vector2(224.66666, 108.69136)
+transitions = ["Start", "walk", SubResource("AnimationNodeStateMachineTransition_blend"), "walk", "sprint", SubResource("AnimationNodeStateMachineTransition_blend"), "sprint", "walk", SubResource("AnimationNodeStateMachineTransition_blend"), "walk", "interact-left", SubResource("AnimationNodeStateMachineTransition_blend"), "walk", "interact-right", SubResource("AnimationNodeStateMachineTransition_blend"), "walk", "die", SubResource("AnimationNodeStateMachineTransition_blend"), "walk", "recover", SubResource("AnimationNodeStateMachineTransition_blend"), "sprint", "interact-left", SubResource("AnimationNodeStateMachineTransition_blend"), "sprint", "interact-right", SubResource("AnimationNodeStateMachineTransition_blend"), "sprint", "die", SubResource("AnimationNodeStateMachineTransition_blend"), "sprint", "recover", SubResource("AnimationNodeStateMachineTransition_blend"), "interact-left", "walk", SubResource("AnimationNodeStateMachineTransition_blend"), "interact-right", "walk", SubResource("AnimationNodeStateMachineTransition_blend"), "recover", "walk", SubResource("AnimationNodeStateMachineTransition_blend"), "recover", "sprint", SubResource("AnimationNodeStateMachineTransition_blend"), "die", "recover", SubResource("AnimationNodeStateMachineTransition_blend"), "die", "walk", SubResource("AnimationNodeStateMachineTransition_blend")]
+graph_offset = Vector2(-187, -69)
+
+[node name="Pawn" type="CharacterBody3D" unique_id=71114608 node_paths=PackedStringArray("visual")]
+script = ExtResource("1_vbdjh")
+shuffle_choice_time = 2.5
+shuffle_debug_enabled = true
+visual = NodePath("CharacterVisual")
+
+[node name="AIBrain" type="Node" parent="." unique_id=408403506]
+script = ExtResource("2_rdelc")
+config = ExtResource("3_hi3te")
+metadata/_custom_type_script = "uid://di4oo53chm4l7"
+
+[node name="Collision" type="CollisionShape3D" parent="." unique_id=184064025]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.75, 0)
+shape = SubResource("BoxShape3D_pawn")
+
+[node name="CharacterVisual" type="Node3D" parent="." unique_id=876488184 node_paths=PackedStringArray("skeleton", "animation_player")]
+script = ExtResource("1_ugk5y")
+skeleton = NodePath("ModelRoot/Redhead/Scene/root/Skeleton3D")
+animation_player = NodePath("ModelRoot/Redhead/AnimationPlayer")
+lean_ignore_time_scale = false
+
+[node name="ModelRoot" type="Node3D" parent="CharacterVisual" unique_id=1016427824]
+transform = Transform3D(-2, 0, 3.019916e-07, 0, 2, 0, -3.019916e-07, 0, -2, 0, 0, 0)
+
+[node name="Redhead" parent="CharacterVisual/ModelRoot" unique_id=953365347 instance=ExtResource("2_ugk5y")]
+transform = Transform3D(0.5, 0, 0, 0, 0.5, 0, 0, 0, 0.5, 0, 0, 0)
+
+[node name="Skeleton3D" parent="CharacterVisual/ModelRoot/Redhead/Scene/root" parent_id_path=PackedInt32Array(953365347, 1718085772) index="0" unique_id=1635058458]
+bones/1/position = Vector3(0.01513764, 0.8492777, -0.008684434)
+bones/1/rotation = Quaternion(-0.03776522, -0.1228617, 0.0045857867, 0.9916944)
+bones/2/rotation = Quaternion(0.9205995, 0.18195309, 0.3373066, 0.07492693)
+bones/3/rotation = Quaternion(0.18662763, 0.026212508, 0.28220204, 0.9406621)
+bones/4/rotation = Quaternion(0.17918967, 0.7156113, -0.55469894, 0.38483846)
+bones/8/rotation = Quaternion(0.9147233, -0.18610768, -0.35375065, 0.059209846)
+bones/9/rotation = Quaternion(0.19917719, -0.027975157, -0.29819295, 0.9330739)
+bones/10/rotation = Quaternion(-0.19998856, 0.68790245, -0.5771466, -0.39204162)
+bones/14/rotation = Quaternion(0.09206091, -0.16913742, -0.030543871, 0.9808081)
+bones/15/rotation = Quaternion(0.029081143, -0.019304514, -0.053092692, 0.99797934)
+bones/16/rotation = Quaternion(0.09473988, -0.14830293, 0.1654158, 0.9703959)
+bones/17/rotation = Quaternion(-0.112844974, -0.15561143, 0.050307482, 0.9800614)
+bones/19/rotation = Quaternion(-0.23149869, 0.072343476, -0.4827805, 0.84148556)
+bones/20/rotation = Quaternion(0.0072464463, 0.00083343685, 0.058651295, 0.998252)
+bones/21/rotation = Quaternion(-0.31236055, 0.4045286, 0.3813489, 0.7702991)
+bones/25/rotation = Quaternion(-0.035334375, -0.12123908, -0.40008003, 0.90773815)
+bones/26/rotation = Quaternion(-0.33398053, 0.026847322, -0.8766715, 0.34522966)
+bones/27/rotation = Quaternion(0.053646207, -0.81711686, -0.24352914, 0.51974595)
+
+[node name="AnimationTree" type="AnimationTree" parent="CharacterVisual" unique_id=10839786]
+root_node = NodePath("../ModelRoot/Redhead")
+tree_root = SubResource("AnimationNodeStateMachine_character")
+anim_player = NodePath("../ModelRoot/Redhead/AnimationPlayer")
+
+[editable path="CharacterVisual/ModelRoot/Redhead"]

@@ -1,7 +1,13 @@
-[gd_scene format=3 uid="uid://c1sd4qbsm8bge"]
+[gd_scene format=3 uid="uid://qgcyfnbot8ap"]
 
-[ext_resource type="Script" uid="uid://71t2vdl7u1v5" path="res://Scenes/Characters/character_visual.gd" id="1_visual"]
-[ext_resource type="PackedScene" uid="uid://fa8xqa7apbt4" path="res://Assets/Models/Characters/LowPoly/Male/mNPC1.glb" id="3_j0lyd"]
+[ext_resource type="Script" uid="uid://cr0npsa6kw2u3" path="res://Scenes/Characters/pawn.gd" id="1_f7doy"]
+[ext_resource type="Script" uid="uid://71t2vdl7u1v5" path="res://Scenes/Characters/character_visual.gd" id="2_afk2k"]
+[ext_resource type="Script" uid="uid://di4oo53chm4l7" path="res://Scenes/Characters/Brains/ai_brain.gd" id="2_e0emp"]
+[ext_resource type="PackedScene" uid="uid://c1u5p2jr61301" path="res://Assets/Models/Characters/LowPoly/Male/Salaryman/salaryman.glb" id="3_f7doy"]
+[ext_resource type="Resource" uid="uid://chxk7vqqad2m1" path="res://Resources/Brains/Commuter.tres" id="3_yofik"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_pawn"]
+size = Vector3(0.813, 1.5, 0.813)
 
 [sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_die"]
 animation = &"Hit_Knockback RT"
@@ -20,11 +26,6 @@ animation = &"Walk_Loop RT"
 
 [sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_walk"]
 animation = &"Walk_Loop RT"
-use_custom_timeline = true
-timeline_length = 1.0
-stretch_time_scale = true
-start_offset = 0.0
-loop_mode = 0
 
 [sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_blend"]
 
@@ -42,47 +43,40 @@ states/recover/position = Vector2(520, 100)
 states/sprint/node = SubResource("AnimationNodeAnimation_sprint")
 states/sprint/position = Vector2(471.3333, -24)
 states/walk/node = SubResource("AnimationNodeAnimation_walk")
-states/walk/position = Vector2(224.66666, 107.358025)
+states/walk/position = Vector2(224.66666, 108.69136)
 transitions = ["Start", "walk", SubResource("AnimationNodeStateMachineTransition_blend"), "walk", "sprint", SubResource("AnimationNodeStateMachineTransition_blend"), "sprint", "walk", SubResource("AnimationNodeStateMachineTransition_blend"), "walk", "interact-left", SubResource("AnimationNodeStateMachineTransition_blend"), "walk", "interact-right", SubResource("AnimationNodeStateMachineTransition_blend"), "walk", "die", SubResource("AnimationNodeStateMachineTransition_blend"), "walk", "recover", SubResource("AnimationNodeStateMachineTransition_blend"), "sprint", "interact-left", SubResource("AnimationNodeStateMachineTransition_blend"), "sprint", "interact-right", SubResource("AnimationNodeStateMachineTransition_blend"), "sprint", "die", SubResource("AnimationNodeStateMachineTransition_blend"), "sprint", "recover", SubResource("AnimationNodeStateMachineTransition_blend"), "interact-left", "walk", SubResource("AnimationNodeStateMachineTransition_blend"), "interact-right", "walk", SubResource("AnimationNodeStateMachineTransition_blend"), "recover", "walk", SubResource("AnimationNodeStateMachineTransition_blend"), "recover", "sprint", SubResource("AnimationNodeStateMachineTransition_blend"), "die", "recover", SubResource("AnimationNodeStateMachineTransition_blend"), "die", "walk", SubResource("AnimationNodeStateMachineTransition_blend")]
 graph_offset = Vector2(-187, -69)
 
-[node name="CharacterVisual" type="Node3D" unique_id=876488184 node_paths=PackedStringArray("skeleton", "animation_player")]
-script = ExtResource("1_visual")
-skeleton = NodePath("ModelRoot/AuxScene/Scene/NPC1_standard_DEF_rig/Skeleton3D")
-animation_player = NodePath("ModelRoot/AuxScene/AnimationPlayer")
+[node name="Pawn" type="CharacterBody3D" unique_id=71114608 node_paths=PackedStringArray("visual")]
+script = ExtResource("1_f7doy")
+shuffle_choice_time = 2.5
+shuffle_debug_enabled = true
+visual = NodePath("CharacterVisual")
 
-[node name="ModelRoot" type="Node3D" parent="." unique_id=1016427824]
+[node name="AIBrain" type="Node" parent="." unique_id=548455131]
+script = ExtResource("2_e0emp")
+config = ExtResource("3_yofik")
+metadata/_custom_type_script = "uid://di4oo53chm4l7"
+
+[node name="Collision" type="CollisionShape3D" parent="." unique_id=184064025]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.75, 0)
+shape = SubResource("BoxShape3D_pawn")
+
+[node name="CharacterVisual" type="Node3D" parent="." unique_id=876488184 node_paths=PackedStringArray("skeleton", "animation_player")]
+script = ExtResource("2_afk2k")
+lean_ignore_time_scale = false
+skeleton = NodePath("ModelRoot/SalaryMan/Scene/root/Skeleton3D")
+animation_player = NodePath("ModelRoot/SalaryMan/AnimationPlayer")
+
+[node name="ModelRoot" type="Node3D" parent="CharacterVisual" unique_id=1016427824]
 transform = Transform3D(-2, 0, 3.019916e-07, 0, 2, 0, -3.019916e-07, 0, -2, 0, 0, 0)
 
-[node name="AuxScene" parent="ModelRoot" unique_id=1374843997 instance=ExtResource("3_j0lyd")]
+[node name="SalaryMan" parent="CharacterVisual/ModelRoot" unique_id=806828664 instance=ExtResource("3_f7doy")]
 transform = Transform3D(0.5, 0, 0, 0, 0.5, 0, 0, 0, 0.5, 0, 0, 0)
 
-[node name="Skeleton3D" parent="ModelRoot/AuxScene/Scene/NPC1_standard_DEF_rig" parent_id_path=PackedInt32Array(1374843997, 50584899) index="1" unique_id=1831316121]
-bones/1/rotation = Quaternion(0.78994495, 0.02642744, -0.0058764475, 0.6125798)
-bones/2/rotation = Quaternion(-0.06447645, 1.1641532e-10, 6.693881e-10, 0.99791926)
-bones/3/rotation = Quaternion(-0.006145012, 0.018222267, -0.011502151, 0.99974895)
-bones/4/rotation = Quaternion(0.055380676, 0.02040523, -0.0069445777, 0.99823266)
-bones/5/rotation = Quaternion(0.15848252, -0.022089647, 0.0145383105, 0.9870077)
-bones/6/rotation = Quaternion(-0.14556785, -0.014174773, 0.0220021, 0.98900205)
-bones/8/rotation = Quaternion(-0.5959186, 0.15698367, -0.052915156, 0.78577167)
-bones/9/rotation = Quaternion(-0.053090163, 0.02880618, -0.24880685, 0.9666679)
-bones/10/rotation = Quaternion(-0.020501852, 0.0156195965, -0.09491666, 0.9951516)
-bones/12/rotation = Quaternion(-0.50841254, -0.19129868, 0.39671957, 0.7399562)
-bones/13/rotation = Quaternion(-0.023371816, 0.20637783, 0.32058814, 0.92416734)
-bones/14/rotation = Quaternion(-0.01935507, -0.010961274, 0.17128281, 0.98497075)
-bones/15/rotation = Quaternion(0.93735987, 0.08768572, 0.026465822, 0.3361062)
-bones/16/rotation = Quaternion(0.13506712, 0.013401851, 0.013357874, 0.9906558)
-bones/17/rotation = Quaternion(-0.597543, -0.08230901, 0.060708497, 0.7952875)
-bones/19/rotation = Quaternion(0.99627244, -0.018850543, -0.058539845, -0.060489804)
-bones/20/rotation = Quaternion(0.077942565, -0.0020016453, -0.00806694, 0.99692327)
-bones/21/rotation = Quaternion(-0.5779113, 0.11117005, -0.06270938, 0.80605656)
-
-[node name="AnimationPlayer" parent="ModelRoot/AuxScene" index="1" unique_id=1335838975]
-autoplay = &"Rest Pose RT"
-
-[node name="AnimationTree" type="AnimationTree" parent="." unique_id=10839786]
-root_node = NodePath("../ModelRoot/AuxScene")
+[node name="AnimationTree" type="AnimationTree" parent="CharacterVisual" unique_id=10839786]
+root_node = NodePath("../ModelRoot/SalaryMan")
 tree_root = SubResource("AnimationNodeStateMachine_character")
-anim_player = NodePath("../ModelRoot/AuxScene/AnimationPlayer")
+anim_player = NodePath("../ModelRoot/SalaryMan/AnimationPlayer")
 
-[editable path="ModelRoot/AuxScene"]
+[editable path="CharacterVisual/ModelRoot/SalaryMan"]

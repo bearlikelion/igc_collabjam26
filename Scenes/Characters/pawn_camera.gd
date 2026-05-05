@@ -60,6 +60,12 @@ const PITCH_LIMIT_DEG: float = 89.0
 @export_range(0.0, 25.0, 0.1, "suffix:deg") var shuffle_camera_tilt_degrees: float = 8.0
 @export_range(0.0, 40.0, 0.1) var shuffle_camera_tilt_speed: float = 18.0
 
+@export_group("Shuffle FOV")
+## How many degrees to narrow FOV when a shuffle begins.
+@export_range(0.0, 30.0, 0.1, "suffix:deg") var shuffle_fov_reduction: float = 6.0
+## Speed at which FOV lerps to the shuffle target and back (degrees per second, wall-clock).
+@export_range(0.1, 60.0, 0.1) var shuffle_fov_speed: float = 12.0
+
 
 signal mode_changed(mode: int)
 
@@ -76,6 +82,8 @@ var _lane_lean_velocity: float = 0.0
 var _lean_direction: int = 0
 var _shuffle_tilt_direction: int = 0
 var _shuffle_tilt_active: bool = false
+var _fov_default: float = 0.0
+var _fov_target: float = 0.0
 var _speed: float = 0.0
 # Tween snapshot used by lane-lean follow-through. Pawn calls
 # set_tween_snapshot once per frame.
@@ -99,6 +107,12 @@ func _find_camera() -> Camera3D:
 	return null
 
 
+func _ready() -> void:
+	if camera != null:
+		_fov_default = camera.fov
+		_fov_target = camera.fov
+
+
 # Per-frame camera math. @tool so editor-only — guard explicitly.
 func _process(delta: float) -> void:
 	if Engine.is_editor_hint():
@@ -109,6 +123,7 @@ func _process(delta: float) -> void:
 	if target_pawn != null:
 		rotation.y = target_pawn.rotation.y
 	_update_headbob(delta)
+	_update_shuffle_fov(delta)
 	if _shuffle_tilt_active:
 		_update_shuffle_tilt(delta)
 		# Drain lane-lean velocity so the spring doesn't pop when we
@@ -197,12 +212,14 @@ func apply_pitch_input(relative_y: float) -> void:
 func engage_shuffle_tilt(direction: int) -> void:
 	_shuffle_tilt_active = true
 	_shuffle_tilt_direction = direction
+	_fov_target = _fov_default - shuffle_fov_reduction
 
 
 # Hand rotation.z back to the lane-lean spring.
 func disengage_shuffle_tilt() -> void:
 	_shuffle_tilt_active = false
 	_shuffle_tilt_direction = 0
+	_fov_target = _fov_default
 
 
 # --- Internal --------------------------------------------------------------
@@ -218,6 +235,15 @@ func _update_headbob(delta: float) -> void:
 		_headbob_offset = 0.0
 	if camera != null:
 		camera.position.y = _headbob_offset
+
+
+# Lerp camera FOV toward its target. Wall-clock aware so the zoom feels the
+# same speed regardless of bullet-time.
+func _update_shuffle_fov(delta: float) -> void:
+	if camera == null or camera.fov == _fov_target:
+		return
+	var fov_delta: float = delta / maxf(Engine.time_scale, 0.001)
+	camera.fov = move_toward(camera.fov, _fov_target, shuffle_fov_speed * fov_delta)
 
 
 # Lerp rotation.z toward the shuffle-tilt target. Time-scale aware so the

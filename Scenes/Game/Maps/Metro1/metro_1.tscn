@@ -1,11 +1,16 @@
 [gd_scene format=4 uid="uid://dejrevjdsd4ry"]
 
 [ext_resource type="Script" uid="uid://bwvo38h6j43lo" path="res://Scenes/Game/Maps/metro_movement.gd" id="1_drku4"]
+[ext_resource type="PackedScene" uid="uid://cv1nxx1utr6ty" path="res://Scenes/Characters/NPCs/Female/Elderly.tscn" id="2_3q7nn"]
 [ext_resource type="AudioStream" uid="uid://vaa12nlltq67" path="res://Assets/Audio/SFX/Metro/363737__alexanderche__ambience-metro-wagon-train-interior-city-moscow.ogg" id="2_t8wx7"]
 [ext_resource type="AudioStream" uid="uid://b58q66c6lsxhf" path="res://Assets/Audio/SFX/Metro/430986__be_a_hero_not_a_patriot__metro-ext-warszawa-2017-train-type-81-russian-door-close-take-off-centrum-station-ambience-poland.ogg" id="3_ee2u3"]
+[ext_resource type="PackedScene" uid="uid://dpjup8pb7028d" path="res://Scenes/Characters/NPCs/Female/Redhead.tscn" id="3_p3hvv"]
 [ext_resource type="AudioStream" uid="uid://d3eum4cf3d2fw" path="res://Assets/Audio/SFX/Metro/727842__alexanderche__ambience-city-metro-preobrazhenskaya-ploshad-subway-moscow.ogg" id="4_jf3xt"]
+[ext_resource type="PackedScene" uid="uid://csm24sanerou1" path="res://Scenes/Characters/NPCs/Male/Doctor.tscn" id="4_lpghw"]
+[ext_resource type="PackedScene" uid="uid://brd7cen16a17a" path="res://Scenes/Characters/NPCs/Male/Hoodie.tscn" id="5_ilanp"]
 [ext_resource type="Script" uid="uid://bd83xckma828n" path="res://Scenes/Game/Maps/metro_sounds.gd" id="5_ug0ud"]
 [ext_resource type="Script" uid="uid://cwu5cf7a0awcd" path="res://addons/func_godot/src/map/func_godot_map.gd" id="6_b3fhr"]
+[ext_resource type="PackedScene" uid="uid://qgcyfnbot8ap" path="res://Scenes/Characters/NPCs/Male/Salaryman.tscn" id="6_gy5qg"]
 [ext_resource type="Resource" uid="uid://bkhxcqsquw1yg" path="res://addons/func_godot/func_godot_default_map_settings.tres" id="7_cyw2y"]
 [ext_resource type="PackedScene" uid="uid://cfbedqf0p215d" path="res://Scenes/Characters/Pawn.tscn" id="8_svs80"]
 [ext_resource type="ArrayMesh" uid="uid://dgtirktt1xuok" path="res://Assets/Models/Metro/Meshes/Metro_subway_car.res" id="9_rrdri"]
@@ -22,13 +27,11 @@
 [ext_resource type="Material" uid="uid://bmti88ony01qi" path="res://Assets/Textures/dev/bumps.tres" id="14_h1b0k"]
 [ext_resource type="Texture2D" uid="uid://cyg2snr1w5xw5" path="res://addons/func_godot/textures/default_texture.png" id="15_0ynle"]
 [ext_resource type="Material" uid="uid://doyt74p2tw1sq" path="res://Assets/Textures/dev/roof.tres" id="16_0ynle"]
-[ext_resource type="Script" uid="uid://di4oo53chm4l7" path="res://Scenes/Characters/Brains/ai_brain.gd" id="19_m7ql2"]
 [ext_resource type="Script" uid="uid://c7ob6aflnt2jl" path="res://Scenes/Characters/pawn_camera.gd" id="20_pcam"]
-[ext_resource type="Resource" uid="uid://b0u5cgxlaxnpc" path="res://Scenes/Characters/Brains/Configs/DefaultPlayer.tres" id="21_plycfg"]
-[ext_resource type="Resource" uid="uid://cfrk4dk0b01m1" path="res://Scenes/Characters/Brains/Configs/Greeter.tres" id="22_greeter"]
-[ext_resource type="Resource" uid="uid://chxk7vqqad2m1" path="res://Scenes/Characters/Brains/Configs/Commuter.tres" id="23_commuter"]
-[ext_resource type="Resource" uid="uid://djsb4mqe2tpvg" path="res://Scenes/Characters/Brains/Configs/Aggressive.tres" id="24_aggr"]
-[ext_resource type="Resource" uid="uid://b6vlhpe8r7m4l" path="res://Scenes/Characters/Brains/Configs/Stubborn.tres" id="25_stubb"]
+[ext_resource type="Resource" uid="uid://b0u5cgxlaxnpc" path="res://Resources/Brains/DefaultPlayer.tres" id="21_plycfg"]
+[ext_resource type="Shader" uid="uid://ca6h0hj5fdy7x" path="res://Shaders/psx.gdshader" id="22_3q7nn"]
+[ext_resource type="ArrayOccluder3D" uid="uid://dx2q14chba8o8" path="res://Scenes/Game/Maps/Metro1/metro_1.occ" id="23_p3hvv"]
+[ext_resource type="Script" uid="uid://df06w8c228ef6" path="res://Scenes/Game/Maps/Metro1/psx_shuffle_effect.gd" id="24_psxfx"]
 
 [sub_resource type="AudioStreamRandomizer" id="AudioStreamRandomizer_et2qy"]
 streams_count = 3
@@ -264,12 +267,37 @@ _surfaces = [{
 "vertex_data": PackedByteArray("AAD4QQAAAD8AAOBAAAD4QQAAAD8AANjBAAD4QQAAAL8AANjBAAD4QQAAAL8AAOBA////f/////////9//////////3//////////f/////8=")
 }]
 
-[sub_resource type="ArrayOccluder3D" id="ArrayOccluder3D_shhil"]
-vertices = PackedVector3Array(-18, 0.5, -24, -21, 0.5, -24, -21, -0.5, -24, -18, -0.5, -24, -21, -0.5, 27, -21, -0.5, -24, -21, 0.5, -24, -21, 0.5, 27, -21, -0.5, 27, -18, -0.5, 27, -18, -0.5, -24, -21, -0.5, -24, -21, 0.5, 27, -21, 0.5, -24, -18, 0.5, -24, -18, 0.5, 27, -18, 0.5, 27, -18, 0.5, -24, -18, -0.5, -24, -18, -0.5, 27, -18, -0.5, 27, -21, -0.5, 27, -21, 0.5, 27, -18, 0.5, 27, 28, 0.5, -27, -31, 0.5, -27, -31, -0.5, -27, 28, -0.5, -27, -31, -0.5, -24, -31, -0.5, -27, -31, 0.5, -27, -31, 0.5, -24, -31, -0.5, -24, 28, -0.5, -24, 28, -0.5, -27, -31, -0.5, -27, -31, 0.5, -24, -31, 0.5, -27, 28, 0.5, -27, 28, 0.5, -24, 28, 0.5, -24, 28, 0.5, -27, 28, -0.5, -27, 28, -0.5, -24, 28, -0.5, -24, -31, -0.5, -24, -31, 0.5, -24, 28, 0.5, -24, 6, 0.5, -24, 3, 0.5, -24, 3, -0.5, -24, 6, -0.5, -24, 3, -0.5, 7, 3, -0.5, -24, 3, 0.5, -24, 3, 0.5, 7, 3, -0.5, 7, 6, -0.5, 7, 6, -0.5, -24, 3, -0.5, -24, 3, 0.5, 7, 3, 0.5, -24, 6, 0.5, -24, 6, 0.5, 7, 6, 0.5, 7, 6, 0.5, -24, 6, -0.5, -24, 6, -0.5, 7, 6, -0.5, 7, 3, -0.5, 7, 3, 0.5, 7, 6, 0.5, 7, 28, 0.5, 4, 6, 0.5, 4, 6, -0.5, 4, 28, -0.5, 4, 6, -0.5, 7, 6, -0.5, 4, 6, 0.5, 4, 6, 0.5, 7, 6, -0.5, 7, 28, -0.5, 7, 28, -0.5, 4, 6, -0.5, 4, 6, 0.5, 7, 6, 0.5, 4, 28, 0.5, 4, 28, 0.5, 7, 28, 0.5, 7, 28, 0.5, 4, 28, -0.5, 4, 28, -0.5, 7, 28, -0.5, 7, 6, -0.5, 7, 6, 0.5, 7, 28, 0.5, 7, 31, 0.5, -27, 28, 0.5, -27, 28, -0.5, -27, 31, -0.5, -27, 28, -0.5, 7, 28, -0.5, -27, 28, 0.5, -27, 28, 0.5, 7, 28, -0.5, 7, 31, -0.5, 7, 31, -0.5, -27, 28, -0.5, -27, 28, 0.5, 7, 28, 0.5, -27, 31, 0.5, -27, 31, 0.5, 7, 31, -0.5, 7, 28, -0.5, 7, 28, 0.5, 7, 31, 0.5, 7, 31, 0.5, 7, 31, 0.5, -27, 31, -0.5, -27, 31, -0.5, 7)
-indices = PackedInt32Array(0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7, 8, 9, 10, 8, 10, 11, 12, 13, 14, 12, 14, 15, 16, 17, 18, 16, 18, 19, 20, 21, 22, 20, 22, 23, 24, 25, 26, 24, 26, 27, 28, 29, 30, 28, 30, 31, 32, 33, 34, 32, 34, 35, 36, 37, 38, 36, 38, 39, 40, 41, 42, 40, 42, 43, 44, 45, 46, 44, 46, 47, 48, 49, 50, 48, 50, 51, 52, 53, 54, 52, 54, 55, 56, 57, 58, 56, 58, 59, 60, 61, 62, 60, 62, 63, 64, 65, 66, 64, 66, 67, 68, 69, 70, 68, 70, 71, 72, 73, 74, 72, 74, 75, 76, 77, 78, 76, 78, 79, 80, 81, 82, 80, 82, 83, 84, 85, 86, 84, 86, 87, 88, 89, 90, 88, 90, 91, 92, 93, 94, 92, 94, 95, 96, 97, 98, 96, 98, 99, 100, 101, 102, 100, 102, 103, 104, 105, 106, 104, 106, 107, 108, 109, 110, 108, 110, 111, 112, 113, 114, 112, 114, 115, 116, 117, 118, 116, 118, 119)
+[sub_resource type="ConcavePolygonShape3D" id="ConcavePolygonShape3D_3q7nn"]
+data = PackedVector3Array(-18, 0.5, -24, -21, 0.5, -24, -21, -0.5, -24, -18, 0.5, -24, -21, -0.5, -24, -18, -0.5, -24, -21, -0.5, 27, -21, -0.5, -24, -21, 0.5, -24, -21, -0.5, 27, -21, 0.5, -24, -21, 0.5, 27, -21, -0.5, 27, -18, -0.5, 27, -18, -0.5, -24, -21, -0.5, 27, -18, -0.5, -24, -21, -0.5, -24, -21, 0.5, 27, -21, 0.5, -24, -18, 0.5, -24, -21, 0.5, 27, -18, 0.5, -24, -18, 0.5, 27, -18, 0.5, 27, -18, 0.5, -24, -18, -0.5, -24, -18, 0.5, 27, -18, -0.5, -24, -18, -0.5, 27, -18, -0.5, 27, -21, -0.5, 27, -21, 0.5, 27, -18, -0.5, 27, -21, 0.5, 27, -18, 0.5, 27, 28, 0.5, -27, -31, 0.5, -27, -31, -0.5, -27, 28, 0.5, -27, -31, -0.5, -27, 28, -0.5, -27, -31, -0.5, -24, -31, -0.5, -27, -31, 0.5, -27, -31, -0.5, -24, -31, 0.5, -27, -31, 0.5, -24, -31, -0.5, -24, 28, -0.5, -24, 28, -0.5, -27, -31, -0.5, -24, 28, -0.5, -27, -31, -0.5, -27, -31, 0.5, -24, -31, 0.5, -27, 28, 0.5, -27, -31, 0.5, -24, 28, 0.5, -27, 28, 0.5, -24, 28, 0.5, -24, 28, 0.5, -27, 28, -0.5, -27, 28, 0.5, -24, 28, -0.5, -27, 28, -0.5, -24, 28, -0.5, -24, -31, -0.5, -24, -31, 0.5, -24, 28, -0.5, -24, -31, 0.5, -24, 28, 0.5, -24, 6, 0.5, -24, 3, 0.5, -24, 3, -0.5, -24, 6, 0.5, -24, 3, -0.5, -24, 6, -0.5, -24, 3, -0.5, 7, 3, -0.5, -24, 3, 0.5, -24, 3, -0.5, 7, 3, 0.5, -24, 3, 0.5, 7, 3, -0.5, 7, 6, -0.5, 7, 6, -0.5, -24, 3, -0.5, 7, 6, -0.5, -24, 3, -0.5, -24, 3, 0.5, 7, 3, 0.5, -24, 6, 0.5, -24, 3, 0.5, 7, 6, 0.5, -24, 6, 0.5, 7, 6, 0.5, 7, 6, 0.5, -24, 6, -0.5, -24, 6, 0.5, 7, 6, -0.5, -24, 6, -0.5, 7, 6, -0.5, 7, 3, -0.5, 7, 3, 0.5, 7, 6, -0.5, 7, 3, 0.5, 7, 6, 0.5, 7, 28, 0.5, 4, 6, 0.5, 4, 6, -0.5, 4, 28, 0.5, 4, 6, -0.5, 4, 28, -0.5, 4, 6, -0.5, 7, 6, -0.5, 4, 6, 0.5, 4, 6, -0.5, 7, 6, 0.5, 4, 6, 0.5, 7, 6, -0.5, 7, 28, -0.5, 7, 28, -0.5, 4, 6, -0.5, 7, 28, -0.5, 4, 6, -0.5, 4, 6, 0.5, 7, 6, 0.5, 4, 28, 0.5, 4, 6, 0.5, 7, 28, 0.5, 4, 28, 0.5, 7, 28, 0.5, 7, 28, 0.5, 4, 28, -0.5, 4, 28, 0.5, 7, 28, -0.5, 4, 28, -0.5, 7, 28, -0.5, 7, 6, -0.5, 7, 6, 0.5, 7, 28, -0.5, 7, 6, 0.5, 7, 28, 0.5, 7, 31, 0.5, -27, 28, 0.5, -27, 28, -0.5, -27, 31, 0.5, -27, 28, -0.5, -27, 31, -0.5, -27, 28, -0.5, 7, 28, -0.5, -27, 28, 0.5, -27, 28, -0.5, 7, 28, 0.5, -27, 28, 0.5, 7, 28, -0.5, 7, 31, -0.5, 7, 31, -0.5, -27, 28, -0.5, 7, 31, -0.5, -27, 28, -0.5, -27, 28, 0.5, 7, 28, 0.5, -27, 31, 0.5, -27, 28, 0.5, 7, 31, 0.5, -27, 31, 0.5, 7, 31, -0.5, 7, 28, -0.5, 7, 28, 0.5, 7, 31, -0.5, 7, 28, 0.5, 7, 31, 0.5, 7, 31, 0.5, 7, 31, 0.5, -27, 31, -0.5, -27, 31, 0.5, 7, 31, -0.5, -27, 31, -0.5, 7)
 
 [sub_resource type="ConcavePolygonShape3D" id="ConcavePolygonShape3D_ai16f"]
 data = PackedVector3Array(-18, 0.5, -24, -21, 0.5, -24, -21, -0.5, -24, -18, 0.5, -24, -21, -0.5, -24, -18, -0.5, -24, -21, -0.5, 27, -21, -0.5, -24, -21, 0.5, -24, -21, -0.5, 27, -21, 0.5, -24, -21, 0.5, 27, -21, -0.5, 27, -18, -0.5, 27, -18, -0.5, -24, -21, -0.5, 27, -18, -0.5, -24, -21, -0.5, -24, -21, 0.5, 27, -21, 0.5, -24, -18, 0.5, -24, -21, 0.5, 27, -18, 0.5, -24, -18, 0.5, 27, -18, 0.5, 27, -18, 0.5, -24, -18, -0.5, -24, -18, 0.5, 27, -18, -0.5, -24, -18, -0.5, 27, -18, -0.5, 27, -21, -0.5, 27, -21, 0.5, 27, -18, -0.5, 27, -21, 0.5, 27, -18, 0.5, 27, 28, 0.5, -27, -31, 0.5, -27, -31, -0.5, -27, 28, 0.5, -27, -31, -0.5, -27, 28, -0.5, -27, -31, -0.5, -24, -31, -0.5, -27, -31, 0.5, -27, -31, -0.5, -24, -31, 0.5, -27, -31, 0.5, -24, -31, -0.5, -24, 28, -0.5, -24, 28, -0.5, -27, -31, -0.5, -24, 28, -0.5, -27, -31, -0.5, -27, -31, 0.5, -24, -31, 0.5, -27, 28, 0.5, -27, -31, 0.5, -24, 28, 0.5, -27, 28, 0.5, -24, 28, 0.5, -24, 28, 0.5, -27, 28, -0.5, -27, 28, 0.5, -24, 28, -0.5, -27, 28, -0.5, -24, 28, -0.5, -24, -31, -0.5, -24, -31, 0.5, -24, 28, -0.5, -24, -31, 0.5, -24, 28, 0.5, -24, 6, 0.5, -24, 3, 0.5, -24, 3, -0.5, -24, 6, 0.5, -24, 3, -0.5, -24, 6, -0.5, -24, 3, -0.5, 7, 3, -0.5, -24, 3, 0.5, -24, 3, -0.5, 7, 3, 0.5, -24, 3, 0.5, 7, 3, -0.5, 7, 6, -0.5, 7, 6, -0.5, -24, 3, -0.5, 7, 6, -0.5, -24, 3, -0.5, -24, 3, 0.5, 7, 3, 0.5, -24, 6, 0.5, -24, 3, 0.5, 7, 6, 0.5, -24, 6, 0.5, 7, 6, 0.5, 7, 6, 0.5, -24, 6, -0.5, -24, 6, 0.5, 7, 6, -0.5, -24, 6, -0.5, 7, 6, -0.5, 7, 3, -0.5, 7, 3, 0.5, 7, 6, -0.5, 7, 3, 0.5, 7, 6, 0.5, 7, 28, 0.5, 4, 6, 0.5, 4, 6, -0.5, 4, 28, 0.5, 4, 6, -0.5, 4, 28, -0.5, 4, 6, -0.5, 7, 6, -0.5, 4, 6, 0.5, 4, 6, -0.5, 7, 6, 0.5, 4, 6, 0.5, 7, 6, -0.5, 7, 28, -0.5, 7, 28, -0.5, 4, 6, -0.5, 7, 28, -0.5, 4, 6, -0.5, 4, 6, 0.5, 7, 6, 0.5, 4, 28, 0.5, 4, 6, 0.5, 7, 28, 0.5, 4, 28, 0.5, 7, 28, 0.5, 7, 28, 0.5, 4, 28, -0.5, 4, 28, 0.5, 7, 28, -0.5, 4, 28, -0.5, 7, 28, -0.5, 7, 6, -0.5, 7, 6, 0.5, 7, 28, -0.5, 7, 6, 0.5, 7, 28, 0.5, 7, 31, 0.5, -27, 28, 0.5, -27, 28, -0.5, -27, 31, 0.5, -27, 28, -0.5, -27, 31, -0.5, -27, 28, -0.5, 7, 28, -0.5, -27, 28, 0.5, -27, 28, -0.5, 7, 28, 0.5, -27, 28, 0.5, 7, 28, -0.5, 7, 31, -0.5, 7, 31, -0.5, -27, 28, -0.5, 7, 31, -0.5, -27, 28, -0.5, -27, 28, 0.5, 7, 28, 0.5, -27, 31, 0.5, -27, 28, 0.5, 7, 31, 0.5, -27, 31, 0.5, 7, 31, -0.5, 7, 28, -0.5, 7, 28, 0.5, 7, 31, -0.5, 7, 28, 0.5, 7, 31, 0.5, 7, 31, 0.5, 7, 31, 0.5, -27, 31, -0.5, -27, 31, 0.5, 7, 31, -0.5, -27, 31, -0.5, 7)
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_p3hvv"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_lpghw"]
+render_priority = 0
+shader = ExtResource("22_3q7nn")
+shader_parameter/dof_enabled = false
+shader_parameter/dof_focus_distance = 3.00000011875
+shader_parameter/dof_falloff = 6.0
+shader_parameter/dof_blur_radius = 0.006
+shader_parameter/color_depth = 4.000000095
+shader_parameter/dither_strength = 0.6
+shader_parameter/banding_enabled = true
+shader_parameter/banding_steps = 8.0
+shader_parameter/banding_strength = 0.50000002375
+shader_parameter/chromatic_enabled = true
+shader_parameter/chromatic_aberration = 0.004
+shader_parameter/vignette_enabled = true
+shader_parameter/vignette_strength = 0.50000002375
+shader_parameter/vignette_softness = 0.8000000363700599
+shader_parameter/saturation_enabled = true
+shader_parameter/saturation = 1.3
+shader_parameter/interlace_enabled = true
+shader_parameter/interlace_strength = 0.30000001425
+shader_parameter/tint_enabled = true
+shader_parameter/tint_color = Color(1.05, 0.95, 0.88, 1)
 
 [sub_resource type="QuadMesh" id="QuadMesh_kvorr"]
 
@@ -292,7 +320,7 @@ shader_parameter/flicker_strength = 0.04
 shader_parameter/flicker_speed = 12.0
 shader_parameter/rec_pulse_speed = 1.4
 shader_parameter/rec_color = Color(1, 0.15, 0.15, 1)
-shader_parameter/rec_dot_radius = 0.014
+shader_parameter/rec_dot_radius = 0.02000000095
 shader_parameter/rec_dot_uv = Vector2(0.06, 0.06)
 
 [sub_resource type="Animation" id="Animation_sryx3"]
@@ -348,6 +376,10 @@ _data = {
 
 [node name="Metro1" type="Node3D" unique_id=1736708119]
 script = ExtResource("1_drku4")
+npc_scenes = Array[PackedScene]([ExtResource("2_3q7nn"), ExtResource("3_p3hvv"), ExtResource("4_lpghw"), ExtResource("5_ilanp"), ExtResource("6_gy5qg")])
+npc_weights = Array[float]([0.1, 0.33, 0.33, 0.33, 0.33])
+starting_npc_count = 12
+safe_spawn_range = 15.0
 debug_show_corners = false
 
 [node name="Ambiance" type="AudioStreamPlayer" parent="." unique_id=1301785252]
@@ -355,11 +387,6 @@ stream = SubResource("AudioStreamRandomizer_et2qy")
 volume_db = -15.0
 autoplay = true
 script = ExtResource("5_ug0ud")
-
-[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=933880672]
-transform = Transform3D(-0.8660254, -0.43301278, 0.25, 0, 0.49999997, 0.86602545, -0.50000006, 0.75, -0.43301266, 0, 0, 0)
-visible = false
-shadow_enabled = true
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=122084999]
 environment = SubResource("Environment_ddw0b")
@@ -499,8 +526,13 @@ collision_mask = 0
 [node name="entity_8_mesh_instance" type="MeshInstance3D" parent="NavigationRegion3D/FuncGodotMap/entity_8_func_floor" unique_id=1856574582]
 mesh = SubResource("ArrayMesh_cql20")
 
+[node name="StaticBody3D" type="StaticBody3D" parent="NavigationRegion3D/FuncGodotMap/entity_8_func_floor/entity_8_mesh_instance" unique_id=43102413]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="NavigationRegion3D/FuncGodotMap/entity_8_func_floor/entity_8_mesh_instance/StaticBody3D" unique_id=1150532231]
+shape = SubResource("ConcavePolygonShape3D_3q7nn")
+
 [node name="entity_8_occluder_instance" type="OccluderInstance3D" parent="NavigationRegion3D/FuncGodotMap/entity_8_func_floor" unique_id=438608887]
-occluder = SubResource("ArrayOccluder3D_shhil")
+occluder = ExtResource("23_p3hvv")
 
 [node name="entity_8_collision_shape" type="CollisionShape3D" parent="NavigationRegion3D/FuncGodotMap/entity_8_func_floor" unique_id=288786642]
 shape = SubResource("ConcavePolygonShape3D_ai16f")
@@ -535,65 +567,18 @@ update_scale = false
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 1.711, -1)
 spring_length = 0.0
 script = ExtResource("20_pcam")
+shuffle_fov_reduction = null
+shuffle_fov_speed = null
 
 [node name="Camera3D" type="Camera3D" parent="NavigationRegion3D/PlayerCamera" unique_id=1179018285]
-fov = 90.0
+fov = 38.8
 
-[node name="NPCCharacter" parent="NavigationRegion3D" unique_id=1919134681 instance=ExtResource("8_svs80")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0, -24)
-
-[node name="Brain" type="Node" parent="NavigationRegion3D/NPCCharacter" unique_id=1339451774]
-script = ExtResource("19_m7ql2")
-config = ExtResource("22_greeter")
-
-[node name="NPCCharacter2" parent="NavigationRegion3D" unique_id=2133715270 instance=ExtResource("8_svs80")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0, -39)
-
-[node name="Brain" type="Node" parent="NavigationRegion3D/NPCCharacter2" unique_id=324579119]
-script = ExtResource("19_m7ql2")
-config = ExtResource("23_commuter")
-
-[node name="NPCCharacter3" parent="NavigationRegion3D" unique_id=1641043877 instance=ExtResource("8_svs80")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0, -52.5)
-
-[node name="Brain" type="Node" parent="NavigationRegion3D/NPCCharacter3" unique_id=817689988]
-script = ExtResource("19_m7ql2")
-config = ExtResource("23_commuter")
-
-[node name="NPCCharacter7" parent="NavigationRegion3D" unique_id=71114608 instance=ExtResource("8_svs80")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0, -50.472874)
-
-[node name="Brain" type="Node" parent="NavigationRegion3D/NPCCharacter7" unique_id=1747428263]
-script = ExtResource("19_m7ql2")
-config = ExtResource("23_commuter")
-
-[node name="NPCCharacter8" parent="NavigationRegion3D" unique_id=1192824832 instance=ExtResource("8_svs80")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.4369965, 0, -49.61233)
-
-[node name="Brain" type="Node" parent="NavigationRegion3D/NPCCharacter8" unique_id=861550226]
-script = ExtResource("19_m7ql2")
-config = ExtResource("23_commuter")
-
-[node name="NPCCharacter4" parent="NavigationRegion3D" unique_id=957812564 instance=ExtResource("8_svs80")]
-transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 9.5, 0, -52.5)
-
-[node name="Brain" type="Node" parent="NavigationRegion3D/NPCCharacter4" unique_id=1604361335]
-script = ExtResource("19_m7ql2")
-config = ExtResource("24_aggr")
-
-[node name="NPCCharacter5" parent="NavigationRegion3D" unique_id=214608436 instance=ExtResource("8_svs80")]
-transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 23.5, 0, -52.5)
-
-[node name="Brain" type="Node" parent="NavigationRegion3D/NPCCharacter5" unique_id=2014586776]
-script = ExtResource("19_m7ql2")
-config = ExtResource("25_stubb")
-
-[node name="NPCCharacter6" parent="NavigationRegion3D" unique_id=1201259432 instance=ExtResource("8_svs80")]
-transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 15, 0, -53.5)
-
-[node name="Brain" type="Node" parent="NavigationRegion3D/NPCCharacter6" unique_id=1633935554]
-script = ExtResource("19_m7ql2")
-config = ExtResource("23_commuter")
+[node name="PSXShader" type="MeshInstance3D" parent="NavigationRegion3D/PlayerCamera/Camera3D" unique_id=773972041]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, -0.100000024)
+mesh = SubResource("PlaneMesh_p3hvv")
+surface_material_override/0 = SubResource("ShaderMaterial_lpghw")
+script = ExtResource("24_psxfx")
+vignette_shuffle = 0.8
 
 [node name="ThreeChairBench" parent="NavigationRegion3D" unique_id=1494757051 instance=ExtResource("10_cfpln")]
 transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, -1.8000001, 0.5, -21)

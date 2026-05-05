@@ -23,3 +23,4 @@ buildwebindex.*
 .env
 excalidraw.log
 Resources/Maps/autosave
+/Build/Web
