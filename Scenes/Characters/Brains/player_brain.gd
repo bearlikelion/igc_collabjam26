@@ -100,7 +100,11 @@ func get_end_of_rail_action() -> int:
 # ahead in the same lane (cap at peer speed, no catch-up).
 func get_move_speed() -> float:
 	if _waiting_for != null:
-		if not is_instance_valid(_waiting_for) or not _waiting_for.is_runner_paused():
+		# Clear the wait once the peer is shuffle-engageable again (RUNNING +
+		# lane-settled). A peer that's mid-tween is RUNNING but NOT engageable,
+		# so we keep halting until their tween completes — then the encounter
+		# scan's next tick fires `start_shuffle` from the encounter handler.
+		if not is_instance_valid(_waiting_for) or _waiting_for.is_shuffle_engageable():
 			_waiting_for = null
 		else:
 			return 0.0
@@ -154,31 +158,28 @@ func _on_encounter_detected(other: Pawn, distance: float) -> void:
 	if other.is_routing_to_finish_point() == pawn.is_routing_to_finish_point():
 		_waiting_for = null
 		return
-	# Busy NPC (already in another shuffle): stop and wait until they free up.
-	# Pawn.start_shuffle would no-op via its hard guard, but we want the
-	# visible halt and the run_speed reset so the player doesn't accelerate
-	# during the wait.
-	if other.is_runner_paused():
+	# Opposing pawn already in another shuffle: halt and wait. Their shuffle
+	# resolves in <0.5s; `_waiting_for` clears the moment they're RUNNING +
+	# lane-settled and the encounter scan's next tick re-engages.
+	if other.is_shuffle_active():
 		_waiting_for = other
 		pawn.set_run_speed(config.start_speed)
 		return
 	_waiting_for = null
-	# Engagement gate: defer shuffle until both pawns are settled in their
-	# lane. Encounter scan keeps firing every frame, so the moment the in-flight
-	# tween completes the next signal re-engages cleanly. Without this gate the
-	# old `_snap_tween_to_target_if_active` path produced a visible teleport.
-	if not pawn.is_lane_settled() or not other.is_lane_settled():
+	# Other paused states (KNOCKED_DOWN, PARKED, FINISHED, DISABLED): no
+	# shuffle, just walk past. Encounter scan re-fires, but with a paused
+	# peer we never engage — the body is geometry to navigate around.
+	if other.is_runner_paused():
 		return
-	# Entry-distance gate: shuffle only initiates inside `inner_shuffle_radius`.
-	# Outside, the encounter signal still fires each frame as the gap closes,
-	# so we engage the moment we're close enough. This bounds the entry gap
-	# so slow-approach math (`Pawn._compute_shuffle_speed`) gets bounded inputs.
+	# Outside the engagement zone: keep closing. Encounter scan re-fires
+	# every frame, so we engage the moment we're inside.
 	if distance > config.inner_shuffle_radius:
 		return
-	# Forward the latest signal's distance — never cache. If the brain ever
-	# defers `start_shuffle` (e.g. waiting for tween settle), this `distance`
-	# is from the most recent encounter scan, not the first one.
-	pawn.start_shuffle(other, distance)
+	# Inside the zone with an opposing RUNNING pawn — start the shuffle in
+	# the encounter lane. `force=true` cancels any in-flight tween or held
+	# lean on either side and snaps both pawns upright in their origin
+	# lanes before the choice window opens.
+	pawn.start_shuffle(other, distance, true)
 
 
 # Press handler — set lane intent. Cancels intent if both keys are now held.

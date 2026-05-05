@@ -163,15 +163,15 @@ func _on_encounter_detected(other: Pawn, distance: float) -> void:
 		_waiting_for = null
 		_clear_pre_shuffle_tell()
 		return
-	# Transiently busy opposing NPC (currently in another shuffle, will resolve
-	# in <0.5s): stop and wait. get_move_speed zeros out until the peer is
-	# RUNNING again. Encounter scan keeps firing, so once the peer frees up the
-	# next call hits the active branch.
+	# Transiently busy opposing NPC (mid-shuffle): stop and wait. Resolves
+	# in <0.5s; once they're shuffle-engageable again `get_move_speed`'s
+	# auto-clear releases us and the next encounter tick hits the live
+	# branch.
 	#
-	# Other paused states (KNOCKED_DOWN ~2.5s, PARKED forever) do NOT halt — we
-	# fall through to the stance-roll branch and swerve around the body.
-	# `_roll_stance` suppresses stay_chance for paused peers so the AI commits
-	# to ±1 instead of phasing through.
+	# Other paused states (KNOCKED_DOWN ~2.5s, PARKED forever) do NOT halt —
+	# we fall through to the stance-roll branch and swerve around the body.
+	# `_roll_stance` suppresses stay_chance for paused peers so the AI
+	# commits to ±1 instead of phasing through.
 	if other.is_in_group("npc") and other.is_shuffle_active():
 		_waiting_for = other
 		pawn.set_run_speed(config.start_speed)
@@ -202,26 +202,22 @@ func _on_encounter_detected(other: Pawn, distance: float) -> void:
 	_pre_shuffle_last_msec = Time.get_ticks_msec()
 	_pre_shuffle_last_distance = distance
 
-	# Outside the inner radius: keep telegraphing; don't initiate shuffle yet.
+	# Outside the engagement zone: keep telegraphing; don't initiate yet.
 	# Gives both pawns a real run-up window to read each other's tells.
 	if distance > config.inner_shuffle_radius:
 		return
 
-	# Inside the inner radius: AI-vs-AI engages the shuffle protocol. Player
-	# initiates from PlayerBrain — we just keep telegraphing and wait for
-	# them to start the shuffle. Paused peers (knocked-down player, busy NPC
-	# handled above) — telegraph + preempt is the only response, no shuffle.
-	if other.is_in_group("npc") and not other.is_runner_paused():
+	# Inside the engagement zone: AI-vs-AI engages the shuffle protocol.
+	# Player initiates from PlayerBrain — we just keep telegraphing and
+	# wait for them to start the shuffle.
+	if other.is_in_group("npc"):
 		if Time.get_ticks_msec() < _avoidance_until_msec:
 			return
-		# Engagement gate: defer shuffle until both pawns are lane-settled.
-		# Encounter scan re-fires next frame; no buffering needed.
-		if not pawn.is_lane_settled() or not other.is_lane_settled():
-			return
-		# Forward latest signal's distance — never cache. Brain may defer
-		# `start_shuffle` (lane-settle wait, avoidance cooldown), so always
-		# pass the current scan's gap, not the first one.
-		pawn.start_shuffle(other, distance)
+		# `force=true` cancels any in-flight tween or held lean on either
+		# side and snaps both pawns upright in their origin lanes before
+		# the choice window opens. Same path whether either pawn is mid-
+		# tween or upright — the encounter is the trigger.
+		pawn.start_shuffle(other, distance, true)
 
 
 # Environment obstacle in the current lane — swerve via the clearance ranker
@@ -356,11 +352,20 @@ func _set_stance(value: int) -> void:
 	pawn.lean(clamped)
 	match pawn.locomotion:
 		Pawn.LocomotionState.RUNNING:
-			# Inside inner_shuffle_radius the run-up positioning window is over;
-			# the shuffle is about to engage and a late lane retarget would
-			# trigger a tween bounce that visually offsets the shuffle entry
-			# from the peer. Lean still broadcasts above (peers can read the
-			# stance shift); only the lane commit is suppressed.
+			# Mid-tween: the body is already committed to a swerve. Don't
+			# queue a new lane change — that would either preempt (extends
+			# the tween) or queue and immediately drain when the current
+			# tween finishes (the visual flicker the user reported as
+			# "stance reroll thrash"). Lean already broadcast above so
+			# peers see the stance update; the next reroll tick after the
+			# tween settles will issue the lane commit if still wanted.
+			if pawn.is_tween_active():
+				return
+			# Inside inner_shuffle_radius the run-up positioning window is
+			# over; the shuffle is about to engage and a late lane retarget
+			# would trigger a tween bounce that visually offsets the
+			# shuffle entry from the peer. Lean still broadcasts (peers
+			# can read the stance shift); only the lane commit is suppressed.
 			if _pre_shuffle_other != null \
 					and _pre_shuffle_last_distance <= config.inner_shuffle_radius:
 				return
@@ -369,11 +374,6 @@ func _set_stance(value: int) -> void:
 			# a prior re-roll. Same call when target == current also no-ops
 			# the lane tween logic itself. See Pawn.request_lane_change.
 			var target: int = clampi(current + clamped, 0, Pawn.LANE_COUNT - 1)
-			# If a prior reroll's tween is still running the request queues
-			# instead of preempting (which would extend the tween and desync
-			# shuffle entry). Queue retries every frame. Pawn-side
-			# `_commit_lane_change` adds the telegraph prefix that guarantees
-			# a held lean before the lateral motion starts.
 			pawn.request_lane_change(target)
 		Pawn.LocomotionState.SHUFFLING:
 			pawn.set_shuffle_telegraph(clamped)
@@ -531,9 +531,13 @@ func get_destination() -> Node3D:
 
 
 func get_move_speed() -> float:
-	# Stalled behind a busy peer? Hold position. Auto-clear when peer frees.
+	# Stalled behind a busy peer? Hold position. Auto-clear once the peer is
+	# shuffle-engageable (RUNNING + lane-settled) — a peer mid-tween is
+	# RUNNING but NOT engageable, so we keep halting until their tween
+	# completes. Encounter scan re-fires next frame and the live branch
+	# of `_on_encounter_detected` engages the shuffle.
 	if _waiting_for != null:
-		if not is_instance_valid(_waiting_for) or not _waiting_for.is_runner_paused():
+		if not is_instance_valid(_waiting_for) or _waiting_for.is_shuffle_engageable():
 			_waiting_for = null
 		else:
 			return 0.0

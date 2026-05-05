@@ -477,18 +477,33 @@ func _is_lane_change_safe(target_lane: int) -> bool:
 # so brains can fall back to waiting / swerving without crashing the protocol
 # (a 2nd `begin_subway_shuffle` call on a busy callee would silently destroy
 # their existing shuffle bookkeeping).
-func start_shuffle(other: Pawn, gap: float) -> void:
+#
+# `force` = panic engagement: cancel any lean / in-flight tween on both
+# sides (rewind to origin lane, drop lean intent) and start the shuffle
+# window from upright. Brains pass true when the encounter distance has
+# closed past the safe-wait threshold (collision imminent) — without
+# `force` the gate would silently drop the encounter and the pawns would
+# slide past each other. Cancel-rather-than-complete keeps the leaner in
+# the lane the player visually saw them in when initiating the shuffle.
+func start_shuffle(other: Pawn, gap: float, force: bool = false) -> void:
 	if locomotion == LocomotionState.SHUFFLING or locomotion == LocomotionState.KNOCKED_DOWN or other == null:
 		return
 	if other.locomotion != LocomotionState.RUNNING:
 		return
-	# Engagement gate: both pawns must be settled in their lane (no in-flight
-	# tween) before shuffle engages. Brains should gate before reaching this
-	# call (PlayerBrain / AIBrain check `is_lane_settled` in
-	# `_on_encounter_detected`); this guard is belt-and-braces. The encounter
-	# scan keeps firing each frame, so the next signal post-tween-settles
-	# re-engages naturally.
-	if not is_lane_settled() or not other.is_lane_settled():
+	# Engagement gate: both pawns must be settled in their lane unless the
+	# caller forces engagement (collision imminent — see `force` above). The
+	# encounter scan re-fires each frame so the non-forced path retries the
+	# moment the in-flight tween completes.
+	if force:
+		# Cancel any swerve intent on both sides — rewind in-flight tweens
+		# to the lane they started from, drop held lean direction. Puts the
+		# bodies upright in their original lanes for the shuffle window;
+		# the telegraph game decides who steps where from there.
+		_cancel_lane_tween()
+		_cancel_lean_intent()
+		other._cancel_lane_tween()
+		other._cancel_lean_intent()
+	elif not is_lane_settled() or not other.is_lane_settled():
 		return
 	var choice_time: float = _get_shuffle_choice_time()
 	shuffle = Shuffle.new()
@@ -739,6 +754,53 @@ func get_lane_position() -> float:
 # path produced when the encounter signal fired during a lane change.
 func is_lane_settled() -> bool:
 	return locomotion == LocomotionState.RUNNING and _lane_tween_phase == LaneTweenPhase.IDLE
+
+
+# True when this pawn can be engaged in a fresh shuffle right now: RUNNING
+# locomotion AND no in-flight lane tween. Brains read this in their encounter
+# handler — an opposing pawn that ISN'T shuffle-engageable forces us to halt
+# (`_waiting_for`) instead of silently dropping the encounter, so two pawns
+# can't slide past each other while one is mid-tween.
+func is_shuffle_engageable() -> bool:
+	return is_lane_settled()
+
+
+# Cancel an in-flight lane tween: rewind `_lane_position` and `_target_lane`
+# to the *origin* of the tween, not the destination. Used by force-engaged
+# shuffles to "cancel the lean" of a pawn that was about to swerve into
+# (or out of) the encounter lane. The other pawn's encounter scan caught
+# them at `_target_lane` (per `_runner_physical_lane`), so rewinding them
+# to `_tween_from` puts them back in the lane they originally held — which
+# matches the position the player visually expects when initiating a
+# shuffle on a leaning pawn. Visually a small jolt, but only fires when
+# the alternative is sliding past each other.
+#
+# Resets phase to IDLE; emits the completion signal targeting the rewound
+# lane so listeners (camera, brains) see a settle at the origin lane.
+func _cancel_lane_tween() -> void:
+	if _lane_tween_phase == LaneTweenPhase.IDLE:
+		return
+	var origin_lane: int = clampi(roundi(_tween_from), 0, LANE_COUNT - 1)
+	_target_lane = origin_lane
+	_lane_position = float(origin_lane)
+	_tween_from = float(origin_lane)
+	_lane_tween_phase = LaneTweenPhase.IDLE
+	_lane_tween_time_left = 0.0
+	_tween_elapsed = 0.0
+	_apply_visual_lean()
+	lane_change_completed.emit(origin_lane)
+
+
+# Drop any held brain-intent lean. Pairs with `_cancel_lane_tween` on
+# force-engage: a pawn that was leaning (committed to swerving into our
+# lane / out of the encounter lane) gets snapped back to upright before
+# the shuffle window opens, so the body posture matches "we're playing
+# the shuffle game now" instead of trailing the canceled swerve.
+func _cancel_lean_intent() -> void:
+	if lean_direction != 0:
+		lean_direction = 0
+		lean_changed.emit(0)
+	_apply_visual_lean()
 
 
 # Shuffle window (s, wall-clock). Read from MetroMovement so every Pawn agrees
