@@ -59,6 +59,13 @@ var _pre_shuffle_last_msec: int = 0
 var _pre_shuffle_last_distance: float = INF
 const PRE_SHUFFLE_STALE_MS: int = 100
 
+# Buffer in rail-meters between the obstacle and where the dodge tween starts.
+# Used to shrink the telegraph prefix when an obstacle is too close for the
+# full lead time (Stubborn detects benches at 0.5 m and walks at 1.4 m/s —
+# can't afford a 300 ms prefix or it'd walk into the bench before the dodge
+# tween starts). The Pawn-side _commit_lane_change clamps to 0.
+const OBSTACLE_TELEGRAPH_SAFETY_MARGIN: float = 0.1
+
 # Wall-clock timestamp of the next stance reroll consideration. Bumped by
 # reaction_period_ms each tick whether we re-roll or stubbornly skip, so
 # stubbornness biases the *content* of the tick (skip vs roll) without
@@ -221,12 +228,19 @@ func _on_encounter_detected(other: Pawn, distance: float) -> void:
 # instead of trusting the signal's pre-shuffled candidates. The signal still
 # carries them as an obstacle-only filter, but registry-aware ranking also
 # considers other pawns and applies the min_clearance floor.
-func _on_obstacle_detected(_blocker: Node, _distance: float, in_lane: int, _candidate_lanes: Array[int]) -> void:
+#
+# Close obstacles can't afford the default telegraph prefix (Stubborn detects
+# benches at 0.5 m, walks at 1.4 m/s — 300 ms standing still would consume
+# 0.42 m before the dodge tween even starts). We pass the available distance
+# budget to the Pawn-side `_commit_lane_change`, which shrinks the telegraph
+# prefix to fit. INF on non-obstacle paths = "use the full default."
+func _on_obstacle_detected(_blocker: Node, distance: float, in_lane: int, _candidate_lanes: Array[int]) -> void:
 	if Time.get_ticks_msec() < _avoidance_until_msec:
 		return
 	var clear_lane: int = _pick_clear_lane(in_lane)
 	if clear_lane != in_lane:
-		_request_adjacent_lane_change(clear_lane)
+		var prefix_budget: float = maxf(distance - OBSTACLE_TELEGRAPH_SAFETY_MARGIN, 0.0)
+		_request_adjacent_lane_change(clear_lane, prefix_budget)
 		_avoidance_until_msec = Time.get_ticks_msec() + int(config.avoidance_cooldown * 1000.0)
 
 
@@ -355,10 +369,12 @@ func _set_stance(value: int) -> void:
 			# a prior re-roll. Same call when target == current also no-ops
 			# the lane tween logic itself. See Pawn.request_lane_change.
 			var target: int = clampi(current + clamped, 0, Pawn.LANE_COUNT - 1)
-			# Throttled: if a prior reroll's tween is still running the request
-			# queues instead of preempting (which would extend the tween and
-			# desync shuffle entry). Queue retries every frame post-cooldown.
-			pawn.request_lane_change_throttled(target)
+			# If a prior reroll's tween is still running the request queues
+			# instead of preempting (which would extend the tween and desync
+			# shuffle entry). Queue retries every frame. Pawn-side
+			# `_commit_lane_change` adds the telegraph prefix that guarantees
+			# a held lean before the lateral motion starts.
+			pawn.request_lane_change(target)
 		Pawn.LocomotionState.SHUFFLING:
 			pawn.set_shuffle_telegraph(clamped)
 
@@ -371,21 +387,23 @@ func _set_stance(value: int) -> void:
 # discarding the picker's judgment: the next picker tick re-evaluates from the
 # new lane and steps again if the goal lane is still further. The stance system
 # (`_set_stance`) already produces ±1 targets and bypasses this helper.
-func _request_adjacent_lane_change(target_lane: int) -> void:
+#
+# `max_prefix_meters` is the rail-distance the pawn can afford to advance
+# during the telegraph prefix before the dodge tween must start. INF
+# (default) tells the Pawn-side telegraph to use its full configured prefix;
+# obstacle dodge passes the actual gap so close benches shrink the prefix
+# to fit.
+func _request_adjacent_lane_change(target_lane: int, max_prefix_meters: float = INF) -> void:
 	var current: int = pawn.get_current_lane()
 	var step: int = clampi(target_lane - current, -1, 1)
 	if step == 0:
 		return
-	# Lean before commit so peers reading `lean_direction` get a one-frame
-	# tell. Pickers (overtake / obstacle / random-lane) used to swerve with
-	# no body tell — same path as the stance reroll now.
-	pawn.lean(step)
-	# Throttled like the stance reroll path: if a prior lane change is still
-	# tweening, queue instead of preempting. Each picker (overtake, obstacle,
-	# random-lane) has its own multi-second avoidance cooldown that's far
-	# longer than lane_tween_duration, so this throttle rarely activates —
-	# but keeps the lane-commit surface uniform with `_set_stance`.
-	pawn.request_lane_change_throttled(current + step)
+	# Same Pawn API as the player path. If a prior lane change is still
+	# tweening, the request queues instead of preempting. Pawn-side
+	# `_commit_lane_change` owns the telegraph prefix — every lane change
+	# starts with a held lean before the lateral motion begins, regardless
+	# of caller.
+	pawn.request_lane_change(current + step, max_prefix_meters)
 
 
 # Lane is "clear enough" for an AI dodge if its clearance meets min_clearance.

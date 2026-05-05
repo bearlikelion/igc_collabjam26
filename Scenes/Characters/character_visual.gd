@@ -32,11 +32,18 @@ const MOTION_STATES: Array[int] = [
 
 @export var walk_speed_threshold: float = 2.5
 @export var playback_fade_time: float = 0.15
-@export var torso_lean_amount: float = 0.3
-@export var torso_lean_speed: float = 3.0
+## Peak lean angle in radians. ~0.5 rad ≈ 28°: dramatic and unmistakable. The
+## body tilts in z (lateral lean) by `torso_lean_amount × _torso_lean_direction`.
+@export var torso_lean_amount: float = 0.5
+## Lerp speed (radians/second-ish). Higher = snappier. 8.0 reaches ~95% of
+## target in ~0.4s at 60fps.
+@export var torso_lean_speed: float = 8.0
 ## When true, lean ignores Engine.time_scale so it stays snappy during bullet-time.
 ## Set false on NPCs so their lean feels slow and dramatic in bullet-time.
 @export var lean_ignore_time_scale: bool = true
+## When true, every direction change emits a `[lean]` print so we can verify
+## the intent is reaching the visual layer. ON during the lean-tuning pass.
+@export var lean_debug_log: bool = true
 @export var skeleton: Skeleton3D
 @export var animation_player: AnimationPlayer
 
@@ -45,7 +52,6 @@ const MOTION_STATES: Array[int] = [
 
 var _playback: AnimationNodeStateMachinePlayback
 var _state: int = MotionState.WALK
-var _torso_bone_index: int = -1
 var _current_torso_lean: float = 0.0
 var _state_lock_time: float = 0.0
 var _locked_state: int = -1
@@ -53,13 +59,11 @@ var _torso_lean_direction: int = 0
 
 
 # Build the reusable animation state machine after child nodes are ready.
+# We rotate `model_root` (a plain Node3D parent of the rig) rather than
+# overriding a bone pose — sidesteps the AnimationTree clobber entirely and
+# works regardless of rig export naming.
 func _ready() -> void:
 	process_priority = 100
-	if skeleton != null:
-		_torso_bone_index = skeleton.find_bone("Spine")
-	if _torso_bone_index < 0:
-		pass
-		# push_warning("CharacterVisual for could not find torso bone for lean.")
 	_force_locomotion_loop()
 	_configure_animation_tree()
 	play_walk()
@@ -90,19 +94,21 @@ func set_move_speed(speed: float) -> void:
 		play_walk()
 
 
-# Play the normal forward walking state.
+# Play the normal forward walking state. Lean direction is owned by Pawn
+# (driven via `set_torso_lean_only`) and is independent of locomotion clip
+# choice — the spine z-override rides on top of the WALK clip. Don't reset
+# it here, or per-frame `Pawn._tick_running` calls to `set_move_speed` will
+# zero out a brain's intent every physics tick and the body never tilts.
 func play_walk() -> void:
 	if _is_recovery_state_locked():
 		return
-	_torso_lean_direction = 0
 	_travel(MotionState.WALK)
 
 
-# Play the faster locomotion state.
+# Faster locomotion clip — same independence from torso lean as `play_walk`.
 func play_sprint() -> void:
 	if _is_recovery_state_locked():
 		return
-	_torso_lean_direction = 0
 	_travel(MotionState.SPRINT)
 
 
@@ -110,7 +116,6 @@ func play_sprint() -> void:
 func play_interact_left() -> void:
 	if _is_recovery_state_locked():
 		return
-	_torso_lean_direction = -1
 	_travel(MotionState.INTERACT_LEFT)
 	_lock_state_for_animation(MotionState.INTERACT_LEFT)
 
@@ -119,32 +124,36 @@ func play_interact_left() -> void:
 func play_interact_right() -> void:
 	if _is_recovery_state_locked():
 		return
-	_torso_lean_direction = 1
 	_travel(MotionState.INTERACT_RIGHT)
 	_lock_state_for_animation(MotionState.INTERACT_RIGHT)
 
 
-# Set just the torso lean direction without changing animation state. Used by
-# AI brains to broadcast a pre-shuffle tell during run-up — body keeps walking
-# while the spine angles toward the side the AI plans to dodge.
+# Set the lean direction without changing animation state. Used by Pawn to
+# drive both the brain-intent lean and the lane-tween's step direction.
+# Body keeps walking; `model_root.rotation.z` lerps toward the new target.
 func set_torso_lean_only(direction: int) -> void:
-	_torso_lean_direction = clampi(direction, -1, 1)
+	var clamped: int = clampi(direction, -1, 1)
+	if clamped == _torso_lean_direction:
+		return
+	_torso_lean_direction = clamped
+	if lean_debug_log:
+		var owner_name: String = get_parent().name if get_parent() != null else "?"
+		print("[lean] %s dir=%d (state=%s)" % [owner_name, clamped, _get_state_name(_state)])
 
 
-# Play the death animation.
+# Play the death animation. Lean direction is preserved (the lerp drives to
+# 0 while DIE owns the upper body — see `_update_torso_lean`'s gate).
 func play_die() -> void:
 	if _state == MotionState.DIE and _is_recovery_state_locked():
 		return
-	_torso_lean_direction = 0
 	_travel(MotionState.DIE)
 	_lock_state_for_animation(MotionState.DIE)
 
 
-# Play the collision recovery animation.
+# Play the collision recovery animation. Same lean handling as `play_die`.
 func play_recover() -> void:
 	if _is_recovery_state_locked():
 		return
-	_torso_lean_direction = 0
 	_travel(MotionState.RECOVER)
 	_lock_state_for_animation(MotionState.RECOVER)
 
@@ -246,27 +255,33 @@ func _is_recovery_state_locked() -> bool:
 	return _locked_state == MotionState.DIE or _locked_state == MotionState.RECOVER
 
 
-# Apply a directional torso lean for side interactions. The lerp uses
-# wall-clock-equivalent delta (re-scaled out of Engine.time_scale) so the
-# lean still snaps in visible time during bullet-time shuffles. Without this,
-# Engine.time_scale = 0.2 stretches the lerp 5× and the lean barely moves
-# before the shuffle resolves.
+# Lerp the model_root's z-rotation toward `_torso_lean_direction × torso_lean_amount`.
+# This rotates the entire rig — sidesteps the AnimationTree-vs-bone-pose
+# fight entirely. Visually identical to a torso-only lean for our use case
+# (the rig is roughly upright; tilting the whole body in z reads as a body
+# lean). WALK / SPRINT clips don't drive z either, so they coexist cleanly.
+#
+# Skipped during clips that own the upper body (INTERACT_* / DIE / RECOVER)
+# so the punch / knockback / get-up poses aren't pre-tilted by leftover lean.
+#
+# `lean_ignore_time_scale` rescales delta by 1/time_scale so the lean still
+# snaps in visible wall-clock time during bullet-time shuffles. NPC scenes
+# set this false — granny's slow lean during bullet-time is part of the feel.
 func _update_torso_lean(delta: float) -> void:
-	if skeleton == null or _torso_bone_index < 0:
-		return
-
-	var target_lean: float = torso_lean_amount * float(_torso_lean_direction)
-
+	var owns_upper_body: bool = (
+		_state == MotionState.INTERACT_LEFT
+		or _state == MotionState.INTERACT_RIGHT
+		or _state == MotionState.DIE
+		or _state == MotionState.RECOVER
+	)
+	var target_lean: float = 0.0 if owns_upper_body else torso_lean_amount * float(_torso_lean_direction)
 	var effective_delta: float = delta / maxf(Engine.time_scale, 0.01) if lean_ignore_time_scale else delta
 	var weight: float = clamp(torso_lean_speed * effective_delta, 0.0, 1.0)
 	_current_torso_lean = lerp(_current_torso_lean, target_lean, weight)
 	if abs(_current_torso_lean) < 0.001 and is_zero_approx(target_lean):
 		_current_torso_lean = 0.0
-
-	var pose_rotation: Quaternion = skeleton.get_bone_pose_rotation(_torso_bone_index)
-	var pose_euler: Vector3 = pose_rotation.get_euler()
-	pose_euler.z = _current_torso_lean
-	skeleton.set_bone_pose_rotation(_torso_bone_index, Quaternion.from_euler(pose_euler))
+	if model_root != null:
+		model_root.rotation.z = _current_torso_lean
 
 
 # Return the state name used in the blend tree.

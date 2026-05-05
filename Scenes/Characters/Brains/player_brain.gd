@@ -200,16 +200,12 @@ func _on_lane_input_release() -> void:
 	if (pawn.can_move() or pawn.is_movement_blocked()) and not pawn.is_knocked_down() and not pawn.is_goal_reached():
 		var next_lane: int = clampi(pawn.get_current_lane() + _lane_intent, 0, Pawn.LANE_COUNT - 1)
 		if next_lane != pawn.get_current_lane():
-			# Lean immediately before the commit so peers reading
-			# `lean_direction` see the intent in the same physics frame the
-			# tween starts. The press-time lean already broadcast during the
-			# hold, but resetting to 0 right after release without a fresh
-			# direction-aligned lean would leave the commit frame neutral.
-			pawn.lean(_lane_intent)
-			# Throttled like AI: a rapid double-tap during an in-flight tween
-			# queues instead of preempting, so the visual swerve always
-			# completes one full lane segment before the next can start.
-			pawn.request_lane_change_throttled(next_lane)
+			# Player skips the telegraph prefix — the keyboard hold IS the
+			# telegraph. Adding 0.3s of standing-still-while-leaning before
+			# the swerve would also delay shuffle engagement past the point
+			# where opposing pawns collide. AI swerves keep the prefix
+			# (default INF clamps to the configured ratio).
+			pawn.request_lane_change(next_lane, 0.0)
 	_lane_intent = 0
 	pawn.lean(0)
 

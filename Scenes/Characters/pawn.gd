@@ -53,7 +53,7 @@ const LANE_COUNT: int = 3
 const START_LANE: int = int(LANE_COUNT / 2)
 
 # Top-level locomotion state. Mutually exclusive — one of these at a time.
-# Lane tween is a *substate* of RUNNING (tracked by _tween_active separately).
+# Lane tween is a *substate* of RUNNING (tracked by `_lane_tween_phase`).
 enum LocomotionState {
 	RUNNING,        # default; lane tween allowed
 	SHUFFLING,      # subway-shuffle window (initiator OR callee — see shuffle.is_initiator)
@@ -134,8 +134,21 @@ var brain: Brain
 var is_active_camera: bool = false
 var apply_bullet_time: bool = false
 
+## Print a `[lean.intent]` / `[lean.visual]` line whenever brain intent or
+## lane-tween phase changes the lean. Pairs with
+## `CharacterVisual.lean_debug_log` to trace where any disconnect is. ON by
+## default during the lean-tuning pass — toggle off in the Pawn scene's
+## export when the feel is dialed in.
+@export var lean_debug_log: bool = true
+
 @export_group("Lane Change")
 @export_range(0.05, 1.0, 0.01, "suffix:s") var lane_tween_duration: float = 0.30
+## Fraction of `lane_tween_duration` spent in the telegraph prefix — the body
+## leans toward the move direction without translating laterally. Lets peers
+## (and the player) read the lean before the swerve starts. 1.0 = telegraph
+## equal in length to the translation phase. Obstacle dodges shrink this when
+## the obstacle is too close to afford the full prefix.
+@export_range(0.0, 2.0, 0.05) var lane_change_telegraph_ratio: float = 1.0
 
 @export_group("Subway Shuffle")
 ## Fraction of the entry-time gap that BOTH pawns combined close across the
@@ -198,29 +211,32 @@ var locomotion: int = LocomotionState.RUNNING
 # Substate of KNOCKED_DOWN. Read only when locomotion == KNOCKED_DOWN.
 var knockdown_phase: int = KnockdownPhase.DOWN
 
-# Lane state. _tween_active is a substate of RUNNING (tween allowed concurrent
-# with running, cancelled when entering SHUFFLING / KNOCKED_DOWN).
+# Lane-tween phase. Substate of RUNNING (the tween is allowed concurrent with
+# running locomotion; cancelled when entering SHUFFLING / KNOCKED_DOWN).
+#   IDLE        — no lane change in flight; `_lane_position` is stable.
+#   TELEGRAPH   — body leans toward the target side and holds. Peers reading
+#                 `lean_direction` see the tell. `_lane_position` does not
+#                 move. Duration = `_lane_tween_time_left` (seconds).
+#   TRANSLATING — sqrt-eased lerp of `_lane_position` from `_tween_from` to
+#                 `_target_lane`. Duration tracked by `_tween_elapsed` against
+#                 `lane_tween_duration`.
+# `is_tween_active()` returns `phase != IDLE`. One write to cancel.
+enum LaneTweenPhase { IDLE, TELEGRAPH, TRANSLATING }
+var _lane_tween_phase: int = LaneTweenPhase.IDLE
+var _lane_tween_time_left: float = 0.0   # seconds remaining in TELEGRAPH
+
 var _target_lane: int = START_LANE
 var _lane_position: float = float(START_LANE)
 var _tween_from: float = float(START_LANE)
 var _tween_elapsed: float = 0.0
-var _tween_active: bool = false
 
-# Pending lane-change request that failed the occupancy gate. Retried every
-# physics frame in _tick_running — clears as soon as it commits or another
-# request_lane_change supersedes it. -1 = no pending request. Drives the
-# "expand and commit when clear" UX for player input AND shared by AI brains
-# (single retry path, identical surface). Cleared on locomotion exit from
-# RUNNING so stale intent doesn't leak across shuffle / knockdown.
+# Pending lane-change request that failed the in-flight gate or the occupancy
+# gate. Retried every physics frame via `_try_commit_queued_lane_change`. -1
+# = no pending request. Cleared on RUNNING exit so stale intent doesn't leak
+# across shuffle / knockdown. The queued request remembers its prefix budget
+# so a queued AI swerve drains with the right telegraph length.
 var _queued_lane_change: int = -1
-
-# Wall-clock cooldown after _commit_lane_change. While in the past, the
-# committed lane change is settled. While in the future, request_lane_change
-# (the unthrottled path) ignores it; request_lane_change_throttled defers the
-# request to _queued_lane_change instead of preempting the in-flight tween.
-# Used by AIBrain stance reroll to prevent back-to-back retargets from
-# extending the tween indefinitely. Player input is not throttled.
-var _lane_change_until_msec: int = 0
+var _queued_max_prefix_meters: float = INF
 
 # Knockdown timing. _recovery_time_left ticks down inside KNOCKED_DOWN; the
 # transition DOWN → RECOVERING fires when it reaches shuffle_get_up_time and
@@ -354,7 +370,7 @@ func _process(_delta: float) -> void:
 	# 0 speed when not RUNNING so headbob settles to neutral.
 	var effective_speed: float = run_speed if locomotion == LocomotionState.RUNNING else 0.0
 	camera_rig.set_speed(effective_speed)
-	camera_rig.set_tween_snapshot(_tween_active, _tween_from, float(_target_lane), get_tween_progress())
+	camera_rig.set_tween_snapshot(is_tween_active(), _tween_from, float(_target_lane), get_tween_progress())
 
 
 # Camera mouse-look + mouse-mode toggle, then forward to brain. Mouse handling
@@ -373,67 +389,65 @@ func _input(event: InputEvent) -> void:
 
 # --- Public API: Brain → Pawn (intent in) ---------------------------------
 
-# Brain commits to a discrete lane. Lane changes are only allowed while
-# RUNNING (tween is a substate of RUNNING). Gated by `_is_lane_change_safe` —
-# if the target lane has a same-direction occupant within the brain's
-# `min_peer_gap` ahead, the request queues and retries every physics frame
-# until safe. A subsequent `request_lane_change` overwrites the queue with
-# the new target. Calling with `target_lane == _target_lane` clears any
-# pending queue (cancel intent).
-func request_lane_change(target_lane: int) -> void:
+# THE lane-change entry point — used by both PlayerBrain and AIBrain. Every
+# lane change starts with a TELEGRAPH phase (body leans toward the target,
+# holds for ~lane_tween_duration × lane_change_telegraph_ratio) before the
+# lateral TRANSLATING phase. Peers reading `lean_direction` get the tell
+# before any sideways motion.
+#
+# Allowed only while RUNNING / BLOCKED (the tween is a substate of RUNNING).
+# Gated by `_is_lane_change_safe` — if the target lane has a same-direction
+# occupant within the brain's `min_peer_gap` ahead, the request queues and
+# retries every physics frame until safe. A subsequent `request_lane_change`
+# overwrites the queue with the new target. Calling with the target equal to
+# the current lane (and no tween in flight) clears any queued intent.
+#
+# `max_prefix_meters` clamps the telegraph length to a known distance budget
+# — used by obstacle dodge so a close bench still leaves time for the body
+# to lean rather than walking into it during the prefix. INF (default) =
+# use the full configured prefix. 0 = skip the prefix entirely (used by
+# shuffle resolution: the shuffle window already served as the telegraph,
+# so the resolution snaps directly into the swerve).
+func request_lane_change(target_lane: int, max_prefix_meters: float = INF) -> void:
 	if locomotion != LocomotionState.RUNNING and locomotion != LocomotionState.BLOCKED:
 		return
 	var clamped: int = clampi(target_lane, 0, LANE_COUNT - 1)
-	if clamped == _target_lane and not _tween_active:
+	if clamped == _target_lane and _lane_tween_phase == LaneTweenPhase.IDLE:
 		_queued_lane_change = -1
 		return
-	if _is_lane_change_safe(clamped):
-		_queued_lane_change = -1
-		_commit_lane_change(clamped)
-		return
-	_queued_lane_change = clamped
-
-
-# Throttled variant for AI stance reroll. Same surface as request_lane_change
-# but defers (queues) the request when `_lane_change_until_msec` has not yet
-# elapsed — i.e. an in-flight tween is still running from a recent commit. The
-# queue retries every physics frame in `_try_commit_queued_lane_change`, which
-# already respects the cooldown via the unthrottled path. Player input goes
-# through `request_lane_change` directly so rapid-tap stays snappy.
-func request_lane_change_throttled(target_lane: int) -> void:
-	if locomotion != LocomotionState.RUNNING and locomotion != LocomotionState.BLOCKED:
-		return
-	var clamped: int = clampi(target_lane, 0, LANE_COUNT - 1)
-	if clamped == _target_lane and not _tween_active:
-		_queued_lane_change = -1
-		return
-	if Time.get_ticks_msec() < _lane_change_until_msec:
+	# Defer when a prior tween is in flight OR the target lane is currently
+	# unsafe. Either way the queue drain (`_try_commit_queued_lane_change`)
+	# retries every physics frame; same surface for both deferral causes.
+	if _lane_tween_phase != LaneTweenPhase.IDLE or not _is_lane_change_safe(clamped):
 		_queued_lane_change = clamped
+		_queued_max_prefix_meters = max_prefix_meters
 		return
-	request_lane_change(clamped)
+	_queued_lane_change = -1
+	_commit_lane_change(clamped, max_prefix_meters)
 
 
-# Per-frame retry for a queued lane change. Called from _tick_running so the
-# pawn auto-commits the moment the target lane clears. No-ops when nothing is
-# queued; clears the queue if it has been satisfied externally (e.g., a
-# direct shuffle resolution moved us to the requested lane).
+# Per-frame retry for a queued lane change. Called from `_tick_running` (and
+# `_tick_blocked` via the BLOCKED-state branch in `_physics_process`) so the
+# pawn auto-commits the moment the prior tween settles AND the target lane
+# clears. No-ops when nothing is queued; clears the queue if the queued
+# target was already satisfied externally (e.g. shuffle resolution moved us
+# there directly).
 func _try_commit_queued_lane_change() -> void:
 	if _queued_lane_change < 0:
 		return
-	if _queued_lane_change == _target_lane and not _tween_active:
+	if _queued_lane_change == _target_lane and _lane_tween_phase == LaneTweenPhase.IDLE:
 		_queued_lane_change = -1
+		_queued_max_prefix_meters = INF
 		return
-	# Respect the lane-change cooldown so a queue drain doesn't preempt the
-	# in-flight tween. The cooldown expires when the tween naturally completes
-	# (same duration as `lane_tween_duration`), so this typically gates the
-	# retry by ~one frame at the tail of the tween.
-	if Time.get_ticks_msec() < _lane_change_until_msec:
+	if _lane_tween_phase != LaneTweenPhase.IDLE:
 		return
 	if not _is_lane_change_safe(_queued_lane_change):
 		return
 	var target: int = _queued_lane_change
+	var prefix_budget: float = _queued_max_prefix_meters
 	_queued_lane_change = -1
-	_commit_lane_change(target)
+	_queued_max_prefix_meters = INF
+	_commit_lane_change(target, prefix_budget)
 
 
 # Returns true when the runner-coord scan reports `target_lane` clear of
@@ -498,8 +512,8 @@ func start_shuffle(other: Pawn, gap: float) -> void:
 	shuffle.their_telegraph = other.begin_subway_shuffle(self, shuffle.deadline_msec, gap)
 	if shuffle_debug_enabled:
 		print("[shuffle-entry] %s target=%d pos=%.3f tween=%s | %s target=%d pos=%.3f tween=%s | gap=%.3f" % [
-			name, _target_lane, _lane_position, _tween_active,
-			other.name, other._target_lane, other._lane_position, other._tween_active,
+			name, _target_lane, _lane_position, is_tween_active(),
+			other.name, other._target_lane, other._lane_position, other.is_tween_active(),
 			gap,
 		])
 	shuffle_began.emit(other, shuffle.their_telegraph, shuffle.deadline_msec)
@@ -534,15 +548,59 @@ func set_shuffle_telegraph(direction: int) -> void:
 #      walking. Shared by PlayerBrain (held lane key) and AIBrain (run-up tell
 #      + reactive shuffle telegraph). Same surface for both — no AI-specific
 #      detour.
+#
+# Always succeeds — `lean()` is Brain → Pawn intent and intent isn't gated.
+# During an active lane tween the visual body angle is owned by the tween's
+# step direction, not by `lean_direction` (see `get_visual_lean_direction`),
+# so a brain writing `lean(0)` mid-tween updates the broadcast intent without
+# yanking the body upright before the swerve completes.
 func lean(direction: int) -> void:
 	var clamped: int = clampi(direction, -1, 1)
 	if clamped != lean_direction:
 		lean_direction = clamped
 		lean_changed.emit(clamped)
+		if lean_debug_log:
+			print("[lean.intent] %s dir=%d phase=%s" % [name, clamped, _phase_name()])
+	# Camera + visual read the *visual* lean direction, which during a tween
+	# follows the tween's step. Outside a tween this equals `lean_direction`.
+	_apply_visual_lean()
+
+
+# What the body should actually be angled toward right now. During an active
+# lane tween (TELEGRAPH or TRANSLATING) the visual lean is the step direction
+# of the tween — so the body holds its lean across the entire swerve and
+# settles upright when the tween completes. Outside a tween it's whatever the
+# brain last asked for via `lean()`. Used by camera + visual; peers reading
+# raw `lean_direction` still get the brain's intent.
+func get_visual_lean_direction() -> int:
+	if _lane_tween_phase == LaneTweenPhase.IDLE:
+		return lean_direction
+	return clampi(_target_lane - roundi(_tween_from), -1, 1)
+
+
+# Push the current visual lean to camera + visual sinks. Called whenever
+# either `lean_direction` changes or the lane-tween phase transitions
+# (entering/leaving a tween changes which value `get_visual_lean_direction`
+# returns). Safe to call repeatedly — sinks dedupe internally.
+func _apply_visual_lean() -> void:
+	var visual_lean: int = get_visual_lean_direction()
+	if lean_debug_log:
+		print("[lean.visual] %s dir=%d phase=%s intent=%d" % [
+			name, visual_lean, _phase_name(), lean_direction,
+		])
 	if camera_rig != null:
-		camera_rig.set_lean_direction(clamped)
+		camera_rig.set_lean_direction(visual_lean)
 	if visual != null:
-		visual.set_torso_lean_only(clamped)
+		visual.set_torso_lean_only(visual_lean)
+
+
+# Debug helper for lean log lines.
+func _phase_name() -> String:
+	match _lane_tween_phase:
+		LaneTweenPhase.IDLE: return "IDLE"
+		LaneTweenPhase.TELEGRAPH: return "TELEGRAPH"
+		LaneTweenPhase.TRANSLATING: return "TRANSLATING"
+	return "?"
 
 
 # Mark a Pawn as ignored for the rail-coord encounter scan until it drifts
@@ -642,7 +700,9 @@ func end_subway_shuffle() -> void:
 		else:
 			visual.play_walk()
 	if direction != 0:
-		request_lane_change(_target_lane + direction)
+		# Skip the telegraph prefix — the shuffle window itself was the
+		# telegraph, so the resolution should snap directly into the swerve.
+		request_lane_change(_target_lane + direction, 0.0)
 
 
 func stop_subway_shuffle() -> void:
@@ -663,7 +723,10 @@ func get_current_lane() -> int:
 func set_current_lane(lane: int) -> void:
 	_target_lane = clampi(lane, 0, LANE_COUNT - 1)
 	_lane_position = float(_target_lane)
-	_tween_active = false
+	_lane_tween_phase = LaneTweenPhase.IDLE
+	_lane_tween_time_left = 0.0
+	_tween_elapsed = 0.0
+	_apply_visual_lean()
 
 
 func get_lane_position() -> float:
@@ -675,7 +738,7 @@ func get_lane_position() -> float:
 # avoids the visual teleport that the old `_snap_tween_to_target_if_active`
 # path produced when the encounter signal fired during a lane change.
 func is_lane_settled() -> bool:
-	return locomotion == LocomotionState.RUNNING and not _tween_active
+	return locomotion == LocomotionState.RUNNING and _lane_tween_phase == LaneTweenPhase.IDLE
 
 
 # Shuffle window (s, wall-clock). Read from MetroMovement so every Pawn agrees
@@ -998,6 +1061,14 @@ func _set_locomotion(new_state: int) -> void:
 	# still wants the change after returning to RUNNING.
 	if old_state == LocomotionState.RUNNING and new_state != LocomotionState.RUNNING:
 		_queued_lane_change = -1
+		_queued_max_prefix_meters = INF
+		# Cancel an in-flight tween (TELEGRAPH or TRANSLATING) so we don't
+		# carry it across into shuffle / knockdown / parked / finished.
+		_lane_tween_phase = LaneTweenPhase.IDLE
+		_lane_tween_time_left = 0.0
+		_tween_elapsed = 0.0
+		# Push visual lean back to brain intent now that the tween is gone.
+		_apply_visual_lean()
 	# Centralized SHUFFLING-exit cleanup. Single source of truth so unusual exit
 	# paths (end-of-rail mid-shuffle, die() during shuffle, future BLOCKED
 	# transitions) restore Engine.time_scale and clear shuffle-driven rail speed.
@@ -1028,22 +1099,25 @@ func die() -> void:
 # --- Tween state read accessors (for camera lane-lean spring) -------------
 
 func is_tween_active() -> bool:
-	return _tween_active
+	return _lane_tween_phase != LaneTweenPhase.IDLE
 
 
 func get_tween_from() -> float:
 	return _tween_from
 
 
+# Camera reads this to drive the lane-lean spring and the parametric
+# follow-along. Returns 0 during TELEGRAPH (no lateral motion yet) and 0–1
+# across TRANSLATING. IDLE → 0.
 func get_tween_progress() -> float:
-	if not _tween_active or lane_tween_duration <= 0.0:
+	if _lane_tween_phase != LaneTweenPhase.TRANSLATING or lane_tween_duration <= 0.0:
 		return 0.0
 	return clampf(_tween_elapsed / lane_tween_duration, 0.0, 1.0)
 
 
 # --- Internal --------------------------------------------------------------
 
-func _commit_lane_change(next_lane: int) -> void:
+func _commit_lane_change(next_lane: int, max_prefix_meters: float) -> void:
 	var clamped_lane: int = clampi(next_lane, 0, LANE_COUNT - 1)
 	if clamped_lane == _target_lane:
 		return
@@ -1051,11 +1125,29 @@ func _commit_lane_change(next_lane: int) -> void:
 	_target_lane = clamped_lane
 	_tween_from = _lane_position
 	_tween_elapsed = 0.0
-	_tween_active = true
-	# Arm the throttle window for request_lane_change_throttled callers (AI
-	# stance reroll). Duration matches lane_tween_duration so the cooldown
-	# expires naturally as the tween completes.
-	_lane_change_until_msec = Time.get_ticks_msec() + int(lane_tween_duration * 1000.0)
+	# Compute the telegraph prefix length. The configured maximum is the
+	# ceiling; the distance budget (rail-meters the pawn can advance during
+	# the prefix before the dodge tween must start) clamps it down. INF
+	# budget = use the full configured prefix.
+	var configured: float = lane_tween_duration * lane_change_telegraph_ratio
+	var prefix_seconds: float = configured
+	if max_prefix_meters != INF:
+		var speed: float = maxf(get_rail_speed(), 0.1)
+		prefix_seconds = clampf(max_prefix_meters / speed, 0.0, configured)
+	# Skip TELEGRAPH entirely when the budget collapses to zero; otherwise
+	# the body leans-and-holds for `prefix_seconds` before the lateral tween
+	# begins.
+	if prefix_seconds > 0.0:
+		_lane_tween_phase = LaneTweenPhase.TELEGRAPH
+		_lane_tween_time_left = prefix_seconds
+	else:
+		_lane_tween_phase = LaneTweenPhase.TRANSLATING
+		_lane_tween_time_left = 0.0
+	# Push the now-active visual lean (= step direction) to camera + visual.
+	# `lean_direction` (brain intent) is intentionally untouched — peers
+	# reading it still see the brain's last intent rather than the tween
+	# step, which preserves AI lean-threat scoring of brain plans.
+	_apply_visual_lean()
 	if locomotion == LocomotionState.BLOCKED:
 		run_speed = brain.get_start_speed() if brain != null else 0.0
 		_set_locomotion(LocomotionState.RUNNING)
@@ -1063,16 +1155,26 @@ func _commit_lane_change(next_lane: int) -> void:
 
 
 func _update_lane_tween(delta: float) -> void:
-	if not _tween_active:
-		return
-	_tween_elapsed += delta
-	var raw: float = clampf(_tween_elapsed / maxf(lane_tween_duration, 0.001), 0.0, 1.0)
-	var eased: float = sqrt(raw)
-	_lane_position = lerp(_tween_from, float(_target_lane), eased)
-	if raw >= 1.0:
-		_lane_position = float(_target_lane)
-		_tween_active = false
-		lane_change_completed.emit(_target_lane)
+	match _lane_tween_phase:
+		LaneTweenPhase.TELEGRAPH:
+			# Body holds its lean toward the target side; `_lane_position`
+			# doesn't move. When the prefix elapses, hand off to TRANSLATING.
+			_lane_tween_time_left = maxf(0.0, _lane_tween_time_left - delta)
+			if _lane_tween_time_left <= 0.0:
+				_lane_tween_phase = LaneTweenPhase.TRANSLATING
+		LaneTweenPhase.TRANSLATING:
+			# Standard sqrt-eased lerp over `lane_tween_duration`.
+			_tween_elapsed += delta
+			var raw: float = clampf(_tween_elapsed / maxf(lane_tween_duration, 0.001), 0.0, 1.0)
+			var eased: float = sqrt(raw)
+			_lane_position = lerp(_tween_from, float(_target_lane), eased)
+			if raw >= 1.0:
+				_lane_position = float(_target_lane)
+				_lane_tween_phase = LaneTweenPhase.IDLE
+				# Tween ended → visual lean follows brain intent again. Push
+				# now so the body untells in the same frame it arrives.
+				_apply_visual_lean()
+				lane_change_completed.emit(_target_lane)
 
 
 func _resolve_subway_shuffle() -> void:
@@ -1111,8 +1213,9 @@ func _complete_subway_shuffle(direction: int) -> void:
 	_set_locomotion(LocomotionState.RUNNING)
 	# Gated lane change — request_lane_change queues if the resolved target
 	# lane is occupied by a same-direction peer. Pawn stays put until safe
-	# rather than overlapping.
-	request_lane_change(_target_lane + direction)
+	# rather than overlapping. Prefix=0 because the shuffle window itself was
+	# the telegraph; another 0.3s lean-and-hold here would feel sluggish.
+	request_lane_change(_target_lane + direction, 0.0)
 	if direction < 0 and visual != null:
 		visual.play_interact_left()
 	elif direction > 0 and visual != null:
