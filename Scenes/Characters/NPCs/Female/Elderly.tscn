@@ -3,6 +3,8 @@
 [ext_resource type="Script" uid="uid://71t2vdl7u1v5" path="res://Scenes/Characters/character_visual.gd" id="1_qp2ea"]
 [ext_resource type="Script" uid="uid://cr0npsa6kw2u3" path="res://Scenes/Characters/pawn.gd" id="1_v0ugl"]
 [ext_resource type="PackedScene" uid="uid://co7ss3ehx2k88" path="res://Assets/Models/Characters/LowPoly/Female/Elderly/elderly.glb" id="2_3fsc8"]
+[ext_resource type="Script" uid="uid://di4oo53chm4l7" path="res://Scenes/Characters/Brains/ai_brain.gd" id="2_dblon"]
+[ext_resource type="Resource" uid="uid://b6vlhpe8r7m4l" path="res://Resources/Brains/Stubborn.tres" id="3_qffma"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_pawn"]
 size = Vector3(0.813, 1.5, 0.813)
@@ -50,6 +52,11 @@ script = ExtResource("1_v0ugl")
 shuffle_choice_time = 2.5
 shuffle_debug_enabled = true
 visual = NodePath("CharacterVisual")
+
+[node name="AIBrain" type="Node" parent="." unique_id=152416641]
+script = ExtResource("2_dblon")
+config = ExtResource("3_qffma")
+metadata/_custom_type_script = "uid://di4oo53chm4l7"
 
 [node name="Collision" type="CollisionShape3D" parent="." unique_id=184064025]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.75, 0)

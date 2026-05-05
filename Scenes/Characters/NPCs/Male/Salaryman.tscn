@@ -2,7 +2,9 @@
 
 [ext_resource type="Script" uid="uid://cr0npsa6kw2u3" path="res://Scenes/Characters/pawn.gd" id="1_f7doy"]
 [ext_resource type="Script" uid="uid://71t2vdl7u1v5" path="res://Scenes/Characters/character_visual.gd" id="2_afk2k"]
+[ext_resource type="Script" uid="uid://di4oo53chm4l7" path="res://Scenes/Characters/Brains/ai_brain.gd" id="2_e0emp"]
 [ext_resource type="PackedScene" uid="uid://c1u5p2jr61301" path="res://Assets/Models/Characters/LowPoly/Male/Salaryman/salaryman.glb" id="3_f7doy"]
+[ext_resource type="Resource" uid="uid://chxk7vqqad2m1" path="res://Resources/Brains/Commuter.tres" id="3_yofik"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_pawn"]
 size = Vector3(0.813, 1.5, 0.813)
@@ -50,6 +52,11 @@ script = ExtResource("1_f7doy")
 shuffle_choice_time = 2.5
 shuffle_debug_enabled = true
 visual = NodePath("CharacterVisual")
+
+[node name="AIBrain" type="Node" parent="." unique_id=548455131]
+script = ExtResource("2_e0emp")
+config = ExtResource("3_yofik")
+metadata/_custom_type_script = "uid://di4oo53chm4l7"
 
 [node name="Collision" type="CollisionShape3D" parent="." unique_id=184064025]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.75, 0)

@@ -214,6 +214,7 @@ var _is_forward_runner: bool = true
 # Camera state lives on the PawnCamera rig (rotation, headbob phase, lane-lean
 # spring). Pawn passes intent via setters and per-frame snapshots in _process.
 
+@onready var slow_sound: AudioStreamPlayer = $SlowSound
 
 func _ready() -> void:
 	if Engine.is_editor_hint():
@@ -268,6 +269,14 @@ func _physics_process(delta: float) -> void:
 		# ticks below in case it wants to react via timers.
 	if brain != null:
 		brain.physics_tick(delta)
+	if not is_on_floor():
+		velocity.y -= ProjectSettings.get_setting("physics/3d/default_gravity") * delta
+	else:
+		velocity.y = 0.0
+	# MetroMovement owns XZ via global_position; move_and_slide only resolves Y.
+	velocity.x = 0.0
+	velocity.z = 0.0
+	move_and_slide()
 
 
 # Per-state ticks. Each one is responsible for its own internal updates.
@@ -400,6 +409,8 @@ func start_shuffle(other: Pawn) -> void:
 	if apply_bullet_time:
 		shuffle.previous_time_scale = Engine.time_scale
 		Engine.time_scale = shuffle_time_scale
+		if brain is PlayerBrain:
+			slow_sound.play()
 	if camera_rig != null:
 		camera_rig.engage_shuffle_tilt(0)
 	shuffle.their_telegraph = other.begin_subway_shuffle(self, shuffle.deadline_msec)

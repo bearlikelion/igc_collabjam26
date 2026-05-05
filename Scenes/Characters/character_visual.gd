@@ -171,7 +171,6 @@ func randomize_animation_offset(min_length: float = 0.75, max_length: float = 1.
 	var walk_speed: float = snappedf(randf_range(min_length, max_length), 0.01)
 	walk_node.timeline_length = walk_speed
 	walk_node.loop_mode = Animation.LOOP_LINEAR
-	print("Set walk speed to %s" % walk_speed)
 
 
 # Freeze the animation tree on its current pose (e.g., when an NPC arrives

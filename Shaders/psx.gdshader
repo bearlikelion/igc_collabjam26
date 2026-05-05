@@ -7,6 +7,16 @@ render_mode unshaded, blend_mix, depth_draw_opaque, cull_disabled;
 // aberration, vignette, saturation, interlace flicker, and CRT tint.
 
 uniform sampler2D screen_texture : hint_screen_texture, repeat_disable, filter_linear_mipmap;
+uniform sampler2D depth_texture : hint_depth_texture, repeat_disable, filter_nearest;
+
+// --- Depth of field ---
+uniform bool dof_enabled = true;
+// View-space distance at which blurring starts.
+uniform float dof_focus_distance : hint_range(0.5, 50.0) = 8.0;
+// Distance over which blur ramps from 0 to full strength.
+uniform float dof_falloff : hint_range(0.1, 20.0) = 6.0;
+// Maximum blur radius in UV units.
+uniform float dof_blur_radius : hint_range(0.0, 0.02) = 0.006;
 
 // --- Colour depth & dither ---
 uniform float color_depth : hint_range(2.0, 8.0) = 5.0;
@@ -60,10 +70,34 @@ void fragment() {
 	vec2 uv = SCREEN_UV;
 	vec2 from_center = uv - vec2(0.5);
 
-	// Chromatic aberration: shift R and B channels along the radial axis.
+	// Depth of field: reconstruct linear view-space distance from depth buffer.
+	float dof_blur = 0.0;
+	if (dof_enabled) {
+		float raw_depth = texture(depth_texture, uv).r;
+		// Remap depth from [0,1] to NDC [-1,1] on Z, then unproject to view space.
+		vec4 ndc = vec4(uv * 2.0 - 1.0, raw_depth * 2.0 - 1.0, 1.0);
+		vec4 view_pos = INV_PROJECTION_MATRIX * ndc;
+		float view_dist = -view_pos.z / view_pos.w;
+		dof_blur = clamp((view_dist - dof_focus_distance) / max(dof_falloff, 0.001), 0.0, 1.0);
+	}
+
+	// Sample screen colour. When DOF is active, box-blur scaled by dof_blur.
+	// Chromatic aberration offsets are applied per-channel on the blurred samples.
 	vec3 col;
-	if (chromatic_enabled) {
-		vec2 ca = from_center * chromatic_aberration;
+	float blur_r = dof_blur_radius * dof_blur;
+	vec2 ca = chromatic_enabled ? from_center * chromatic_aberration : vec2(0.0);
+	if (blur_r > 0.0) {
+		vec3 acc = vec3(0.0);
+		for (int dy = -1; dy <= 1; dy++) {
+			for (int dx = -1; dx <= 1; dx++) {
+				vec2 off = vec2(float(dx), float(dy)) * blur_r;
+				acc.r += texture(screen_texture, uv + ca + off).r;
+				acc.g += texture(screen_texture, uv + off).g;
+				acc.b += texture(screen_texture, uv - ca + off).b;
+			}
+		}
+		col = acc / 9.0;
+	} else if (chromatic_enabled) {
 		col.r = texture(screen_texture, uv + ca).r;
 		col.g = texture(screen_texture, uv).g;
 		col.b = texture(screen_texture, uv - ca).b;
