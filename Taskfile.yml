@@ -7,24 +7,29 @@ vars:
 
 tasks:
   run:
-	desc: Open project in Godot
-	cmds:
-	  - '{{.GODOT}} --path .'
+    desc: Open project in Godot
+    cmds:
+      - '{{.GODOT}} --path .'
 
   edit:
-	desc: Open Godot editor
-	cmds:
-	  - '{{.GODOT}} --editor --path .'
+    desc: Open Godot editor
+    cmds:
+      - '{{.GODOT}} --editor --path .'
+
+  check:
+    desc: Headless parse + warning-as-error check (no scene run)
+    cmds:
+      - '{{.GODOT}} --headless --check-only --path . --quit'
 
   build:
-	desc: Export Web build
-	cmds:
-	  - rm -rf build/web
-	  - mkdir -p build/web
-	  - '{{.GODOT}} --headless --export-release "Web" build/web/index.html'
+    desc: Export Web build
+    cmds:
+      - rm -rf build/web
+      - mkdir -p build/web
+      - '{{.GODOT}} --headless --export-release "Web" build/web/index.html'
 
   deploy:
-	desc: Build and push to itch.io via butler
-	deps: [build]
-	cmds:
-	  - butler push build/web smitner/igc-cj-26:html5
+    desc: Build and push to itch.io via butler
+    deps: [build]
+    cmds:
+      - butler push build/web smitner/igc-cj-26:html5
