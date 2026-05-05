@@ -89,6 +89,16 @@ class Runner:
 		toward_finish = p_toward_finish
 
 
+## NPC packed scenes to randomly spawn at startup.
+@export var npc_scenes: Array[PackedScene] = []
+## Spawn weight for each entry in npc_scenes (1.0 = 100%, 0.1 = 10%).
+## Matched by index; missing entries default to 1.0.
+@export var npc_weights: Array[float] = []
+## How many NPCs to place along the rail when the level starts.
+@export var starting_npc_count: int = 0
+## Minimum rail-meter distance from the player a startup NPC may spawn.
+@export var safe_spawn_range: float = 5.0
+
 # Debug visualization
 @export var debug_show_corners: bool = true
 @export var debug_corner_color: Color = Color(1.0, 0.2, 0.2, 0.7)
@@ -163,6 +173,7 @@ func _wait_for_nav() -> void:
 		_spawn_debug_markers()
 	_register_player()
 	_register_existing_npcs()
+	_spawn_starting_npcs()
 	_ready_state = true
 
 
@@ -182,14 +193,86 @@ func _register_existing_npcs() -> void:
 		_register_npc(npc)
 
 
+# Instantiate starting_npc_count NPCs from npc_scenes using weighted random
+# selection, placing each at a random rail position with a random travel direction.
+# Positions within safe_spawn_range rail-meters of the player are rejected and
+# re-rolled (up to 20 attempts per NPC before accepting the last candidate).
+func _spawn_starting_npcs() -> void:
+	if npc_scenes.is_empty() or starting_npc_count <= 0 or _corners.size() < 2:
+		return
+	var total_rail_length: float = 0.0
+	for i: int in range(_corners.size() - 1):
+		total_rail_length += _corners[i].distance_to(_corners[i + 1])
+	var player_runner: Runner = _find_runner_for(_player)
+	var player_centerline: float = player_runner.distance_along if player_runner != null else 0.0
+	for _i: int in range(starting_npc_count):
+		var scene: PackedScene = _pick_weighted_npc_scene()
+		if scene == null:
+			continue
+		var npc: Node = scene.instantiate()
+		if not (npc is Pawn):
+			npc.queue_free()
+			continue
+		var nav_region: Node = get_node_or_null("NavigationRegion3D")
+		var spawn_parent: Node = nav_region if nav_region != null else self
+		spawn_parent.add_child(npc, true)
+		var pawn: Pawn = npc as Pawn
+		var toward_finish: bool = randi() % 2 == 0
+		var chosen_dist: float = randf() * total_rail_length
+		var max_attempts: int = 20
+		for attempt: int in range(max_attempts):
+			var candidate: float = randf() * total_rail_length
+			if absf(candidate - player_centerline) >= safe_spawn_range:
+				chosen_dist = candidate
+				break
+			if attempt == max_attempts - 1:
+				chosen_dist = candidate
+		var seg: int = 0
+		var dist_remaining: float = chosen_dist
+		while seg < _corners.size() - 2:
+			var seg_len: float = _corners[seg].distance_to(_corners[seg + 1])
+			if dist_remaining <= seg_len:
+				break
+			dist_remaining -= seg_len
+			seg += 1
+		var seg_start: Vector3 = _corners[seg]
+		var seg_end: Vector3 = _corners[seg + 1]
+		var seg_dir: Vector3 = (seg_end - seg_start).normalized()
+		pawn.global_position = seg_start + seg_dir * dist_remaining
+		pawn.set_current_lane(randi() % Pawn.LANE_COUNT)
+		_register_npc(pawn, toward_finish)
+		if pawn.visual != null:
+			pawn.visual.randomize_animation_offset()
+
+
+# Pick a random scene from npc_scenes using per-entry weights.
+func _pick_weighted_npc_scene() -> PackedScene:
+	var total_weight: float = 0.0
+	for i: int in range(npc_scenes.size()):
+		var w: float = npc_weights[i] if i < npc_weights.size() else 1.0
+		total_weight += maxf(w, 0.0)
+	if total_weight <= 0.0:
+		return null
+	var roll: float = randf() * total_weight
+	var accumulated: float = 0.0
+	for i: int in range(npc_scenes.size()):
+		var w: float = npc_weights[i] if i < npc_weights.size() else 1.0
+		accumulated += maxf(w, 0.0)
+		if roll <= accumulated:
+			return npc_scenes[i]
+	return npc_scenes[npc_scenes.size() - 1]
+
+
 # Project the NPC's authored world position onto the rail and use that as its
 # starting coordinate so NPCs appear where the level designer placed them.
 # After projection, run a de-stagger pass — if another runner already occupies
 # the same physical lane within the new NPC's `min_peer_gap`, push the new
 # runner backward along its travel direction until clear (or we walk off the
 # rail's start, in which case overlap is accepted as an authoring problem).
-func _register_npc(npc: Pawn) -> void:
-	var toward_finish: bool = _npc_toward_finish(npc)
+# Pass force_toward_finish = true/false to override destination-based detection
+# (used by _spawn_starting_npcs for random direction assignment).
+func _register_npc(npc: Pawn, force_toward_finish: Variant = null) -> void:
+	var toward_finish: bool = force_toward_finish if force_toward_finish != null else _npc_toward_finish(npc)
 	npc.set_rail_forward(toward_finish)
 	var proj: RailProjection = _project_onto_rail(npc.global_position, toward_finish)
 	var runner: Runner = Runner.new(npc, proj.segment_index, proj.distance_along, toward_finish)

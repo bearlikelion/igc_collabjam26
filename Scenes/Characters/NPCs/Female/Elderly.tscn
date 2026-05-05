@@ -64,6 +64,7 @@ animation_player = NodePath("ModelRoot/AuxScene/AnimationPlayer")
 transform = Transform3D(-2, 0, 3.019916e-07, 0, 2, 0, -3.019916e-07, 0, -2, 0, 0, 0)
 
 [node name="AuxScene" parent="CharacterVisual/ModelRoot" unique_id=1043582231 instance=ExtResource("2_3fsc8")]
+transform = Transform3D(0.5, 0, 0, 0, 0.5, 0, 0, 0, 0.5, 0, 0, 0)
 
 [node name="Skeleton3D" parent="CharacterVisual/ModelRoot/AuxScene/Scene/root" parent_id_path=PackedInt32Array(1043582231, 233427986) index="0" unique_id=1317176473]
 bones/1/position = Vector3(0.013773884, 0.7727658, -0.01993414)

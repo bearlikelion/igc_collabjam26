@@ -155,6 +155,25 @@ func is_recovery_locked() -> bool:
 	return _is_recovery_state_locked()
 
 
+# Enable use_custom_timeline on the walk AnimationNodeAnimation and set a
+# random timeline_length so each NPC loops at a different rate, breaking sync.
+func randomize_animation_offset(min_length: float = 0.75, max_length: float = 1.25) -> void:
+	if animation_tree == null or animation_tree.tree_root == null:
+		return
+	var state_machine: AnimationNodeStateMachine = animation_tree.tree_root as AnimationNodeStateMachine
+	if state_machine == null:
+		return
+	var walk_state_name: String = _get_state_name(MotionState.WALK)
+	var walk_node: AnimationNodeAnimation = state_machine.get_node(walk_state_name) as AnimationNodeAnimation
+	if walk_node == null:
+		return
+	walk_node.use_custom_timeline = true
+	var walk_speed: float = snappedf(randf_range(min_length, max_length), 0.01)
+	walk_node.timeline_length = walk_speed
+	walk_node.loop_mode = Animation.LOOP_LINEAR
+	print("Set walk speed to %s" % walk_speed)
+
+
 # Freeze the animation tree on its current pose (e.g., when an NPC arrives
 # at the train and stands idle). Locomotion state is preserved so a later
 # resume_animation() resumes the same clip.

@@ -64,6 +64,7 @@ animation_player = NodePath("ModelRoot/DoctorM/AnimationPlayer")
 transform = Transform3D(-2, 0, 3.019916e-07, 0, 2, 0, -3.019916e-07, 0, -2, 0, 0, 0)
 
 [node name="DoctorM" parent="CharacterVisual/ModelRoot" unique_id=1454610418 instance=ExtResource("2_xhwvd")]
+transform = Transform3D(0.5, 0, 0, 0, 0.5, 0, 0, 0, 0.5, 0, 0, 0)
 
 [node name="AnimationTree" type="AnimationTree" parent="CharacterVisual" unique_id=10839786]
 root_node = NodePath("../ModelRoot/DoctorM")

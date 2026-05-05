@@ -57,15 +57,16 @@ shape = SubResource("BoxShape3D_pawn")
 
 [node name="CharacterVisual" type="Node3D" parent="." unique_id=876488184 node_paths=PackedStringArray("skeleton", "animation_player")]
 script = ExtResource("1_ugk5y")
-skeleton = NodePath("ModelRoot/AuxScene/Scene/root/Skeleton3D")
-animation_player = NodePath("ModelRoot/AuxScene/AnimationPlayer")
+skeleton = NodePath("ModelRoot/Redhead/Scene/root/Skeleton3D")
+animation_player = NodePath("ModelRoot/Redhead/AnimationPlayer")
 
 [node name="ModelRoot" type="Node3D" parent="CharacterVisual" unique_id=1016427824]
 transform = Transform3D(-2, 0, 3.019916e-07, 0, 2, 0, -3.019916e-07, 0, -2, 0, 0, 0)
 
-[node name="AuxScene" parent="CharacterVisual/ModelRoot" unique_id=953365347 instance=ExtResource("2_ugk5y")]
+[node name="Redhead" parent="CharacterVisual/ModelRoot" unique_id=953365347 instance=ExtResource("2_ugk5y")]
+transform = Transform3D(0.5, 0, 0, 0, 0.5, 0, 0, 0, 0.5, 0, 0, 0)
 
-[node name="Skeleton3D" parent="CharacterVisual/ModelRoot/AuxScene/Scene/root" parent_id_path=PackedInt32Array(953365347, 1718085772) index="0" unique_id=1635058458]
+[node name="Skeleton3D" parent="CharacterVisual/ModelRoot/Redhead/Scene/root" parent_id_path=PackedInt32Array(953365347, 1718085772) index="0" unique_id=1635058458]
 bones/1/position = Vector3(0.01513764, 0.8492777, -0.008684434)
 bones/1/rotation = Quaternion(-0.03776522, -0.1228617, 0.0045857867, 0.9916944)
 bones/2/rotation = Quaternion(0.9205995, 0.18195309, 0.3373066, 0.07492693)
@@ -86,8 +87,8 @@ bones/26/rotation = Quaternion(-0.33398053, 0.026847322, -0.8766715, 0.34522966)
 bones/27/rotation = Quaternion(0.053646207, -0.81711686, -0.24352914, 0.51974595)
 
 [node name="AnimationTree" type="AnimationTree" parent="CharacterVisual" unique_id=10839786]
-root_node = NodePath("../ModelRoot/AuxScene")
+root_node = NodePath("../ModelRoot/Redhead")
 tree_root = SubResource("AnimationNodeStateMachine_character")
-anim_player = NodePath("../ModelRoot/AuxScene/AnimationPlayer")
+anim_player = NodePath("../ModelRoot/Redhead/AnimationPlayer")
 
-[editable path="CharacterVisual/ModelRoot/AuxScene"]
+[editable path="CharacterVisual/ModelRoot/Redhead"]

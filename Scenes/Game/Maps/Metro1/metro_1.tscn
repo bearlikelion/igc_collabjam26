@@ -1,11 +1,16 @@
 [gd_scene format=4 uid="uid://dejrevjdsd4ry"]
 
 [ext_resource type="Script" uid="uid://bwvo38h6j43lo" path="res://Scenes/Game/Maps/metro_movement.gd" id="1_drku4"]
+[ext_resource type="PackedScene" uid="uid://cv1nxx1utr6ty" path="res://Scenes/Characters/NPCs/Female/Elderly.tscn" id="2_3q7nn"]
 [ext_resource type="AudioStream" uid="uid://vaa12nlltq67" path="res://Assets/Audio/SFX/Metro/363737__alexanderche__ambience-metro-wagon-train-interior-city-moscow.ogg" id="2_t8wx7"]
 [ext_resource type="AudioStream" uid="uid://b58q66c6lsxhf" path="res://Assets/Audio/SFX/Metro/430986__be_a_hero_not_a_patriot__metro-ext-warszawa-2017-train-type-81-russian-door-close-take-off-centrum-station-ambience-poland.ogg" id="3_ee2u3"]
+[ext_resource type="PackedScene" uid="uid://dpjup8pb7028d" path="res://Scenes/Characters/NPCs/Female/Redhead.tscn" id="3_p3hvv"]
 [ext_resource type="AudioStream" uid="uid://d3eum4cf3d2fw" path="res://Assets/Audio/SFX/Metro/727842__alexanderche__ambience-city-metro-preobrazhenskaya-ploshad-subway-moscow.ogg" id="4_jf3xt"]
+[ext_resource type="PackedScene" uid="uid://csm24sanerou1" path="res://Scenes/Characters/NPCs/Male/Doctor.tscn" id="4_lpghw"]
+[ext_resource type="PackedScene" uid="uid://brd7cen16a17a" path="res://Scenes/Characters/NPCs/Male/Hoodie.tscn" id="5_ilanp"]
 [ext_resource type="Script" uid="uid://bd83xckma828n" path="res://Scenes/Game/Maps/metro_sounds.gd" id="5_ug0ud"]
 [ext_resource type="Script" uid="uid://cwu5cf7a0awcd" path="res://addons/func_godot/src/map/func_godot_map.gd" id="6_b3fhr"]
+[ext_resource type="PackedScene" uid="uid://qgcyfnbot8ap" path="res://Scenes/Characters/NPCs/Male/Salaryman.tscn" id="6_gy5qg"]
 [ext_resource type="Resource" uid="uid://bkhxcqsquw1yg" path="res://addons/func_godot/func_godot_default_map_settings.tres" id="7_cyw2y"]
 [ext_resource type="PackedScene" uid="uid://cfbedqf0p215d" path="res://Scenes/Characters/Pawn.tscn" id="8_svs80"]
 [ext_resource type="ArrayMesh" uid="uid://dgtirktt1xuok" path="res://Assets/Models/Metro/Meshes/Metro_subway_car.res" id="9_rrdri"]
@@ -22,14 +27,9 @@
 [ext_resource type="Material" uid="uid://bmti88ony01qi" path="res://Assets/Textures/dev/bumps.tres" id="14_h1b0k"]
 [ext_resource type="Texture2D" uid="uid://cyg2snr1w5xw5" path="res://addons/func_godot/textures/default_texture.png" id="15_0ynle"]
 [ext_resource type="Material" uid="uid://doyt74p2tw1sq" path="res://Assets/Textures/dev/roof.tres" id="16_0ynle"]
-[ext_resource type="Script" uid="uid://di4oo53chm4l7" path="res://Scenes/Characters/Brains/ai_brain.gd" id="19_m7ql2"]
 [ext_resource type="Script" uid="uid://c7ob6aflnt2jl" path="res://Scenes/Characters/pawn_camera.gd" id="20_pcam"]
 [ext_resource type="Resource" uid="uid://b0u5cgxlaxnpc" path="res://Resources/Brains/DefaultPlayer.tres" id="21_plycfg"]
 [ext_resource type="Shader" uid="uid://ca6h0hj5fdy7x" path="res://Shaders/psx.gdshader" id="22_3q7nn"]
-[ext_resource type="Resource" uid="uid://cfrk4dk0b01m1" path="res://Resources/Brains/Greeter.tres" id="22_greeter"]
-[ext_resource type="Resource" uid="uid://chxk7vqqad2m1" path="res://Resources/Brains/Commuter.tres" id="23_commuter"]
-[ext_resource type="Resource" uid="uid://djsb4mqe2tpvg" path="res://Resources/Brains/Aggressive.tres" id="24_aggr"]
-[ext_resource type="Resource" uid="uid://b6vlhpe8r7m4l" path="res://Resources/Brains/Stubborn.tres" id="25_stubb"]
 
 [sub_resource type="AudioStreamRandomizer" id="AudioStreamRandomizer_et2qy"]
 streams_count = 3
@@ -371,6 +371,10 @@ _data = {
 
 [node name="Metro1" type="Node3D" unique_id=1736708119]
 script = ExtResource("1_drku4")
+npc_scenes = Array[PackedScene]([ExtResource("2_3q7nn"), ExtResource("3_p3hvv"), ExtResource("4_lpghw"), ExtResource("5_ilanp"), ExtResource("6_gy5qg")])
+npc_weights = Array[float]([0.1, 0.33, 0.33, 0.33, 0.33])
+starting_npc_count = 20
+safe_spawn_range = 15.0
 debug_show_corners = false
 
 [node name="Ambiance" type="AudioStreamPlayer" parent="." unique_id=1301785252]
@@ -558,64 +562,9 @@ fov = 38.8
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="NavigationRegion3D/PlayerCamera/Camera3D" unique_id=773972041]
 transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, -0.100000024)
+visible = false
 mesh = SubResource("PlaneMesh_p3hvv")
 surface_material_override/0 = SubResource("ShaderMaterial_lpghw")
-
-[node name="NPCCharacter" parent="NavigationRegion3D" unique_id=1919134681 instance=ExtResource("8_svs80")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0, -24)
-
-[node name="Brain" type="Node" parent="NavigationRegion3D/NPCCharacter" unique_id=1339451774]
-script = ExtResource("19_m7ql2")
-config = ExtResource("22_greeter")
-
-[node name="NPCCharacter2" parent="NavigationRegion3D" unique_id=2133715270 instance=ExtResource("8_svs80")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0, -39)
-
-[node name="Brain" type="Node" parent="NavigationRegion3D/NPCCharacter2" unique_id=324579119]
-script = ExtResource("19_m7ql2")
-config = ExtResource("23_commuter")
-
-[node name="NPCCharacter3" parent="NavigationRegion3D" unique_id=1641043877 instance=ExtResource("8_svs80")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0, -52.5)
-
-[node name="Brain" type="Node" parent="NavigationRegion3D/NPCCharacter3" unique_id=817689988]
-script = ExtResource("19_m7ql2")
-config = ExtResource("23_commuter")
-
-[node name="NPCCharacter7" parent="NavigationRegion3D" unique_id=71114608 instance=ExtResource("8_svs80")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0, -50.472874)
-
-[node name="Brain" type="Node" parent="NavigationRegion3D/NPCCharacter7" unique_id=1747428263]
-script = ExtResource("19_m7ql2")
-config = ExtResource("23_commuter")
-
-[node name="NPCCharacter8" parent="NavigationRegion3D" unique_id=1192824832 instance=ExtResource("8_svs80")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.4369965, 0, -49.61233)
-
-[node name="Brain" type="Node" parent="NavigationRegion3D/NPCCharacter8" unique_id=861550226]
-script = ExtResource("19_m7ql2")
-config = ExtResource("23_commuter")
-
-[node name="NPCCharacter4" parent="NavigationRegion3D" unique_id=957812564 instance=ExtResource("8_svs80")]
-transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 9.5, 0, -52.5)
-
-[node name="Brain" type="Node" parent="NavigationRegion3D/NPCCharacter4" unique_id=1604361335]
-script = ExtResource("19_m7ql2")
-config = ExtResource("24_aggr")
-
-[node name="NPCCharacter5" parent="NavigationRegion3D" unique_id=214608436 instance=ExtResource("8_svs80")]
-transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 23.5, 0, -52.5)
-
-[node name="Brain" type="Node" parent="NavigationRegion3D/NPCCharacter5" unique_id=2014586776]
-script = ExtResource("19_m7ql2")
-config = ExtResource("25_stubb")
-
-[node name="NPCCharacter6" parent="NavigationRegion3D" unique_id=1201259432 instance=ExtResource("8_svs80")]
-transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 15, 0, -53.5)
-
-[node name="Brain" type="Node" parent="NavigationRegion3D/NPCCharacter6" unique_id=1633935554]
-script = ExtResource("19_m7ql2")
-config = ExtResource("23_commuter")
 
 [node name="ThreeChairBench" parent="NavigationRegion3D" unique_id=1494757051 instance=ExtResource("10_cfpln")]
 transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, -1.8000001, 0.5, -21)

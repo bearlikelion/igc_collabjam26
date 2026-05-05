@@ -64,6 +64,7 @@ animation_player = NodePath("ModelRoot/SalaryMan/AnimationPlayer")
 transform = Transform3D(-2, 0, 3.019916e-07, 0, 2, 0, -3.019916e-07, 0, -2, 0, 0, 0)
 
 [node name="SalaryMan" parent="CharacterVisual/ModelRoot" unique_id=806828664 instance=ExtResource("3_f7doy")]
+transform = Transform3D(0.5, 0, 0, 0, 0.5, 0, 0, 0, 0.5, 0, 0, 0)
 
 [node name="Skeleton3D" parent="CharacterVisual/ModelRoot/SalaryMan/Scene/root" parent_id_path=PackedInt32Array(806828664, 675380867) index="0" unique_id=725109224]
 bones/1/position = Vector3(0.016166521, 0.90700173, 0.0013613626)
