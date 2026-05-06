@@ -138,13 +138,6 @@ signal locomotion_changed(old_state: int, new_state: int)
 # Resolved in _ready (not @onready) so editor-tool Pawns ignore it.
 var brain: Brain
 
-## Print a `[lean.intent]` / `[lean.visual]` line whenever brain intent or
-## lane-tween phase changes the lean. Pairs with
-## `CharacterVisual.lean_debug_log` to trace where any disconnect is. ON by
-## default during the lean-tuning pass — toggle off in the Pawn scene's
-## export when the feel is dialed in.
-@export var lean_debug_log: bool = true
-
 @export_group("Lane Change")
 @export_range(0.05, 1.0, 0.01, "suffix:s") var lane_tween_duration: float = 0.30
 ## Fraction of `lane_tween_duration` spent in the telegraph prefix — the body
@@ -558,8 +551,6 @@ func lean(direction: int) -> void:
 	if clamped != lean_direction:
 		lean_direction = clamped
 		lean_changed.emit(clamped)
-		if lean_debug_log:
-			print("[lean.intent] %s dir=%d phase=%s" % [name, clamped, _phase_name()])
 	# Camera + visual read the *visual* lean direction, which during a tween
 	# follows the tween's step. Outside a tween this equals `lean_direction`.
 	_apply_visual_lean()
@@ -583,23 +574,10 @@ func get_visual_lean_direction() -> int:
 # returns). Safe to call repeatedly — sinks dedupe internally.
 func _apply_visual_lean() -> void:
 	var visual_lean: int = get_visual_lean_direction()
-	if lean_debug_log:
-		print("[lean.visual] %s dir=%d phase=%s intent=%d" % [
-			name, visual_lean, _phase_name(), lean_direction,
-		])
 	if camera_rig != null:
 		camera_rig.set_lean_direction(visual_lean)
 	if visual != null:
 		visual.set_torso_lean_only(visual_lean)
-
-
-# Debug helper for lean log lines.
-func _phase_name() -> String:
-	match _lane_tween_phase:
-		LaneTweenPhase.IDLE: return "IDLE"
-		LaneTweenPhase.TELEGRAPH: return "TELEGRAPH"
-		LaneTweenPhase.TRANSLATING: return "TRANSLATING"
-	return "?"
 
 
 # --- Rail-coord delegators (Pawn-as-facade over MetroMovement scans) ------

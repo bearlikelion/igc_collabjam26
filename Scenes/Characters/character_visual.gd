@@ -66,9 +66,6 @@ const MOTION_STATES: Array[int] = [
 ##   - Mixamo-style (Doctor / Hoodie / Salaryman / Redhead / Elderly): "Chest"
 ## Default fits the player + CharacterVisual.tscn; Mixamo-rig NPC scenes override.
 @export var spine_bone_name: String = "DEF-spine002"
-## When true, every direction change emits a `[lean]` print so we can verify
-## the intent is reaching the visual layer. ON during the lean-tuning pass.
-@export var lean_debug_log: bool = true
 @export var skeleton: Skeleton3D
 @export var animation_player: AnimationPlayer
 
@@ -190,9 +187,6 @@ func set_torso_lean_only(direction: int) -> void:
 	if clamped == _torso_lean_direction:
 		return
 	_torso_lean_direction = clamped
-	if lean_debug_log:
-		var owner_name: String = get_parent().name if get_parent() != null else "?"
-		print("[lean] %s dir=%d (state=%s)" % [owner_name, clamped, _get_state_name(_state)])
 
 
 # Play the death animation. Lean direction is preserved (the lerp drives to
