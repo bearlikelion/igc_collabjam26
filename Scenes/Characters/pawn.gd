@@ -311,6 +311,12 @@ func _physics_process(delta: float) -> void:
 			_try_commit_queued_lane_change()
 		# PARKED / FINISHED — no per-state physics work; brain still
 		# ticks below in case it wants to react via timers.
+	# Push effective rail speed to the visual once per physics tick — covers
+	# every state. RUNNING with modulator-clamped 0 (waiting / compression)
+	# and formal BLOCKED both surface the idle clip via this single seam.
+	# KNOCKED_DOWN / PARKED / DISABLED are skipped inside the helper because
+	# their playback is externally owned (state-locked clip / paused tree).
+	_update_visual_speed()
 	if brain != null:
 		brain.physics_tick(delta)
 	if not is_on_floor():
@@ -334,8 +340,39 @@ func _tick_running(delta: float) -> void:
 	_update_lane_tween(delta)
 	_try_commit_queued_lane_change()
 	_update_run_speed(delta)
-	if visual != null:
-		visual.set_move_speed(run_speed)
+	# Visual speed is pushed centrally from `_physics_process` via
+	# `_update_visual_speed()` so BLOCKED / FINISHED also reach the visual.
+	# Don't double-write here.
+
+
+# Push the visual's locomotion-clip pick once per physics tick.
+#
+# Two cuts:
+#   1. KNOCKED_DOWN / PARKED / DISABLED — playback is externally owned
+#      (state-locked die/recover clips, paused AnimationTree). Don't
+#      fight them with a per-frame push.
+#   2. RUNNING uses the brain's effective speed (modulators + walk/sprint
+#      threshold + idle-when-clamped-to-0). Every other non-skipped state
+#      (BLOCKED / FINISHED / SHUFFLING) is "engaged but not running" —
+#      either parametrically frozen on the rail or slow-approaching during
+#      the mini-game window — and the visual idles.
+#
+# Note SHUFFLING's divergence from `get_rail_speed`: the pawn does advance
+# on the rail during the choice window (slow-approach), so MetroMovement
+# reads `shuffle.approach_speed` from `get_rail_speed`. The visual reads 0
+# instead so the body squares up rather than walk-cycling-on-the-spot
+# inside bullet-time.
+func _update_visual_speed() -> void:
+	if visual == null:
+		return
+	if (
+			locomotion == LocomotionState.KNOCKED_DOWN
+			or locomotion == LocomotionState.PARKED
+			or locomotion == LocomotionState.DISABLED
+	):
+		return
+	var speed: float = get_rail_speed() if locomotion == LocomotionState.RUNNING else 0.0
+	visual.set_move_speed(speed)
 
 
 func _tick_shuffle(_delta: float) -> void:
@@ -817,7 +854,19 @@ func _compute_shuffle_speed(gap: float) -> float:
 #   the `shuffle.approach_speed = _compute_shuffle_speed(gap)` assignment in
 #   the caller — though MetroMovement doesn't tick mid-call, so production
 #   never observes the 0.0 fallback.
+# is_advancing_paused() → 0. Correctness fix for peer compression: a paused
+#   pawn's "current rail speed" is genuinely 0, but the brain's
+#   `_actual_move_speed` (NPC) and `run_speed` (player) aren't reset by
+#   parking / blocking / knockdown. Without this short-circuit a parked
+#   greeter still reports its old walking speed to peers, and a trailing
+#   pawn's `modulate_for_same_direction_peer` caps at that stale speed
+#   instead of collapsing to 0 — they'd walk into the static body at the
+#   parked speed. MetroMovement gates its own advance on `is_advancing_paused`
+#   before calling here, so this branch only affects external readers (peer
+#   compression in `modulate_for_same_direction_peer`).
 func get_rail_speed() -> float:
+	if is_advancing_paused():
+		return 0.0
 	if locomotion == LocomotionState.SHUFFLING:
 		return shuffle.approach_speed if shuffle != null else 0.0
 	if brain == null:

@@ -1,8 +1,12 @@
 class_name CharacterVisual
 extends Node3D
 
-enum MotionState { WALK, SPRINT, INTERACT_LEFT, INTERACT_RIGHT, DIE, RECOVER }
+enum MotionState { WALK, SPRINT, INTERACT_LEFT, INTERACT_RIGHT, DIE, RECOVER, IDLE }
 
+# IDLE shares the "recover" state-machine node — both play
+# `Idle_FoldArms_Loop RT` and every shipped scene already wires "recover"
+# transitions. The script-level distinction keeps lock semantics separate:
+# RECOVER state-locks (post-knockdown), IDLE doesn't (transient halt).
 const STATE_NAMES: Dictionary[int, String] = {
 	MotionState.WALK: "walk",
 	MotionState.SPRINT: "sprint",
@@ -10,6 +14,7 @@ const STATE_NAMES: Dictionary[int, String] = {
 	MotionState.INTERACT_RIGHT: "interact-right",
 	MotionState.DIE: "die",
 	MotionState.RECOVER: "recover",
+	MotionState.IDLE: "recover",
 }
 
 const ANIMATION_NAMES: Dictionary[int, String] = {
@@ -19,8 +24,12 @@ const ANIMATION_NAMES: Dictionary[int, String] = {
 	MotionState.INTERACT_RIGHT: "Fighting Right Jab RT",
 	MotionState.DIE: "Hit_Knockback RT",
 	MotionState.RECOVER: "Idle_FoldArms_Loop RT",
+	MotionState.IDLE: "Idle_FoldArms_Loop RT",
 }
 
+# IDLE is intentionally absent — it shares "recover"'s node, so listing it
+# here would create a duplicate when `_create_animation_state_machine`
+# bootstraps a tree from scratch.
 const MOTION_STATES: Array[int] = [
 	MotionState.WALK,
 	MotionState.SPRINT,
@@ -31,6 +40,10 @@ const MOTION_STATES: Array[int] = [
 ]
 
 @export var walk_speed_threshold: float = 2.5
+## Below this speed (m/s) the body plays the idle clip instead of the walk
+## loop. Set just above 0 so floating-point noise doesn't flicker between
+## idle and walk.
+@export var idle_speed_threshold: float = 0.05
 @export var playback_fade_time: float = 0.15
 ## Peak lean angle in radians. Pivot is now a mid-spine bone (via
 ## TorsoLeanModifier) rather than the whole rig at the feet — same number
@@ -106,14 +119,21 @@ func _process(delta: float) -> void:
 	_drive_torso_lean()
 
 
-# Set locomotion animation from current movement speed.
+# Set locomotion animation from current movement speed. Three-way picker:
+#   speed >= walk_speed_threshold  → sprint
+#   speed >  idle_speed_threshold  → walk
+#   else                           → idle (pawn is halted — waiting behind a
+#                                          peer, compressed against a slow
+#                                          peer, BLOCKED, or FINISHED)
 func set_move_speed(speed: float) -> void:
 	if _state_lock_time > 0.0 or _state == MotionState.DIE:
 		return
 	if speed >= walk_speed_threshold:
 		play_sprint()
-	else:
+	elif speed > idle_speed_threshold:
 		play_walk()
+	else:
+		play_idle()
 
 
 # Play the normal forward walking state. Lean direction is owned by Pawn
@@ -132,6 +152,17 @@ func play_sprint() -> void:
 	if _is_recovery_state_locked():
 		return
 	_travel(MotionState.SPRINT)
+
+
+# Standing-idle clip for halted pawns. Travels to the existing "recover"
+# state-machine node (shared with `play_recover`) but does NOT lock —
+# transitions out via the next `set_move_speed` call once the body is
+# moving again. A still pawn still leans toward held lane intent (IDLE
+# is intentionally absent from `_drive_torso_lean`'s owns_upper_body set).
+func play_idle() -> void:
+	if _is_recovery_state_locked():
+		return
+	_travel(MotionState.IDLE)
 
 
 # Play a left-side interaction dodge/shuffle animation.
