@@ -20,4 +20,4 @@ start_speed = 0.2
 max_speed = 1.0
 obstacle_lookahead = 0.5
 encounter_lookahead = 1.0
-inner_shuffle_radius = 0.6
+inner_shuffle_radius = 1.2
