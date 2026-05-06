@@ -39,3 +39,10 @@ extends Resource
 ## closing — values at or below the safe cap freeze the pawns in place during
 ## the window without jitter.
 @export_range(0.1, 5.0, 0.05) var inner_shuffle_radius: float = 1.5
+## Rail-distance ahead a target lane must be clear of obstacles AND peers
+## before this pawn will swerve into it. Single source of truth for the
+## lane-change gate (`Pawn.can_enter_lane`) — AIBrain stance roll, picker
+## filter, and the `request_lane_change` queue all read this. Distinct from
+## `min_peer_gap` (convoy comfort gap, scoped to same-direction speed
+## modulation in `Brain.modulate_for_same_direction_peer`).
+@export_range(0.1, 5.0, 0.05) var swerve_safety_distance: float = 1.5

@@ -16,10 +16,6 @@ extends BrainConfig
 @export_group("Lane Behavior")
 @export var avoid_obstacles: bool = true
 @export var avoidance_cooldown: float = 2.0
-## Minimum clearance (rail-meters) a candidate lane must offer before this AI
-## will swerve into it. If no candidate clears the floor, the AI holds its
-## current lane rather than swap into a tighter slot.
-@export var min_clearance: float = 1.5
 ## Comfort gap (rail-meters) behind a same-direction peer. Inside this
 ## distance the AI slows below peer speed so the gap regrows — prevents
 ## convoy stacking. See `Brain.modulate_for_same_direction_peer`.

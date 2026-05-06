@@ -258,9 +258,9 @@ func _tick_overtake() -> void:
 	for lane: int in range(Pawn.LANE_COUNT):
 		if lane == current:
 			continue
-		var score: float = _lane_safety_score(lane)
-		if score < config.min_clearance:
+		if not pawn.can_enter_lane(lane):
 			continue
+		var score: float = _lane_safety_score(lane)
 		if score > best_score:
 			best_score = score
 			best_lane = lane
@@ -327,16 +327,16 @@ func _on_encounter_detected(other: Pawn, distance: float) -> void:
 
 
 # Environment obstacle in the current lane — swerve via the clearance ranker
-# instead of trusting the signal's pre-shuffled candidates. The signal still
-# carries them as an obstacle-only filter, but registry-aware ranking also
-# considers other pawns and applies the min_clearance floor.
+# (`_pick_clear_lane`), which gates each candidate through `pawn.can_enter_lane`
+# (single-source-of-truth check for both obstacle AND peer occupancy) and
+# ranks the survivors by `_lane_safety_score` (clearance minus lean-threat).
 #
 # Close obstacles can't afford the default telegraph prefix (Stubborn detects
 # benches at 0.5 m, walks at 1.4 m/s — 300 ms standing still would consume
 # 0.42 m before the dodge tween even starts). We pass the available distance
 # budget to the Pawn-side `_commit_lane_change`, which shrinks the telegraph
 # prefix to fit. INF on non-obstacle paths = "use the full default."
-func _on_obstacle_detected(_blocker: Node, distance: float, in_lane: int, _candidate_lanes: Array[int]) -> void:
+func _on_obstacle_detected(_blocker: Node, distance: float, in_lane: int) -> void:
 	if Time.get_ticks_msec() < _avoidance_until_msec:
 		return
 	var clear_lane: int = _pick_clear_lane(in_lane)
@@ -387,8 +387,8 @@ func _on_shuffle_resolved(_succeeded: bool, _direction: int) -> void:
 # the reroll loop, the telegraph game decides who wins each encounter.
 func _roll_stance(other: Pawn) -> int:
 	var current: int = pawn.get_current_lane()
-	var left_clear: bool = current > 0 and _is_dodge_lane_clear(current - 1)
-	var right_clear: bool = current < Pawn.LANE_COUNT - 1 and _is_dodge_lane_clear(current + 1)
+	var left_clear: bool = current > 0 and pawn.can_enter_lane(current - 1)
+	var right_clear: bool = current < Pawn.LANE_COUNT - 1 and pawn.can_enter_lane(current + 1)
 	if not left_clear and not right_clear:
 		return 0
 	var stay_weight: float = config.stay_chance
@@ -471,17 +471,6 @@ func _request_adjacent_lane_change(target_lane: int, max_prefix_meters: float = 
 	pawn.request_lane_change(current + step, max_prefix_meters)
 
 
-# Lane is "clear enough" for an AI dodge if its clearance meets min_clearance.
-# get_lane_clearance returns 0.0 if an obstacle is in the lane, otherwise the
-# rail-distance to the nearest occupant (capped at lookahead). No registry =
-# assume clear (defensive — keeps unit-test scenarios from soft-locking).
-func _is_dodge_lane_clear(lane: int) -> bool:
-	# Pre-registration → INF (defensive); inside config.min_clearance threshold
-	# the lane reads as clear. Keeps unit-test scenarios from soft-locking.
-	var clearance: float = pawn.get_lane_clearance(lane, config.encounter_lookahead)
-	return clearance >= config.min_clearance
-
-
 # Pick this AI's telegraph (-1 / +1) such that its world-space side points
 # opposite to the other Pawn's chosen world-side. If the other hasn't
 # committed yet (other_telegraph == 0), default to +1.
@@ -546,6 +535,10 @@ func get_min_peer_gap() -> float:
 	return config.min_peer_gap
 
 
+func get_swerve_safety_distance() -> float:
+	return config.swerve_safety_distance
+
+
 func get_spawn_distance() -> float:
 	return config.spawn_distance
 
@@ -605,14 +598,15 @@ func _roll_speed() -> void:
 	_actual_move_speed = maxf(0.1, config.move_speed * (1.0 + jitter))
 
 
-# Pick the safest lane other than `current`, gated by min_clearance. "Safest"
-# = clearance minus lean-threat (peers currently committing into the candidate
-# lane reduce its score, see `_lane_safety_score`). Falls back to `current` if
-# no candidate clears the floor — the AI holds rather than swerve into a
-# tighter / more-contested slot. Used by random-lane changes and obstacle
-# dodges; the lean-threat biases two AIs away from racing into the same lane
-# in the same physics frame. Requires the Pawn's MetroMovement back-ref to be
-# wired (set during runner registration); returns `current` if not.
+# Pick the safest lane other than `current`, gated by `pawn.can_enter_lane`.
+# "Safest" = highest `_lane_safety_score` (clearance minus lean-threat —
+# peers currently committing into the candidate lane reduce its score) among
+# enterable candidates. Falls back to `current` if no candidate is enterable
+# — the AI holds rather than swerve into an occupied / blocked slot. Used by
+# random-lane changes and obstacle dodges; the lean-threat biases two AIs
+# away from racing into the same lane in the same physics frame. Requires
+# the Pawn's MetroMovement back-ref to be wired (set during runner
+# registration); returns `current` if not.
 func _pick_clear_lane(current: int) -> int:
 	if Pawn.LANE_COUNT <= 1:
 		return current
@@ -623,9 +617,9 @@ func _pick_clear_lane(current: int) -> int:
 	for lane: int in range(Pawn.LANE_COUNT):
 		if lane == current:
 			continue
-		var score: float = _lane_safety_score(lane)
-		if score < config.min_clearance:
+		if not pawn.can_enter_lane(lane):
 			continue
+		var score: float = _lane_safety_score(lane)
 		if score > best_score:
 			best_score = score
 			best = lane

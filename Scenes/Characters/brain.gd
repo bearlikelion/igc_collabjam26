@@ -123,7 +123,7 @@ func _on_recovered() -> void:
 	pass
 
 
-func _on_obstacle_detected(_blocker: Node, _distance: float, _in_lane: int, _candidate_lanes: Array[int]) -> void:
+func _on_obstacle_detected(_blocker: Node, _distance: float, _in_lane: int) -> void:
 	pass
 
 
@@ -212,6 +212,14 @@ func get_end_of_rail_action() -> int:
 # Subclasses may override per-instance via export.
 func get_min_peer_gap() -> float:
 	return 1.0
+
+
+# Rail-distance ahead a target lane must be clear of obstacles AND peers before
+# this pawn will swerve into it. Single source of truth for `Pawn.can_enter_lane`.
+# Subclasses override to return `config.swerve_safety_distance`. Default fallback
+# matches the BrainConfig default so brain-less unit tests don't soft-lock.
+func get_swerve_safety_distance() -> float:
+	return 1.5
 
 
 # Body feel-tunables. Live on the brain's config Resource (BrainConfig +

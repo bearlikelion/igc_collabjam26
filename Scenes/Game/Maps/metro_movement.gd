@@ -904,6 +904,14 @@ func _runner_target_lane(runner: Runner) -> int:
 # source. Combined with the mid-tween engagement gate in `Pawn.start_shuffle`,
 # this means a swerver and an opposing pawn can pass through the same target
 # lane without locking into a shuffle as long as the swerver is still moving.
+#
+# Diverges from `_runner_target_lane` BY DESIGN. The encounter scan asks
+# "are bodies physically overlapping right now?" — collision-prediction
+# semantics, OCCUPIED lane. The lane-change gate (via `find_lane_occupant_ahead`
+# / `get_lane_clearance` / `Pawn.can_enter_lane`) asks "does anyone hold a
+# reservation on this lane?" — TARGET lane. If the encounter scan used TARGET,
+# rapid-tap input could flip the body's target lane and "escape" an opposing
+# pawn's encounter window without the body actually moving. Keep the split.
 func _runner_occupied_lane(runner: Runner) -> int:
 	var raw: int = runner.node.get_occupied_lane()
 	if runner.toward_finish:
@@ -1120,9 +1128,11 @@ func _maybe_clear_runner_ignore(self_snap: EncounterSnap, snaps: Array[Encounter
 		self_snap.runner.shuffle_ignored = null
 
 
-# Scan the runner's current lane for an obstacle within their lookahead.
-# When something is hit, pre-compute the clear-lane candidates and emit
-# obstacle_detected on the pawn. The runner's Brain decides what to do.
+# Scan the runner's current lane for an obstacle within their lookahead. When
+# something is hit, emit obstacle_detected on the pawn — the Brain decides
+# what to do (PlayerBrain blocks; AIBrain runs `_pick_clear_lane`, which
+# gates each candidate through `pawn.can_enter_lane` for both obstacle and
+# peer occupancy).
 func _detect_obstacle_and_notify_brain(runner: Runner) -> void:
 	var lookahead: float = runner.node.get_obstacle_lookahead()
 	if lookahead <= 0.0:
@@ -1131,27 +1141,23 @@ func _detect_obstacle_and_notify_brain(runner: Runner) -> void:
 	var blocker: Node = _scan_lane_for_obstacle(runner, current_lane, lookahead)
 	if blocker == null:
 		return
-	var candidates: Array[int] = _clear_lane_candidates(runner, current_lane, lookahead)
-	runner.node.obstacle_detected.emit(blocker, lookahead, current_lane, candidates)
-
-
-# Lanes other than `blocked_lane` that the runner could swerve into right now,
-# already shuffled so brains can just pick the first.
-func _clear_lane_candidates(runner: Runner, blocked_lane: int, lookahead: float) -> Array[int]:
-	var clear: Array[int] = []
-	for lane: int in range(Pawn.LANE_COUNT):
-		if lane == blocked_lane:
-			continue
-		if _scan_lane_for_obstacle(runner, lane, lookahead) == null:
-			clear.append(lane)
-	clear.shuffle()
-	return clear
+	runner.node.obstacle_detected.emit(blocker, lookahead, current_lane)
 
 
 # Public: nearest other Pawn ahead of `querier` in `lane` (querier's
 # direction-relative frame), within [0, lookahead] rail-meters. Null if none.
 # Internally compares physical (world-side) lanes so FORWARD vs REVERSE doesn't
-# false-match. Used by AIBrain for clearance-aware lane choice.
+# false-match. Used by AIBrain for clearance-aware lane choice and by
+# `Pawn.can_enter_lane` (via `get_lane_clearance`) for the lane-change gate.
+#
+# Keys on TARGET lane (`_runner_target_lane`) — a peer mid-tween 0→1 reports
+# as in lane 1 (their target). This is LANE-RESERVATION semantics: a peer
+# committing into lane X claims lane X for the gate, so two pawns never plan
+# into the same lane simultaneously. The encounter scan
+# (`_scan_encounters_for_all_runners`) keys on OCCUPIED instead because it
+# asks a different question — physical-overlap collision prediction. DO NOT
+# unify the two; the asymmetry is load-bearing. See `_runner_occupied_lane`
+# for the parallel rationale.
 func find_lane_occupant_ahead(querier: Pawn, lane: int, lookahead: float) -> Pawn:
 	var querier_runner: Runner = _find_runner_for(querier)
 	if querier_runner == null:
@@ -1178,56 +1184,6 @@ func find_lane_occupant_ahead(querier: Pawn, lane: int, lookahead: float) -> Paw
 			nearest_distance = ahead
 			nearest = other.node
 	return nearest
-
-
-# Public: lanes other than `exclude_lane` (use -1 to include all), sorted
-# descending by clearance — most-clear first. Clearance is min(distance to
-# nearest occupant ahead, lookahead) with obstacle-blocked lanes pinned to
-# clearance 0 so they sort last but stay candidates. Ties broken by random
-# shuffle so AI choices stay non-deterministic.
-func rank_lanes_by_clearance(querier: Pawn, exclude_lane: int, lookahead: float) -> Array[int]:
-	var querier_runner: Runner = _find_runner_for(querier)
-	if querier_runner == null:
-		return []
-	var querier_centerline: float = _runner_centerline_position(querier_runner)
-
-	# Pre-collect nearest occupant per physical lane so we don't re-scan _runners
-	# inside the per-candidate loop.
-	var occupants_by_physical_lane: Dictionary[int, float] = {}
-	for other: Runner in _runners:
-		if other == querier_runner or not is_instance_valid(other.node):
-			continue
-		var ahead: float = _signed_distance_ahead(
-			querier_centerline,
-			_runner_centerline_position(other),
-			querier_runner.toward_finish
-		)
-		if ahead <= 0.0 or ahead > lookahead:
-			continue
-		var phys: int = _runner_target_lane(other)
-		var prev: float = occupants_by_physical_lane.get(phys, INF)
-		if ahead < prev:
-			occupants_by_physical_lane[phys] = ahead
-
-	# Build (lane, clearance) tuples for every candidate.
-	var entries: Array[Vector2] = []
-	for lane: int in range(Pawn.LANE_COUNT):
-		if lane == exclude_lane:
-			continue
-		var phys: int = _physical_lane_for(querier_runner, lane)
-		var occupant_distance: float = occupants_by_physical_lane.get(phys, lookahead)
-		var obstacle_blocked: bool = _scan_lane_for_obstacle(querier_runner, lane, lookahead) != null
-		var clearance: float = 0.0 if obstacle_blocked else occupant_distance
-		entries.append(Vector2(float(lane), clearance))
-
-	# Random shuffle first so equal clearances tie-break non-deterministically.
-	entries.shuffle()
-	entries.sort_custom(func(a: Vector2, b: Vector2) -> bool: return a.y > b.y)
-
-	var result: Array[int] = []
-	for entry: Vector2 in entries:
-		result.append(int(entry.x))
-	return result
 
 
 # Public: every RUNNING peer ahead of `querier` within `lookahead` rail-meters
@@ -1270,7 +1226,10 @@ func get_runners_near(querier: Pawn, lookahead: float) -> Array[Pawn]:
 # Public: clearance ahead in `lane` (querier's direction-relative frame), in
 # rail-meters. Returns 0 if the lane has an obstacle within lookahead, else
 # the distance to the nearest occupant ahead, or `lookahead` if the lane is
-# fully clear. Used by AIBrain to apply a min-clearance floor before swerving.
+# fully clear. Used by `Pawn.can_enter_lane` (the canonical lane-change gate)
+# and by `Brain.modulate_for_same_direction_peer` (convoy speed matching).
+# Inherits `find_lane_occupant_ahead`'s TARGET-lane keying — see its
+# docstring for why this differs from the encounter scan.
 func get_lane_clearance(querier: Pawn, lane: int, lookahead: float) -> float:
 	var querier_runner: Runner = _find_runner_for(querier)
 	if querier_runner == null:
@@ -1301,6 +1260,15 @@ func _physical_lane_for(runner: Runner, direction_relative_lane: int) -> int:
 
 # Sample positions ahead along the runner's rail in a candidate lane. Returns
 # the first `obstacle` group node in the path, or null if clear.
+#
+# Sampling spans `[base_distance, base_distance + lookahead]` inclusive (5
+# rays for sample_count=4). The leading `i=0` sample covers the immediate
+# vicinity — the perpendicular point right next to the runner. Without it,
+# `can_enter_lane`'s 1.5 m scan has a [0, 0.375 m) dead zone, while the
+# obstacle scan in the runner's current lane (0.75 m for player) catches
+# anything past 0.1875 m — the band [0.1875, 0.375] m would let the swerve
+# gate pass and then block the runner the very next frame ("swerve and
+# stop"). 5 samples close the gap.
 func _scan_lane_for_obstacle(runner: Runner, lane: int, lookahead: float) -> Node:
 	var space_state: PhysicsDirectSpaceState3D = runner.node.get_world_3d().direct_space_state
 	if space_state == null:
@@ -1308,7 +1276,7 @@ func _scan_lane_for_obstacle(runner: Runner, lane: int, lookahead: float) -> Nod
 	var sample_count: int = 4
 	var step: float = lookahead / float(sample_count)
 	var base_distance: float = runner.distance_along
-	for i: int in range(1, sample_count + 1):
+	for i: int in range(sample_count + 1):
 		var sample_distance: float = base_distance + step * float(i)
 		var sample: Vector3 = _runner_position_at(runner, lane, sample_distance)
 		var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(

@@ -122,10 +122,9 @@ signal recovered()
 
 # Planning events. Emitted by MetroMovement when its forward scan finds an
 # `obstacle` group node in the runner's lane. Brain decides the response —
-# PlayerBrain knocks the pawn down; AIBrain swerves to a candidate lane.
-# `candidate_lanes` is the pre-filtered list of clear lanes (already
-# shuffled), so AI brains can just pick the first.
-signal obstacle_detected(blocker: Node, distance: float, in_lane: int, candidate_lanes: Array[int])
+# PlayerBrain knocks the pawn down; AIBrain runs `_pick_clear_lane` (gated
+# by `can_enter_lane` for both obstacles and peers) and swerves.
+signal obstacle_detected(blocker: Node, distance: float, in_lane: int)
 
 # Locomotion lifecycle. Fires whenever locomotion changes.
 signal locomotion_changed(old_state: int, new_state: int)
@@ -378,11 +377,11 @@ func _input(event: InputEvent) -> void:
 # before any sideways motion.
 #
 # Allowed only while RUNNING / BLOCKED (the tween is a substate of RUNNING).
-# Gated by `_is_lane_change_safe` — if the target lane has a same-direction
-# occupant within the brain's `min_peer_gap` ahead, the request queues and
-# retries every physics frame until safe. A subsequent `request_lane_change`
-# overwrites the queue with the new target. Calling with the target equal to
-# the current lane (and no tween in flight) clears any queued intent.
+# Gated by `can_enter_lane` — if the target lane has a peer or obstacle within
+# the brain's `swerve_safety_distance`, the request queues and retries every
+# physics frame until safe. A subsequent `request_lane_change` overwrites the
+# queue with the new target. Calling with the target equal to the current
+# lane (and no tween in flight) clears any queued intent.
 #
 # `max_prefix_meters` clamps the telegraph length to a known distance budget
 # — used by obstacle dodge so a close bench still leaves time for the body
@@ -400,7 +399,7 @@ func request_lane_change(target_lane: int, max_prefix_meters: float = INF) -> vo
 	# Defer when a prior tween is in flight OR the target lane is currently
 	# unsafe. Either way the queue drain (`_try_commit_queued_lane_change`)
 	# retries every physics frame; same surface for both deferral causes.
-	if _lane_tween_phase != LaneTweenPhase.IDLE or not _is_lane_change_safe(clamped):
+	if _lane_tween_phase != LaneTweenPhase.IDLE or not can_enter_lane(clamped):
 		_queued_lane_change = clamped
 		_queued_max_prefix_meters = max_prefix_meters
 		return
@@ -423,32 +422,13 @@ func _try_commit_queued_lane_change() -> void:
 		return
 	if _lane_tween_phase != LaneTweenPhase.IDLE:
 		return
-	if not _is_lane_change_safe(_queued_lane_change):
+	if not can_enter_lane(_queued_lane_change):
 		return
 	var target: int = _queued_lane_change
 	var prefix_budget: float = _queued_max_prefix_meters
 	_queued_lane_change = -1
 	_queued_max_prefix_meters = INF
 	_commit_lane_change(target, prefix_budget)
-
-
-# Returns true when the runner-coord scan reports `target_lane` clear of
-# same-direction peers within `min_peer_gap` ahead AND no `obstacle` group
-# node within the same window. Defensive default: no MetroMovement back-ref
-# (pre-registration window during nav-mesh bake — see facade docstring) →
-# assume safe so AIBrain's `_tick_random_lane` can request lane changes
-# during startup without crashing. Same-lane request → trivially safe.
-func _is_lane_change_safe(target_lane: int) -> bool:
-	if target_lane == _target_lane:
-		return true
-	if _metro_movement == null:
-		return true
-	# While blocked by an obstacle the player may freely switch lanes — obstacle
-	# re-detection in _advance_runner will immediately re-block if needed.
-	if locomotion == LocomotionState.BLOCKED:
-		return true
-	var min_gap: float = brain.get_min_peer_gap() if brain != null else 1.0
-	return get_lane_clearance(target_lane, min_gap) >= min_gap
 
 
 # Brain initiates a shuffle encounter. This Pawn becomes the initiator.
@@ -651,6 +631,29 @@ func get_runners_near(lookahead: float) -> Array[Pawn]:
 	if _metro_movement == null:
 		return []
 	return _metro_movement.get_runners_near(self, lookahead)
+
+
+# THE canonical "is target_lane enterable right now?" predicate. Single source
+# of truth for every lane-change gate — `request_lane_change` queue gate, the
+# queue drain in `_try_commit_queued_lane_change`, AIBrain's stance roll
+# (`_roll_stance` / `_pick_clear_lane`). A lane is enterable iff:
+#   - it's the current lane (trivial), OR
+#   - no obstacle within `swerve_safety_distance` ahead, AND
+#   - no peer within `swerve_safety_distance` ahead.
+# Defensive default: pre-registration (`_metro_movement == null`) → assume
+# safe so AI ticks during nav-mesh bake don't soft-lock. The MetroMovement
+# scan internally keys on TARGET lane — a peer mid-tween into the target
+# lane already counts as occupying it (lane-reservation semantics). The
+# encounter scan in MetroMovement keys on OCCUPIED instead because it asks
+# a different question (physical overlap, not reservation); see the
+# docstrings on `find_lane_occupant_ahead` and `_runner_occupied_lane`.
+func can_enter_lane(target_lane: int) -> bool:
+	if target_lane == _target_lane:
+		return true
+	if _metro_movement == null:
+		return true
+	var d: float = brain.get_swerve_safety_distance() if brain != null else 1.5
+	return get_lane_clearance(target_lane, d) >= d
 
 
 # --- Subway-shuffle participant hooks (called by initiator on callee) -----

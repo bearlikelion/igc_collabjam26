@@ -68,6 +68,10 @@ func get_encounter_lookahead() -> float:
 	return config.encounter_lookahead
 
 
+func get_swerve_safety_distance() -> float:
+	return config.swerve_safety_distance
+
+
 # Body feel-tunables — read from the shared BrainConfig fields.
 
 func get_start_speed() -> float:
@@ -94,7 +98,7 @@ func get_shuffle_knockback_distance() -> float:
 	return config.shuffle_knockback_distance
 
 
-func _on_obstacle_detected(_blocker: Node, _distance: float, _in_lane: int, _candidate_lanes: Array[int]) -> void:
+func _on_obstacle_detected(_blocker: Node, _distance: float, _in_lane: int) -> void:
 	pawn.set_movement_blocked(true)
 
 
