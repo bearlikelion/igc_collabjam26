@@ -836,9 +836,13 @@ func _advance_runner(runner: Runner, delta: float) -> void:
 		return
 	if runner.node.is_advancing_paused():
 		runner.node.set_movement_blocked(false)
-
-	if not runner.node.is_running():
 		return
+
+	# SHUFFLING falls through here. is_advancing_paused() excludes SHUFFLING
+	# by design (see Pawn.is_advancing_paused docstring) — the pawn closes
+	# the gap at _shuffle_approach_speed during the choice window. Obstacle
+	# scanning is suppressed for SHUFFLING in Pawn.should_avoid_obstacles,
+	# so the block below is effectively a no-op for SHUFFLING.
 
 	# MetroMovement detects, Brain decides. The signal handler runs
 	# synchronously, so by the next line the pawn may be knocked down or
