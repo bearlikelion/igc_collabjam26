@@ -2,14 +2,38 @@ class_name AIBrain
 extends Brain
 
 # AI brain. Owns all rail-movement intent for an NPC: destination, speed, lane
-# avoidance. MetroMovement queries these via the Brain virtual interface on Pawn.
-# Timer-driven lane decisions tick through physics_tick using msec timestamps —
-# avoids spawning Timer child nodes and keeps all decision state in one place.
+# avoidance, run-up + shuffle telegraphs, obstacle dodge, ambient lane wander.
+# MetroMovement queries these via the Brain virtual interface on Pawn. Timer-
+# driven decisions tick through `physics_tick` using msec timestamps — avoids
+# spawning Timer child nodes and keeps all decision state in one place.
 #
 # All tunables live on the assigned `AIBrainConfig` Resource. Different .tres
 # files = different archetypes — see Scenes/Characters/Brains/Configs/.
 # Per-pawn runtime state stays on this Node (every NPC gets its own AIBrain
 # instance via the Brain child node).
+#
+# RunUpState (Stage 4 of the state-management refactor) replaces the four
+# free-floating pre-shuffle fields with an explicit FSM:
+#
+#   IDLE        — no opposing peer in scope. Stance 0, no reroll.
+#   TRACKING    — opposing peer detected, run-up window active. The reroll
+#                 loop ticks (gated by stubbornness), broadcasting a stance
+#                 lean toward the planned dodge side. No lane commit during
+#                 RUNNING — pre-shuffle stance is pure telegraph.
+#   COMMITTING  — shuffle has begun (locomotion == SHUFFLING). Stance now
+#                 routes to `pawn.set_shuffle_telegraph` for the resolver
+#                 collision math. Reroll loop continues.
+#
+# Transitions:
+#   IDLE       ──_enter_tracking(other)─────►  TRACKING
+#   TRACKING   ──_exit_runup()──────────────►  IDLE  (staleness or same-direction)
+#   TRACKING   ──_advance_to_committing()──►   COMMITTING  (on_shuffle_began)
+#   IDLE       ──_advance_to_committing()──►   COMMITTING  (peer initiated inside our scan)
+#   COMMITTING ──_exit_runup()──────────────►  IDLE  (on_shuffle_resolved)
+#
+# Per-peer cooldown is owned by Pawn's `shuffle_ignored` (set by the initiator
+# on resolve), not by this FSM — the encounter scan already skips re-engaging
+# the same peer until they drift past hysteresis.
 
 ## Per-archetype tunables. Authored as a .tres under
 ## Scenes/Characters/Brains/Configs/ — Greeter.tres (parks at finish),
@@ -18,42 +42,40 @@ extends Brain
 ## defaults with a push_error.
 @export var config: AIBrainConfig
 
+enum RunUpState { IDLE, TRACKING, COMMITTING }
+
 var destination: Node3D
 var _actual_move_speed: float = 0.0
 var _next_random_lane_msec: int = 0
 var _avoidance_until_msec: int = 0
 
-# Pawn we're stalled behind because they're busy in another shuffle. While
-# set, get_move_speed returns 0 so this NPC visibly stops. Auto-clears as
-# soon as the target's locomotion returns to RUNNING (checked in the getter).
-# The encounter scan keeps firing each frame and re-attempts start_shuffle
-# the moment the peer is free.
-var _waiting_for: Pawn
-
 # The AI's current planned stance. -1 = lean/dodge left, +1 = lean/dodge
 # right, 0 = stand upright and claim the lane. Drives the body via
 # `_set_stance`:
-#   - RUNNING   → pure lean broadcast. Peers reading `lean_direction` see
-#                 the tell, but the body holds its lane — the shuffle
-#                 trigger is "same physical lane + opposing pawn", and we
-#                 don't want pre-shuffle swerves to spend the engagement
-#                 window mid-tween (the mid-tween gate in `start_shuffle`
-#                 would then refuse to engage).
-#   - SHUFFLING → locked into pawn.set_shuffle_telegraph for the
-#                 collision-resolution math at the deadline. The lane
-#                 commit happens at shuffle resolution.
-# Re-rolled by `_tick_stance_reroll` every reaction_period_ms, gated by
-# `stubbornness` (random skip). lean(0) returns the torso to upright.
+#   - RUNNING / TRACKING → pure lean broadcast. Peers reading `lean_direction`
+#                          see the tell, but the body holds its lane — the
+#                          shuffle trigger is "same physical lane + opposing
+#                          pawn", and we don't want pre-shuffle swerves to
+#                          spend the engagement window mid-tween.
+#   - SHUFFLING / COMMITTING → locked into pawn.set_shuffle_telegraph for the
+#                              collision-resolution math at the deadline. The
+#                              lane commit happens at shuffle resolution.
+# Re-rolled by `_tick_tracking` / `_tick_committing` every reaction_period_ms,
+# gated by `stubbornness` (random skip). lean(0) returns the torso to upright.
 var _current_stance: int = 0
 
-# Tracks the opposing peer this AI is currently telegraphing against.
-# Set on first encounter scan that hits an opposing pawn; cleared on
-# shuffle resolve OR via staleness check (encounter signal stopped firing
-# for PRE_SHUFFLE_STALE_MS → peer left the lane). Used by the reroll loop
-# to know who to consult for the peer-tell bias.
-var _pre_shuffle_other: Pawn = null
-var _pre_shuffle_last_msec: int = 0
-const PRE_SHUFFLE_STALE_MS: int = 100
+# RunUpState FSM bookkeeping. Set/cleared exclusively through the transition
+# helpers (`_enter_tracking`, `_exit_runup`, `_advance_to_committing`) so the
+# four-field cluster doesn't drift out of sync.
+var _runup: int = RunUpState.IDLE
+var _runup_other: Pawn = null         # peer we're tracking against (TRACKING / COMMITTING)
+var _runup_last_msec: int = 0         # last encounter signal — staleness gate (TRACKING)
+var _runup_reaction_msec: int = 0     # next reroll consideration (TRACKING + COMMITTING)
+
+# Stale-tell horizon (ms): if the encounter scan hasn't refreshed
+# `_runup_last_msec` within this window, the cached peer is assumed gone
+# (left our lane / moved out of range) and we drop back to IDLE.
+const RUNUP_STALE_MS: int = 100
 
 # Buffer in rail-meters between the obstacle and where the dodge tween starts.
 # Used to shrink the telegraph prefix when an obstacle is too close for the
@@ -61,12 +83,6 @@ const PRE_SHUFFLE_STALE_MS: int = 100
 # can't afford a 300 ms prefix or it'd walk into the bench before the dodge
 # tween starts). The Pawn-side _commit_lane_change clamps to 0.
 const OBSTACLE_TELEGRAPH_SAFETY_MARGIN: float = 0.1
-
-# Wall-clock timestamp of the next stance reroll consideration. Bumped by
-# reaction_period_ms each tick whether we re-roll or stubbornly skip, so
-# stubbornness biases the *content* of the tick (skip vs roll) without
-# changing its frequency.
-var _next_reaction_msec: int = 0
 
 
 # --- Brain hooks ----------------------------------------------------------
@@ -82,10 +98,116 @@ func _on_bound() -> void:
 		_next_random_lane_msec = Time.get_ticks_msec() + int(_next_random_lane_delay() * 1000.0)
 
 
+# Single dispatch point: pick which RunUp tick runs (if any), then run the
+# state-independent ones (overtake, random-lane wander). Overtake gates on
+# RunUp state internally — suppressed during TRACKING / COMMITTING so the AI
+# doesn't tween into a lane mid-shuffle and trip the engagement gate.
 func physics_tick(_delta: float) -> void:
-	_tick_pre_shuffle_staleness()
-	_tick_stance_reroll()
+	match _runup:
+		RunUpState.TRACKING:
+			_tick_tracking()
+		RunUpState.COMMITTING:
+			_tick_committing()
 	_tick_overtake()
+	_tick_random_lane()
+
+
+# --- RunUpState transitions -----------------------------------------------
+
+# IDLE → TRACKING. Cache the peer, arm the reroll cadence so a stubborn first-
+# sight skip doesn't get re-rolled on the very next physics frame, and roll a
+# fresh stance unless the stubbornness gate fires. The reroll loop in
+# `_tick_tracking` owns subsequent reconsiderations.
+func _enter_tracking(other: Pawn) -> void:
+	_runup = RunUpState.TRACKING
+	_runup_other = other
+	_runup_last_msec = Time.get_ticks_msec()
+	_runup_reaction_msec = Time.get_ticks_msec() + config.reaction_period_ms
+	if randf() >= config.stubbornness:
+		_set_stance(_roll_stance(other))
+
+
+# TRACKING / COMMITTING → IDLE. Drop the cached peer + stance; clear the run-
+# up tell on the body. Pawn's own lean(0) reset on locomotion exits SHUFFLING
+# /KNOCKED_DOWN to RUNNING covers the COMMITTING → IDLE-via-resolved path
+# defensively, but we issue lean(0) here too so the staleness path (RUNNING-
+# only) clears the body too.
+func _exit_runup() -> void:
+	_runup = RunUpState.IDLE
+	_runup_other = null
+	_runup_last_msec = 0
+	_runup_reaction_msec = 0
+	_current_stance = 0
+	if pawn.locomotion == Pawn.LocomotionState.RUNNING:
+		pawn.lean(0)
+
+
+# TRACKING (or IDLE) → COMMITTING. Fired from `_on_shuffle_began`. If we never
+# saw a run-up encounter for this peer (player initiated inside our scan
+# radius before we caught them), roll fresh; otherwise lock in the cached
+# stance. Reset the reroll cadence so the first commit-window reroll has the
+# full reaction window.
+func _advance_to_committing(other: Pawn) -> void:
+	var fresh_peer: bool = _runup_other != other
+	_runup = RunUpState.COMMITTING
+	_runup_other = other
+	_runup_reaction_msec = Time.get_ticks_msec() + config.reaction_period_ms
+	if fresh_peer:
+		_set_stance(_roll_stance(other))
+	else:
+		_set_stance(_current_stance)  # routes to set_shuffle_telegraph since locomotion is now SHUFFLING
+
+
+# --- Per-state ticks ------------------------------------------------------
+
+# TRACKING: staleness check + stance reroll.
+# Staleness: encounter scan stopped firing for the cached peer (peer left our
+# lane / moved out of range) → drop to IDLE.
+# Reroll: every reaction_period_ms, consider re-rolling (gated by stubbornness).
+func _tick_tracking() -> void:
+	if Time.get_ticks_msec() - _runup_last_msec > RUNUP_STALE_MS:
+		_exit_runup()
+		return
+	_maybe_reroll_stance(_runup_other)
+
+
+# COMMITTING: stance reroll only. Staleness doesn't apply — locomotion is
+# SHUFFLING, encounter scan paused, the deadline timer on the initiator
+# decides when this ends.
+func _tick_committing() -> void:
+	# `pawn.get_shuffle_other()` is more authoritative than `_runup_other`
+	# during COMMITTING (covers the rare callee path where a fresh peer
+	# attached). Falls back to cached if shuffle isn't fully wired.
+	var other: Pawn = pawn.get_shuffle_other()
+	if other == null:
+		other = _runup_other
+	_maybe_reroll_stance(other)
+
+
+# Periodic reroll consideration. Bumps `_runup_reaction_msec` whether we
+# re-roll or stubbornly skip, so stubbornness biases the *content* of the
+# tick (skip vs roll) without changing its frequency.
+#
+# Wall-clock timing: shuffle.deadline_msec is wall-clock too (not affected
+# by Engine.time_scale = 0.2 bullet-time), so 50 ms here is 50 ms of peer
+# perception even though physics ticks 5× slower during bullet-time.
+func _maybe_reroll_stance(other: Pawn) -> void:
+	if config.reaction_period_ms <= 0 or other == null:
+		return
+	if Time.get_ticks_msec() < _runup_reaction_msec:
+		return
+	_runup_reaction_msec = Time.get_ticks_msec() + config.reaction_period_ms
+	if randf() < config.stubbornness:
+		return
+	var new_stance: int = _roll_stance(other)
+	if new_stance == _current_stance:
+		return
+	_set_stance(new_stance)
+
+
+# Random-lane wander, extracted from the old physics_tick body so the
+# RunUpState dispatcher stays clean.
+func _tick_random_lane() -> void:
 	if not config.random_lane_changes:
 		return
 	if Time.get_ticks_msec() < _next_random_lane_msec:
@@ -106,11 +228,10 @@ func physics_tick(_delta: float) -> void:
 # obstacle dodge and the overtake share one cooldown — the AI can't ping-pong
 # every frame.
 #
-# Skipped during run-up to an opposing peer (`_pre_shuffle_other != null`):
-# an overtake tween in flight when distance closes inside `inner_shuffle_radius`
-# would put us mid-tween, and the engagement gate in `Pawn.start_shuffle`
-# would then refuse to engage. The shuffle takes priority; overtaking can
-# resume after it resolves.
+# Skipped during TRACKING / COMMITTING: an overtake tween in flight when
+# distance closes inside `inner_shuffle_radius` would put us mid-tween, and
+# the engagement gate in `Pawn.start_shuffle` would refuse to engage. The
+# shuffle takes priority; overtaking can resume after it resolves.
 func _tick_overtake() -> void:
 	if not config.overtake_when_throttled:
 		return
@@ -118,7 +239,7 @@ func _tick_overtake() -> void:
 		return
 	if Time.get_ticks_msec() < _avoidance_until_msec:
 		return
-	if _pre_shuffle_other != null:
+	if _runup != RunUpState.IDLE:
 		return
 	if Pawn.LANE_COUNT <= 1:
 		return
@@ -151,53 +272,43 @@ func _tick_overtake() -> void:
 	_avoidance_until_msec = Time.get_ticks_msec() + int(config.avoidance_cooldown * 1000.0)
 
 
+# --- Pawn signal handlers -------------------------------------------------
+
 func _on_encounter_detected(other: Pawn, distance: float) -> void:
 	if other == null:
 		return
 	# Same-direction peer (player or NPC walking our way): no shuffle. Speed
 	# modulation in get_move_speed caps us at their speed so we trail without
-	# ever colliding. Knockback should only fire head-on.
+	# ever colliding. Knockback should only fire head-on. If we were tracking
+	# this peer (now flipped direction somehow), drop the run-up state.
 	if other.is_routing_to_finish_point() == pawn.is_routing_to_finish_point():
 		_waiting_for = null
-		_clear_pre_shuffle_tell()
+		if _runup_other == other:
+			_exit_runup()
 		return
 	# Transiently busy opposing NPC (mid-shuffle): stop and wait. Resolves
 	# in <0.5s; once they're shuffle-engageable again `get_move_speed`'s
-	# auto-clear releases us and the next encounter tick hits the live
-	# branch.
+	# auto-clear releases us and the next encounter tick hits the live branch.
 	#
 	# Other paused states (KNOCKED_DOWN ~2.5s, PARKED forever) do NOT halt —
 	# we fall through to the stance-roll branch and swerve around the body.
-	# `_roll_stance` suppresses stay_chance for paused peers so the AI
-	# commits to ±1 instead of phasing through.
-	if other.is_in_group("npc") and other.is_shuffle_active():
-		_waiting_for = other
-		pawn.set_run_speed(config.start_speed)
+	# `_roll_stance` suppresses stay_chance for paused peers so the AI commits
+	# to ±1 instead of phasing through.
+	if other.is_in_group("npc") and other.locomotion == Pawn.LocomotionState.SHUFFLING:
+		_wait_for(other)
 		return
 	_waiting_for = null
 
-	# First-encounter stance roll. The reroll loop in _tick_stance_reroll
-	# owns subsequent reconsiderations (gated by stubbornness), so we only
-	# roll fresh here when the opposing peer changes. _set_stance handles
-	# all three side effects: lean broadcast, run-up preempt, and shuffle
-	# telegraph (whichever applies given current locomotion).
-	#
-	# Stubbornness gate: at high stubbornness the AI skips the first-sight
-	# swerve and holds its lane (stance 0) — the reroll loop will reconsider
-	# every reaction_period_ms, also gated by stubbornness, so the AI may
-	# eventually swerve as the gap closes. We still set `_pre_shuffle_other`
-	# so the reroll loop activates; we just don't commit a stance now.
-	if _pre_shuffle_other != other:
-		_pre_shuffle_other = other
-		# Arm the reroll cadence on peer change so a stubborn first-sight skip
-		# doesn't get re-rolled on the very next physics frame (stale
-		# _next_reaction_msec from a prior peer / staleness clear would
-		# otherwise satisfy the cadence gate immediately). Mirrors
-		# _on_shuffle_began's arming pattern.
-		_next_reaction_msec = Time.get_ticks_msec() + config.reaction_period_ms
-		if randf() >= config.stubbornness:
-			_set_stance(_roll_stance(other))
-	_pre_shuffle_last_msec = Time.get_ticks_msec()
+	# Live opposing peer. Refresh staleness timestamp regardless of state so
+	# `_tick_tracking` sees we're still in scope.
+	_runup_last_msec = Time.get_ticks_msec()
+
+	# Enter TRACKING on first sight of a new peer. Stubbornness gate happens
+	# inside `_enter_tracking` — at high stubbornness the AI may skip the
+	# first-sight stance roll and hold lane (stance 0); the reroll loop
+	# reconsiders every reaction_period_ms.
+	if _runup == RunUpState.IDLE or _runup_other != other:
+		_enter_tracking(other)
 
 	# Outside the engagement zone: keep telegraphing; don't initiate yet.
 	# Gives both pawns a real run-up window to read each other's tells.
@@ -205,12 +316,12 @@ func _on_encounter_detected(other: Pawn, distance: float) -> void:
 		return
 
 	# Inside the engagement zone: AI-vs-AI engages the shuffle protocol.
-	# Player initiates from PlayerBrain — we just keep telegraphing and
-	# wait for them to start the shuffle. `start_shuffle` no-ops if either
-	# side is mid-tween; the encounter scan re-fires next frame and engages
-	# once both pawns settle. Run-up stance is pure lean broadcast (see
-	# `_set_stance`), so the AI is always lane-settled here unless an
-	# unrelated obstacle dodge / overtake / random-lane is in flight.
+	# Player initiates from PlayerBrain — we just keep telegraphing and wait.
+	# `start_shuffle` no-ops if either side is mid-tween; the encounter scan
+	# re-fires next frame and engages once both pawns settle. Run-up stance
+	# is pure lean broadcast (see `_set_stance`), so the AI is always
+	# lane-settled here unless an unrelated obstacle dodge / overtake /
+	# random-lane is in flight.
 	if other.is_in_group("npc"):
 		pawn.start_shuffle(other, distance)
 
@@ -238,43 +349,28 @@ func _on_obstacle_detected(_blocker: Node, distance: float, in_lane: int, _candi
 func _on_shuffle_began(other: Pawn, _other_telegraph: int, _deadline_msec: int) -> void:
 	if other == null:
 		return
-	# Schedule the first stance re-roll. Continuous loop runs in physics_tick:
-	# every reaction_period_ms wall-clock the AI considers reconsidering its
-	# stance (stubbornness gates the actual re-roll). Same loop for player
-	# and AI peers — that's what makes telegraphs feel responsive without
-	# being deterministic about who wins.
-	_next_reaction_msec = Time.get_ticks_msec() + config.reaction_period_ms
-	# Lock the cached run-up stance into the shuffle telegraph. If we never
-	# saw a run-up encounter for this peer (e.g. player initiated the shuffle
-	# inside our scan radius before our scan caught them), roll fresh now.
-	# Either way, _set_stance routes to set_shuffle_telegraph since locomotion
-	# is already SHUFFLING by the time this signal fires.
-	if _pre_shuffle_other != other:
-		_pre_shuffle_other = other
-		_set_stance(_roll_stance(other))
-	else:
-		_set_stance(_current_stance)
+	# TRACKING / IDLE → COMMITTING. Either path locks the stance in via
+	# `pawn.set_shuffle_telegraph` (locomotion is now SHUFFLING, so
+	# `_set_stance` routes there).
+	_advance_to_committing(other)
 
 
 # AI-vs-AI no longer reactively opposes the peer's commit signal — both AIs
-# roll independently in `_tick_stance_reroll` so the telegraph game decides
+# roll independently in `_tick_committing` so the telegraph game decides
 # the outcome. Player-vs-AI is handled by the same reroll loop. Kept as a
 # no-op override so the base-class signal connection stays wired.
 func _on_shuffle_telegraph_changed(_direction: int) -> void:
 	pass
 
 
-# Clear stance state on resolve (success or fail). Pawn already emits lean(0)
-# on the locomotion transition out of SHUFFLING, so the body untells itself;
-# we just drop the cached peer + stance so the next encounter rolls fresh.
+# COMMITTING → IDLE on resolve (success or fail). Pawn already emits lean(0)
+# on the locomotion transition out of SHUFFLING, so the body untells itself
+# even before `_exit_runup` runs.
 func _on_shuffle_resolved(_succeeded: bool, _direction: int) -> void:
-	_pre_shuffle_other = null
-	_current_stance = 0
-	_pre_shuffle_last_msec = 0
-	_next_reaction_msec = 0
+	_exit_runup()
 
 
-# --- Stance roll + reroll loop --------------------------------------------
+# --- Stance roll ----------------------------------------------------------
 
 # Roll a fresh stance (-1 / 0 / +1) against the opposing peer. Weighted pick:
 #   - Both adjacents blocked or out of bounds → forced 0 (must claim).
@@ -283,13 +379,12 @@ func _on_shuffle_resolved(_succeeded: bool, _direction: int) -> void:
 #   - `stay_weight` = 0 when `other` is paused (knocked-down, parked, etc.).
 #     A non-RUNNING peer is geometry — they won't move out of our way, so the
 #     telegraph game collapses: stance MUST commit to a side or the AI walks
-#     through the body. RUNNING peer = `stay_weight` = config.stay_chance
-#     (the negotiable case).
+#     through the body. RUNNING peer = `stay_weight` = config.stay_chance.
 #   - Peer-tell bias: if the peer is broadcasting a non-zero lean, the
 #     anti-collision world-side gets a 2× weight boost — but stay still
 #     remains a real option (unlike the old hard-oppose loop).
 # The roll is non-deterministic by design — combined with stubbornness in
-# `_tick_stance_reroll`, the telegraph game decides who wins each encounter.
+# the reroll loop, the telegraph game decides who wins each encounter.
 func _roll_stance(other: Pawn) -> int:
 	var current: int = pawn.get_current_lane()
 	var left_clear: bool = current > 0 and _is_dodge_lane_clear(current - 1)
@@ -297,7 +392,7 @@ func _roll_stance(other: Pawn) -> int:
 	if not left_clear and not right_clear:
 		return 0
 	var stay_weight: float = config.stay_chance
-	if other != null and other.is_runner_paused():
+	if other != null and not other.is_running():
 		stay_weight = 0.0
 	var weights: Dictionary[int, float] = {0: stay_weight}
 	if left_clear:
@@ -336,7 +431,7 @@ func _weighted_pick(weights: Dictionary[int, float]) -> int:
 #      RUNNING this is the *only* effect — pre-shuffle stance is pure
 #      telegraph, no lane commit. The shuffle trigger is "same physical
 #      lane + opposing pawn", so a run-up swerve would just spend the
-#      engagement window mid-tween and the mid-tween gate in
+#      engagement window mid-tween and the engagement gate in
 #      `start_shuffle` would refuse to engage. The lane commit happens at
 #      shuffle resolution via the SHUFFLING branch below.
 #   3. SHUFFLING → lock the shuffle telegraph to the stance. The Pawn's
@@ -385,67 +480,6 @@ func _is_dodge_lane_clear(lane: int) -> bool:
 	# the lane reads as clear. Keeps unit-test scenarios from soft-locking.
 	var clearance: float = pawn.get_lane_clearance(lane, config.encounter_lookahead)
 	return clearance >= config.min_clearance
-
-
-# Drop the run-up tell — peer changed (same-direction now), or encounter
-# scan stopped firing (staleness). Reset stance to 0 so the body stands
-# upright; no stance to broadcast.
-func _clear_pre_shuffle_tell() -> void:
-	if _pre_shuffle_other == null:
-		return
-	_pre_shuffle_other = null
-	_current_stance = 0
-	_pre_shuffle_last_msec = 0
-	if pawn.locomotion == Pawn.LocomotionState.RUNNING:
-		pawn.lean(0)
-
-
-# Staleness clear: encounter scan stopped firing for the cached peer (peer
-# left our lane / moved out of range), so the tell no longer reflects an
-# imminent shuffle. Don't clear during SHUFFLING — `_on_shuffle_resolved`
-# owns cleanup once the encounter resolves.
-func _tick_pre_shuffle_staleness() -> void:
-	if _pre_shuffle_other == null:
-		return
-	if pawn.locomotion == Pawn.LocomotionState.SHUFFLING:
-		return
-	if Time.get_ticks_msec() - _pre_shuffle_last_msec <= PRE_SHUFFLE_STALE_MS:
-		return
-	_clear_pre_shuffle_tell()
-
-
-# Periodic stance reroll. Active during run-up (RUNNING + opposing peer
-# tracked) and the shuffle window (SHUFFLING). Stubbornness gates whether
-# we re-roll on each tick — when stubborn we hold the current stance so
-# peers reading our tell can rely on it; otherwise we re-roll fresh and
-# may flip stance, including back to 0 (stand upright).
-#
-# Wall-clock timing: shuffle.deadline_msec is wall-clock too (not affected
-# by Engine.time_scale = 0.2 bullet-time), so 50 ms here is 50 ms of peer
-# perception even though physics ticks 5× slower during bullet-time.
-func _tick_stance_reroll() -> void:
-	if config.reaction_period_ms <= 0:
-		return
-	var in_runup: bool = (
-		pawn.locomotion == Pawn.LocomotionState.RUNNING
-		and _pre_shuffle_other != null
-	)
-	var in_shuffle: bool = pawn.is_shuffle_active()
-	if not (in_runup or in_shuffle):
-		return
-	if Time.get_ticks_msec() < _next_reaction_msec:
-		return
-	_next_reaction_msec = Time.get_ticks_msec() + config.reaction_period_ms
-	# Stubbornness gate: random skip = keep current stance, no re-roll this tick.
-	if randf() < config.stubbornness:
-		return
-	var other: Pawn = pawn.get_shuffle_other() if in_shuffle else _pre_shuffle_other
-	if other == null:
-		return
-	var new_stance: int = _roll_stance(other)
-	if new_stance == _current_stance:
-		return
-	_set_stance(new_stance)
 
 
 # Pick this AI's telegraph (-1 / +1) such that its world-space side points
@@ -500,19 +534,12 @@ func get_destination() -> Node3D:
 
 
 func get_move_speed() -> float:
-	# Stalled behind a busy peer? Hold position. Auto-clear once the peer is
-	# RUNNING + lane-settled — a peer mid-tween isn't engageable yet, so we
-	# keep halting until their tween completes. Encounter scan re-fires next
-	# frame and the live branch of `_on_encounter_detected` engages the
-	# shuffle.
-	if _waiting_for != null:
-		if not is_instance_valid(_waiting_for) or _waiting_for.is_lane_settled():
-			_waiting_for = null
-		else:
-			return 0.0
 	if _actual_move_speed <= 0.0:
 		_roll_speed()
-	return modulate_for_same_direction_peer(_actual_move_speed)
+	# modulate_for_wait short-circuits to 0 while halting behind a busy peer;
+	# auto-clears in the modulator when the peer becomes lane-settled.
+	# modulate_for_same_direction_peer caps at peer speed for convoy trailing.
+	return modulate_for_wait(modulate_for_same_direction_peer(_actual_move_speed))
 
 
 func get_min_peer_gap() -> float:

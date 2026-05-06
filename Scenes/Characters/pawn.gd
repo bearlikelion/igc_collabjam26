@@ -13,11 +13,16 @@ extends CharacterBody3D
 #   - Subway-shuffle resolver (initiator-side: deadline timer + world-side compare)
 #   - Subway-shuffle participant state (callee-side: telegraph + side-step)
 #   - Encounter sense (rail-coord scan in MetroMovement: emits encounter_detected)
-#   - Camera (a "sense": mouse pitch input, headbob, lane-lean spring,
-#     shuffle camera tilt, mode flip on knockdown — all owned by Pawn)
-#   - Bullet-time on shuffle (player-flagged via apply_bullet_time)
+#   - Camera rig reference (PlayerBrain wires it at bind; null on NPCs)
 #   - Visual animation playback (die, recover, walk, interact_*)
-#   - Visual show/hide tied to camera mode
+#   - Visual show on knockdown (NPC death anim too — PlayerBrain re-hides on
+#     recovery via `on_recovered` hook)
+#
+# Player-specific concerns (bullet-time, camera mode flips, mouse capture,
+# slow_sound) live in PlayerBrain via the locomotion-transition hooks
+# (`on_shuffle_entered` / `on_shuffle_exited` / `on_knocked_down` /
+# `on_recovered`) dispatched from `_set_locomotion`. Pawn stays role-agnostic
+# — same code paths fire for player and NPCs.
 #
 # Locomotion state machine (see LocomotionState below):
 #   RUNNING  ──start_shuffle──────►   SHUFFLING
@@ -79,10 +84,9 @@ class Shuffle:
 	var time_left: float = 0.0
 	var my_telegraph: int = 0       # this Pawn's chosen side (-1, 0, +1)
 	var their_telegraph: int = 0    # the other Pawn's last-seen telegraph
-	# Engine.time_scale snapshot lives on Pawn (`_shuffle_previous_time_scale`)
-	# rather than here so cleanup in `_set_locomotion`'s SHUFFLING-exit branch
-	# isn't coupled to this struct's lifetime — resolve paths null `shuffle`
-	# at varying points relative to the locomotion transition.
+	# Engine.time_scale snapshot lives on PlayerBrain — only PlayerBrain mutates
+	# it, and PlayerBrain.on_shuffle_exited restores it. NPCs never touch
+	# bullet-time so this struct doesn't need a snapshot field.
 
 # --- Signals: Pawn → Brain (results out) -----------------------------------
 
@@ -127,12 +131,6 @@ signal locomotion_changed(old_state: int, new_state: int)
 # NPCs). Pawn._ready locates the first Brain child and calls brain.bind(self).
 # Resolved in _ready (not @onready) so editor-tool Pawns ignore it.
 var brain: Brain
-
-# Brain claims these at bind time via set_camera_active / set_bullet_time_owner.
-# Off by default; PlayerBrain turns them on. Kept as plain fields (not exports)
-# so the Pawn's authored surface stays role-agnostic.
-var is_active_camera: bool = false
-var apply_bullet_time: bool = false
 
 ## Print a `[lean.intent]` / `[lean.visual]` line whenever brain intent or
 ## lane-tween phase changes the lean. Pairs with
@@ -252,14 +250,6 @@ var shuffle: Shuffle
 # Cleared by `_set_locomotion`'s SHUFFLING-exit branch.
 var _shuffle_approach_speed: float = 0.0
 
-# Engine.time_scale snapshot captured on shuffle entry (player only — gated by
-# `apply_bullet_time`). Restored by `_set_locomotion`'s SHUFFLING-exit branch
-# so unusual exit paths (end-of-rail, die(), failed-shuffle knockdown) all
-# unwind bullet-time without each having to remember to. Decoupled from the
-# `shuffle` field's lifetime — `shuffle` may be nulled before/after the
-# locomotion transition; this snapshot survives it.
-var _shuffle_previous_time_scale: float = 1.0
-
 # Parking offset (applied by MetroMovement while locomotion == PARKED).
 var _parked_offset: Vector3 = Vector3.ZERO
 
@@ -294,23 +284,6 @@ func _find_brain_child() -> Brain:
 		if child is Brain:
 			return child as Brain
 	return null
-
-
-# Brain hook: claim this Pawn's Camera3D as the active view, capture the
-# mouse, and hide the visual (first-person). PlayerBrain calls this at bind.
-func set_camera_active(active: bool) -> void:
-	is_active_camera = active
-	if not active or camera_rig == null:
-		return
-	camera_rig.set_active(true)
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-	if visual != null:
-		visual.hide()
-
-
-# Brain hook: opt this Pawn in to bullet-time on shuffle. Player-only effect.
-func set_bullet_time_owner(value: bool) -> void:
-	apply_bullet_time = value
 
 
 func _physics_process(delta: float) -> void:
@@ -373,16 +346,9 @@ func _process(_delta: float) -> void:
 	camera_rig.set_tween_snapshot(is_tween_active(), _tween_from, float(_target_lane), get_tween_progress())
 
 
-# Camera mouse-look + mouse-mode toggle, then forward to brain. Mouse handling
-# only runs when this Pawn has an active camera (player only).
+# Forward all input to the brain. Player-specific concerns (mouse pitch via
+# camera_rig, mouse-mode toggle on ui_cancel) live in PlayerBrain.process_input.
 func _input(event: InputEvent) -> void:
-	if is_active_camera and camera_rig != null:
-		if can_look() and event is InputEventMouseMotion:
-			var motion: InputEventMouseMotion = event as InputEventMouseMotion
-			camera_rig.apply_pitch_input(motion.relative.y)
-		if event.is_action_pressed("ui_cancel"):
-			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
-					else Input.MOUSE_MODE_CAPTURED
 	if brain != null:
 		brain.process_input(event)
 
@@ -498,19 +464,16 @@ func start_shuffle(other: Pawn, gap: float) -> void:
 	shuffle.other = other
 	shuffle.deadline_msec = Time.get_ticks_msec() + int(choice_time * 1000.0)
 	shuffle.time_left = choice_time
+	# `_set_locomotion(SHUFFLING)` fires `brain.on_shuffle_entered()`, which
+	# (PlayerBrain only) mutates `Engine.time_scale`, plays slow_sound, and
+	# engages camera shuffle tilt. The mutation MUST happen before the
+	# `_compute_shuffle_speed(gap)` call below so the slow-approach math
+	# reads the post-mutation time_scale — both initiator and callee compute
+	# against the same effective wall-clock window.
 	_set_locomotion(LocomotionState.SHUFFLING)
-	# Apply bullet-time BEFORE computing slow-approach speed so initiator and
-	# callee both compute against the same `Engine.time_scale`.
-	if apply_bullet_time:
-		_shuffle_previous_time_scale = Engine.time_scale
-		Engine.time_scale = _get_shuffle_bullet_time_scale()
-		if brain is PlayerBrain:
-			slow_sound.play()
 	_shuffle_approach_speed = _compute_shuffle_speed(gap)
-	if camera_rig != null:
-		camera_rig.engage_shuffle_tilt(0)
 	# Pass `gap` so callee computes its own approach speed against the same
-	# time_scale (we just mutated it above).
+	# `Engine.time_scale` (PlayerBrain.on_shuffle_entered already mutated it).
 	shuffle.their_telegraph = other.begin_subway_shuffle(self, shuffle.deadline_msec, gap)
 	if shuffle_debug_enabled:
 		print("[shuffle-entry] %s target=%d pos=%.3f tween=%s | %s target=%d pos=%.3f tween=%s | gap=%.3f" % [
@@ -670,13 +633,12 @@ func begin_subway_shuffle(from: Pawn, deadline_msec: int, gap: float) -> int:
 	shuffle.is_initiator = false
 	shuffle.other = from
 	shuffle.deadline_msec = deadline_msec
+	# `_set_locomotion(SHUFFLING)` fires `brain.on_shuffle_entered()`
+	# (PlayerBrain only — engages camera shuffle tilt). The initiator already
+	# mutated `Engine.time_scale` before calling here, so the slow-approach
+	# math reads the same post-mutation value the initiator did.
 	_set_locomotion(LocomotionState.SHUFFLING)
-	# Initiator already mutated `Engine.time_scale` (player path) before this
-	# call, so we read the post-mutation value and produce the same closing
-	# distance over the wall-clock window.
 	_shuffle_approach_speed = _compute_shuffle_speed(gap)
-	if camera_rig != null:
-		camera_rig.engage_shuffle_tilt(0)
 	shuffle_began.emit(from, 0, deadline_msec)
 	return shuffle.my_telegraph
 
@@ -684,8 +646,8 @@ func begin_subway_shuffle(from: Pawn, deadline_msec: int, gap: float) -> int:
 func end_subway_shuffle() -> void:
 	var direction: int = shuffle.my_telegraph if shuffle != null else 0
 	shuffle = null
-	if camera_rig != null:
-		camera_rig.disengage_shuffle_tilt()
+	# `_set_locomotion(RUNNING)` below fires `brain.on_shuffle_exited()`
+	# (PlayerBrain only — disengages camera shuffle tilt, restores time_scale).
 	# Symmetric with initiator's _complete_subway_shuffle: callee actually
 	# lane-changes by its committed direction (no more world-space side-step
 	# that snapped back). _set_locomotion(RUNNING) → lean(0) reset → visual
@@ -709,8 +671,8 @@ func end_subway_shuffle() -> void:
 
 func stop_subway_shuffle() -> void:
 	shuffle = null
-	if camera_rig != null:
-		camera_rig.disengage_shuffle_tilt()
+	# `_set_locomotion(RUNNING)` fires `brain.on_shuffle_exited()`
+	# (PlayerBrain disengages tilt + restores time_scale).
 	_set_locomotion(LocomotionState.RUNNING)
 
 
@@ -762,9 +724,9 @@ func _get_shuffle_choice_time() -> float:
 	return _metro_movement.get_shuffle_choice_time()
 
 
-# Engine.time_scale multiplier applied during the shuffle when this Pawn has
-# `apply_bullet_time = true` (player only). Same back-ref + fallback model as
-# `_get_shuffle_choice_time`.
+# Engine.time_scale multiplier applied during the shuffle window. Only
+# PlayerBrain reads this (in `on_shuffle_entered`) — NPC pawns never touch
+# Engine.time_scale. Same back-ref + fallback model as `_get_shuffle_choice_time`.
 func _get_shuffle_bullet_time_scale() -> float:
 	if _metro_movement == null:
 		push_warning("Pawn._get_shuffle_bullet_time_scale: no MetroMovement back-ref, using fallback.")
@@ -839,21 +801,16 @@ func get_shuffle_telegraph() -> int:
 	return shuffle.my_telegraph if shuffle != null else 0
 
 
-# Anything other than RUNNING counts as paused — including SHUFFLING, PARKED,
-# FINISHED, and BLOCKED. AIBrain / PlayerBrain use this for "is this peer in
-# a normal-locomotion state I can shuffle / catch up to" decisions. SHUFFLING
-# peers are still considered paused at the brain level (they're locked into
-# a different encounter); only `_advance_runner` uses `is_advancing_paused()`
-# below to keep them physically advancing during the window.
-func is_runner_paused() -> bool:
-	return locomotion != LocomotionState.RUNNING
-
-
 # Locomotion states where MetroMovement should NOT advance the runner along
 # the rail. SHUFFLING falls through (pawn closes the gap during slow-approach);
 # everything else (KNOCKED_DOWN / PARKED / FINISHED / BLOCKED / DISABLED) is
 # physically frozen. Equivalent to "locomotion != RUNNING and != SHUFFLING"
 # but spelled out to keep intent obvious.
+#
+# Brains asking "is this peer engageable" use `is_running()` directly, or
+# `not pawn.is_running()` for the inverse — SHUFFLING peers are not running,
+# but they ARE advancing on the rail during slow-approach, so the two
+# concepts diverge. Keep them separate.
 func is_advancing_paused() -> bool:
 	return (
 		locomotion == LocomotionState.KNOCKED_DOWN
@@ -870,10 +827,6 @@ func is_routing_to_finish_point() -> bool:
 
 func set_rail_forward(value: bool) -> void:
 	_is_forward_runner = value
-
-
-func is_shuffle_active() -> bool:
-	return locomotion == LocomotionState.SHUFFLING
 
 
 func should_avoid_obstacles() -> bool:
@@ -911,10 +864,6 @@ func reach_goal() -> void:
 	goal_reached.emit()
 
 
-func is_goal_reached() -> bool:
-	return locomotion == LocomotionState.FINISHED
-
-
 # Block external locomotion (e.g. cutscene, pre-goal pause). On entry, run_speed
 # is reset to start_speed so the post-unblock acceleration ramps from a known
 # floor rather than wherever the player happened to be.
@@ -933,10 +882,6 @@ func set_movement_blocked(blocked: bool) -> void:
 		_set_locomotion(LocomotionState.RUNNING)
 
 
-func is_movement_blocked() -> bool:
-	return locomotion == LocomotionState.BLOCKED
-
-
 # --- Parking (FORWARD pawns at end of rail) -------------------------------
 
 func park_at_finish(offset: Vector3) -> void:
@@ -944,10 +889,6 @@ func park_at_finish(offset: Vector3) -> void:
 	_set_locomotion(LocomotionState.PARKED)
 	if visual != null:
 		visual.pause_animation()
-
-
-func is_parked_at_finish() -> bool:
-	return locomotion == LocomotionState.PARKED
 
 
 func get_parked_offset() -> Vector3:
@@ -967,14 +908,11 @@ func knock_down_from_shuffle() -> void:
 	var get_up_time: float = brain.get_shuffle_get_up_time() if brain != null else 0.0
 	_recovery_time_left = maxf(recovery_time, get_up_time)
 	knockdown_phase = KnockdownPhase.DOWN
+	# `_set_locomotion(KNOCKED_DOWN)` fires `brain.on_knocked_down()`
+	# (PlayerBrain — re-engages camera shuffle tilt with target 0 so the camera
+	# rolls upright as the player falls; flips to THIRD_PERSON). For failed-
+	# shuffle paths it also fires `on_shuffle_exited` first (SHUFFLING → KD).
 	_set_locomotion(LocomotionState.KNOCKED_DOWN)
-	# Hold the camera in shuffle-tilt mode with a zero-degree target so it
-	# rolls back to upright as the player falls (lane lean is suppressed).
-	if camera_rig != null:
-		camera_rig.engage_shuffle_tilt(0)
-	# Player flips to third-person and shows its body during knockdown.
-	if is_active_camera and camera_rig != null:
-		camera_rig.apply_mode(PawnCamera.Mode.THIRD_PERSON)
 	if visual != null:
 		visual.show()
 		visual.play_die()
@@ -1024,20 +962,10 @@ func _finish_knockdown_recovery() -> void:
 	if visual != null:
 		visual.play_walk()
 	run_speed = brain.get_start_speed() if brain != null else 0.0
+	# `_set_locomotion(RUNNING)` fires `brain.on_recovered()` (PlayerBrain —
+	# disengages shuffle tilt, flips back to FIRST_PERSON, hides visual).
 	_set_locomotion(LocomotionState.RUNNING)
-	# Hand rotation.z back to the lane-lean spring.
-	if camera_rig != null:
-		camera_rig.disengage_shuffle_tilt()
-	# Player flips back to first-person and re-hides its body.
-	if is_active_camera and camera_rig != null:
-		camera_rig.apply_mode(PawnCamera.Mode.FIRST_PERSON)
-		if visual != null:
-			visual.hide()
 	recovered.emit()
-
-
-func is_knocked_down() -> bool:
-	return locomotion == LocomotionState.KNOCKED_DOWN
 
 
 func _can_start_recover() -> bool:
@@ -1080,19 +1008,46 @@ func _set_locomotion(new_state: int) -> void:
 		_tween_elapsed = 0.0
 		# Push visual lean back to brain intent now that the tween is gone.
 		_apply_visual_lean()
-	# Centralized SHUFFLING-exit cleanup. Single source of truth so unusual exit
-	# paths (end-of-rail mid-shuffle, die() during shuffle, future BLOCKED
-	# transitions) restore Engine.time_scale and clear shuffle-driven rail speed.
-	# Uses the Pawn-owned `_shuffle_previous_time_scale` snapshot rather than
-	# the `shuffle` field — decoupling the cleanup from `shuffle`'s lifetime
-	# (some resolve paths null `shuffle` before the locomotion transition).
+	# Centralized SHUFFLING-exit rail-speed cleanup. Single source of truth so
+	# unusual exit paths (end-of-rail mid-shuffle, die() during shuffle, future
+	# BLOCKED transitions) all clear shuffle-driven rail speed.
 	if old_state == LocomotionState.SHUFFLING and new_state != LocomotionState.SHUFFLING:
-		if apply_bullet_time:
-			Engine.time_scale = _shuffle_previous_time_scale
 		_shuffle_approach_speed = 0.0
+	# Brain hooks for transitions — dispatched AFTER internal cleanup so the
+	# brain sees a consistent locomotion + lane state. Defaults are no-op on
+	# AIBrain; PlayerBrain overrides drive bullet-time, camera mode flips,
+	# mouse mode, slow_sound. The early-return at the top guarantees
+	# `new_state != old_state` here, so each `new_state == X` check implicitly
+	# means "entering X" and `old_state == X` means "leaving X".
+	if brain != null:
+		if new_state == LocomotionState.SHUFFLING:
+			brain.on_shuffle_entered()
+		elif old_state == LocomotionState.SHUFFLING:
+			brain.on_shuffle_exited()
+		if new_state == LocomotionState.KNOCKED_DOWN:
+			brain.on_knocked_down()
+		elif old_state == LocomotionState.KNOCKED_DOWN and new_state == LocomotionState.RUNNING:
+			brain.on_recovered()
 
 
-func can_move() -> bool:
+# --- Canonical status predicates ------------------------------------------
+#
+# Stage 1 of the state-management refactor consolidated the 9-predicate sprawl
+# (`is_runner_paused`, `is_movement_blocked`, `is_knocked_down`,
+# `is_shuffle_active`, `is_goal_reached`, `is_parked_at_finish`, `can_move`,
+# `is_lane_settled`, `is_advancing_paused`) into the four below. Anything else
+# is a direct enum check: `pawn.locomotion == LocomotionState.X`.
+#
+#   is_running()         — pawn is in default RUNNING locomotion. Lane changes
+#                          and most input gating ride on this.
+#   is_lane_settled()    — RUNNING and no lane tween in flight. Engagement gate
+#                          for `start_shuffle`.
+#   is_advancing_paused()— MetroMovement should NOT advance this runner along
+#                          the rail. Composite: KNOCKED_DOWN / PARKED /
+#                          FINISHED / BLOCKED / DISABLED.
+#   can_look()           — input gate for mouse pitch (true unless DISABLED).
+
+func is_running() -> bool:
 	return locomotion == LocomotionState.RUNNING
 
 
@@ -1219,8 +1174,8 @@ func _complete_subway_shuffle(direction: int) -> void:
 		# a fresh callee-initiated shuffle. Awkward, but emergent.
 		set_shuffle_ignored(other)
 	shuffle = null
-	if camera_rig != null:
-		camera_rig.disengage_shuffle_tilt()
+	# `_set_locomotion(RUNNING)` fires `brain.on_shuffle_exited()` (PlayerBrain
+	# disengages camera shuffle tilt + restores Engine.time_scale).
 	_set_locomotion(LocomotionState.RUNNING)
 	# Gated lane change — request_lane_change queues if the resolved target
 	# lane is occupied by a same-direction peer. Pawn stays put until safe

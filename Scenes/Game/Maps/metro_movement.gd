@@ -98,9 +98,9 @@ class Runner:
 ## so production paths always read this value. Default preserves the prior
 ## per-pawn `Pawn.tscn` override (= 2.5 s wall-clock during bullet-time).
 @export_range(0.05, 5.0, 0.01, "suffix:s") var shuffle_choice_time: float = 2.5
-## Multiplier applied to `Engine.time_scale` while the player Pawn is in a
-## shuffle (`apply_bullet_time = true`). Default 0.2 = 5× slow-mo. AI-vs-AI
-## shuffles never apply this — `apply_bullet_time` is false on NPC pawns.
+## Multiplier applied to `Engine.time_scale` during a shuffle. Read by
+## PlayerBrain.on_shuffle_entered to mutate time_scale; AIBrain ignores it.
+## Default 0.2 = 5× slow-mo. AI-vs-AI shuffles run at full game-time.
 @export_range(0.05, 1.0, 0.01) var shuffle_bullet_time_scale: float = 0.2
 
 @export_group("NPC Spawning")
@@ -186,26 +186,60 @@ func _wait_for_nav() -> void:
 	_print_corners("===")
 	if debug_show_corners:
 		_spawn_debug_markers()
-	_register_player()
-	_register_existing_npcs()
+	# Player first (rail anchor), then NPCs by group. Single registration path
+	# for both — see `_register_pawn` below.
+	register_pawn(_player)
+	for npc: Pawn in get_tree().get_nodes_in_group("npc"):
+		register_pawn(npc)
 	_spawn_starting_npcs()
 	_ready_state = true
 
 
-# Register the player as the first runner at the rail origin.
-func _register_player() -> void:
-	var runner: Runner = Runner.new(_player, 0, 0.0, true)
+# Public: register a Pawn as a runner on the rail with auto-detected direction.
+# Idempotent — no-op if the Pawn is already registered (so dynamic spawn callers
+# don't have to check). Player Pawns (group "player") are seeded at the rail
+# origin (0, 0) toward_finish=true; the player's authored world position has
+# anchored `_corners[0]` in `_wait_for_nav`, so projecting them adds floating-
+# point noise without buying anything. NPCs are projected from their authored
+# world position and use `_npc_toward_finish` to derive direction.
+func register_pawn(pawn: Pawn) -> void:
+	if pawn == null:
+		return
+	var toward_finish: bool = true if pawn.is_in_group("player") else _npc_toward_finish(pawn)
+	_register_pawn(pawn, toward_finish)
+
+
+# Public: register a Pawn at an explicit direction. Used by `_spawn_starting_npcs`
+# to randomize NPC direction on spawn. Idempotent. Player paths shouldn't call
+# this — `register_pawn(player)` always seeds toward_finish=true.
+func register_pawn_with_direction(pawn: Pawn, toward_finish: bool) -> void:
+	if pawn == null:
+		return
+	_register_pawn(pawn, toward_finish)
+
+
+# Single registration body. Typed bool — no Variant. Player vs NPC differ only
+# in seeding (origin vs projection) and whether de-stagger runs.
+func _register_pawn(pawn: Pawn, toward_finish: bool) -> void:
+	if _find_runner_for(pawn) != null:
+		return
+	var is_player: bool = pawn.is_in_group("player")
+	var seg: int = 0
+	var dist: float = 0.0
+	if not is_player:
+		var proj: RailProjection = _project_onto_rail(pawn.global_position, toward_finish)
+		seg = proj.segment_index
+		dist = proj.distance_along
+	pawn.set_rail_forward(toward_finish)
+	var runner: Runner = Runner.new(pawn, seg, dist, toward_finish)
 	_runners.append(runner)
-	_player._metro_movement = self
+	pawn._metro_movement = self
 	_wire_runner_signals(runner)
+	if not is_player:
+		var min_gap: float = pawn.brain.get_min_peer_gap() if pawn.brain != null else 1.0
+		_destagger_runner_spawn(runner, min_gap)
 	_apply_runner_position(runner)
 	_apply_runner_yaw_instant(runner)
-
-
-# Find every Pawn in the "npc" group and bind it to the rail.
-func _register_existing_npcs() -> void:
-	for npc: Pawn in get_tree().get_nodes_in_group("npc"):
-		_register_npc(npc)
 
 
 # Instantiate starting_npc_count NPCs from npc_scenes using weighted random
@@ -255,7 +289,7 @@ func _spawn_starting_npcs() -> void:
 		var seg_dir: Vector3 = (seg_end - seg_start).normalized()
 		pawn.global_position = seg_start + seg_dir * dist_remaining
 		pawn.set_current_lane(randi() % Pawn.LANE_COUNT)
-		_register_npc(pawn, toward_finish)
+		register_pawn_with_direction(pawn, toward_finish)
 		if pawn.visual != null:
 			pawn.visual.randomize_animation_offset()
 
@@ -276,28 +310,6 @@ func _pick_weighted_npc_scene() -> PackedScene:
 		if roll <= accumulated:
 			return npc_scenes[i]
 	return npc_scenes[npc_scenes.size() - 1]
-
-
-# Project the NPC's authored world position onto the rail and use that as its
-# starting coordinate so NPCs appear where the level designer placed them.
-# After projection, run a de-stagger pass — if another runner already occupies
-# the same physical lane within the new NPC's `min_peer_gap`, push the new
-# runner backward along its travel direction until clear (or we walk off the
-# rail's start, in which case overlap is accepted as an authoring problem).
-# Pass force_toward_finish = true/false to override destination-based detection
-# (used by _spawn_starting_npcs for random direction assignment).
-func _register_npc(npc: Pawn, force_toward_finish: Variant = null) -> void:
-	var toward_finish: bool = force_toward_finish if force_toward_finish != null else _npc_toward_finish(npc)
-	npc.set_rail_forward(toward_finish)
-	var proj: RailProjection = _project_onto_rail(npc.global_position, toward_finish)
-	var runner: Runner = Runner.new(npc, proj.segment_index, proj.distance_along, toward_finish)
-	_runners.append(runner)
-	npc._metro_movement = self
-	_wire_runner_signals(runner)
-	var min_gap: float = npc.brain.get_min_peer_gap() if npc.brain != null else 1.0
-	_destagger_runner_spawn(runner, min_gap)
-	_apply_runner_position(runner)
-	_apply_runner_yaw_instant(runner)
 
 
 # Walk a freshly-spawned runner backward along its rail direction in
@@ -825,7 +837,7 @@ func _advance_runner(runner: Runner, delta: float) -> void:
 	if runner.node.is_advancing_paused():
 		runner.node.set_movement_blocked(false)
 
-	if runner.node.is_runner_paused():
+	if not runner.node.is_running():
 		return
 
 	# MetroMovement detects, Brain decides. The signal handler runs
@@ -1033,7 +1045,7 @@ func _scan_encounters_for_all_runners() -> void:
 		# Only RUNNING pawns initiate scans. Paused / knocked-down / disabled
 		# runners stay in the snapshot list as candidate "others" but won't
 		# emit encounter_detected themselves.
-		snap.lookahead = runner.node.get_encounter_lookahead() if runner.node.can_move() else 0.0
+		snap.lookahead = runner.node.get_encounter_lookahead() if runner.node.is_running() else 0.0
 		snaps.append(snap)
 
 	for self_snap: EncounterSnap in snaps:
@@ -1338,7 +1350,7 @@ func _apply_runner_position(runner: Runner) -> void:
 	if t > 0.001:
 		var lane_ceil: int = clampi(lane_floor + 1, 0, LANE_OFFSETS.size() - 1)
 		pos = pos.lerp(_runner_position_at(runner, lane_ceil, distance_along), t)
-	if runner.node.is_parked_at_finish():
+	if runner.node.locomotion == Pawn.LocomotionState.PARKED:
 		pos += runner.node.get_parked_offset()
 	pos.y = runner.node.global_position.y
 	runner.node.global_position = pos

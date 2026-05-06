@@ -33,6 +33,16 @@ enum EndOfRailAction { GOAL, PARK, RESPAWN }
 
 var pawn: Pawn
 
+# Pawn we're stalled behind because they're transiently busy (mid-shuffle,
+# knocked down, mid-tween). While non-null, modulate_for_wait clamps
+# get_move_speed() to 0 so this Pawn visibly halts. Auto-clears in the
+# modulator the moment the peer is lane-settled — the encounter scan keeps
+# firing each frame so the brain's next tick re-attempts engagement.
+#
+# PlayerBrain and AIBrain both used to carry this field locally with identical
+# logic. Lifted here in Stage 2 of the state-management refactor.
+var _waiting_for: Pawn
+
 
 # Bind to a Pawn. Connects signal handlers and runs the subclass _on_bound hook.
 func bind(p: Pawn) -> void:
@@ -121,6 +131,40 @@ func _on_goal_reached() -> void:
 	pass
 
 
+# --- Locomotion-transition hooks (player-specific concerns) ---------------
+#
+# Pawn calls these from `_set_locomotion` when the matching transitions
+# happen. Default no-op — NPCs ignore them. PlayerBrain overrides to drive
+# bullet-time, camera-mode flips, mouse capture, and slow_sound playback so
+# Pawn stays role-agnostic.
+#
+#   on_shuffle_entered  — fires when locomotion enters SHUFFLING (initiator
+#                         AND callee paths — both go through _set_locomotion).
+#   on_shuffle_exited   — fires when locomotion exits SHUFFLING to anything
+#                         (RUNNING on success/end_subway_shuffle, KNOCKED_DOWN
+#                         on fail). Pair with on_knocked_down for the failure
+#                         case — both fire on SHUFFLING → KNOCKED_DOWN.
+#   on_knocked_down     — fires when locomotion enters KNOCKED_DOWN.
+#   on_recovered        — fires when locomotion transitions KNOCKED_DOWN →
+#                         RUNNING (recovery completion). Does NOT fire for
+#                         KNOCKED_DOWN → DISABLED (die during knockdown).
+
+func on_shuffle_entered() -> void:
+	pass
+
+
+func on_shuffle_exited() -> void:
+	pass
+
+
+func on_knocked_down() -> void:
+	pass
+
+
+func on_recovered() -> void:
+	pass
+
+
 # --- Virtual interface: movement intent (queried by MetroMovement via Pawn) -
 
 # The node this pawn is walking toward. AIBrain returns the authored export;
@@ -195,6 +239,30 @@ func get_shuffle_get_up_time() -> float:
 
 
 func get_shuffle_knockback_distance() -> float:
+	return 0.0
+
+
+# Begin halting behind a transiently-busy peer. Resets run_speed to start_speed
+# so post-wait acceleration ramps from a known floor. Subclasses call this from
+# their encounter handlers when the target is mid-shuffle / not yet engageable.
+func _wait_for(other: Pawn) -> void:
+	_waiting_for = other
+	if pawn != null:
+		pawn.set_run_speed(get_start_speed())
+
+
+# Auto-clearing wait gate. Returns 0 while `_waiting_for` is non-null and the
+# peer isn't yet lane-settled; otherwise returns `raw`. Compose with
+# `modulate_for_same_direction_peer` in `get_move_speed` overrides:
+#   return modulate_for_wait(modulate_for_same_direction_peer(raw))
+# A peer mid-tween isn't engageable yet, so we keep halting until their tween
+# completes — `is_lane_settled` already requires RUNNING + IDLE tween.
+func modulate_for_wait(raw: float) -> float:
+	if _waiting_for == null:
+		return raw
+	if not is_instance_valid(_waiting_for) or _waiting_for.is_lane_settled():
+		_waiting_for = null
+		return raw
 	return 0.0
 
 

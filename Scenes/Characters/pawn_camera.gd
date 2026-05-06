@@ -19,9 +19,9 @@ extends SpringArm3D
 #     clobbering local pitch (X) and roll (Z).
 #   - NPCs have no rig — every camera_rig check on Pawn short-circuits.
 #
-# First-person = spring_length 0, character model hidden by Pawn.set_camera_active.
-# Third-person = spring_length = third_person_distance (Pawn flips to this on
-# knockdown so the player sees their body fall).
+# First-person = spring_length 0, character model hidden by PlayerBrain at bind.
+# Third-person = spring_length = third_person_distance (PlayerBrain flips to
+# this in `on_knocked_down` so the player sees their body fall).
 #
 # Z-rotation has two modes:
 #   - LANE_LEAN  (default): spring-damped roll toward held lane intent + tween
