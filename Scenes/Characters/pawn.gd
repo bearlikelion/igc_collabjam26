@@ -169,6 +169,16 @@ var brain: Brain
 const _SHUFFLE_CHOICE_TIME_FALLBACK: float = 2.5
 const _SHUFFLE_BULLET_TIME_SCALE_FALLBACK: float = 0.2
 
+# Minimum centerline distance (m) the slow-approach math is allowed to leave
+# between the two SHUFFLING pawns. Set above the Pawn collider's footprint
+# (BoxShape3D 0.813m on X/Z + ~0.14m visual buffer) so closing never pushes
+# pawns into each other's collider — the resulting parametric-vs-collision
+# fight produces visible jitter. Acts as a CEILING on per-pawn closing in
+# `_compute_shuffle_speed`: closing is min(factor budget, safe-cap budget),
+# so retuning `shuffle_approach_factor` or `inner_shuffle_radius` to tighter
+# values stays safe automatically.
+const _SHUFFLE_MIN_SEPARATION: float = 0.95
+
 # Run-speed and knockdown tunables live on the brain's BrainConfig Resource —
 # read via brain.get_start_speed(), brain.get_max_speed(), brain.get_acceleration_time(),
 # brain.get_shuffle_recovery_time(), brain.get_shuffle_get_up_time(),
@@ -307,7 +317,12 @@ func _physics_process(delta: float) -> void:
 		velocity.y -= ProjectSettings.get_setting("physics/3d/default_gravity") * delta
 	else:
 		velocity.y = 0.0
-	# MetroMovement owns XZ via global_position; move_and_slide only resolves Y.
+	# MetroMovement owns XZ via global_position writes. Zero XZ each tick
+	# because move_and_slide writes back to `velocity` after slide-collision
+	# response — without this, residual horizontal velocity accumulates and
+	# move_and_slide nudges the body sideways between MetroMovement's
+	# corrections, producing visible jitter (especially during bullet-time
+	# SHUFFLING where slow per-tick advance amplifies the residual).
 	velocity.x = 0.0
 	velocity.z = 0.0
 	move_and_slide()
@@ -740,20 +755,32 @@ func _get_shuffle_bullet_time_scale() -> float:
 # (initiator + callee) call this with the same `gap` and the same Engine.time_scale
 # (the initiator mutates time_scale before the callee's call). Result: combined
 # closing distance across the window equals `gap × shuffle_approach_factor`,
-# regardless of bullet-time.
+# capped by `_SHUFFLE_MIN_SEPARATION` so the pair don't end up inside each
+# other's colliders. Same closing in real-meters whether bullet-time is on
+# (player shuffle) or off (AI-vs-AI).
 #
 # Math:
 #   game_time_window = shuffle_choice_time × Engine.time_scale  (game-time seconds)
-#   per_pawn_closing = (gap × factor) / 2
+#   factor_budget    = (gap × factor) / 2          (per-pawn, design intent)
+#   safe_budget      = max(gap - MIN_SEP, 0) / 2   (per-pawn, geometry cap)
+#   per_pawn_closing = min(factor_budget, safe_budget)
 #   speed            = per_pawn_closing / game_time_window
-#                    = (gap × factor) / (shuffle_choice_time × time_scale × 2)
+#
+# When the safe cap binds, final centerline distance equals `_SHUFFLE_MIN_SEPARATION`
+# regardless of entry gap. When the factor binds, final equals `gap × (1 - factor)`.
+# For `gap < _SHUFFLE_MIN_SEPARATION` the cap collapses to zero closing — pawns
+# sit at their entry positions for the window (still overlapping at engagement,
+# but not pushed deeper).
 #
 # Clamped to brain.get_max_speed() defensively — entry is bounded by
 # `inner_shuffle_radius` upstream, but we don't trust unbounded gaps to
 # produce sane speeds.
 func _compute_shuffle_speed(gap: float) -> float:
 	var window: float = maxf(_get_shuffle_choice_time() * Engine.time_scale, 0.001)
-	var raw: float = (gap * shuffle_approach_factor) / window / 2.0
+	var factor_budget: float = (gap * shuffle_approach_factor) / 2.0
+	var safe_budget: float = maxf(gap - _SHUFFLE_MIN_SEPARATION, 0.0) / 2.0
+	var per_pawn_closing: float = minf(factor_budget, safe_budget)
+	var raw: float = per_pawn_closing / window
 	if brain == null:
 		return maxf(raw, 0.0)
 	var ceiling: float = brain.get_max_speed()
@@ -919,25 +946,6 @@ func knock_down_from_shuffle() -> void:
 		visual.show()
 		visual.play_die()
 	knocked_down.emit()
-
-
-# Push this Pawn back from the impact origin by brain.get_shuffle_knockback_distance().
-# NOTE: For rail-driven Pawns this mutation is overwritten the same frame —
-# MetroMovement listens for the `knocked_down` signal and runs its own rewind
-# via `_on_runner_knocked_down` → `_rewind_runner` (mutates `Runner.distance_along`
-# backward) → `_apply_runner_position` (overwrites global_position with parametric
-# position). Kept as a fallback for non-rail Pawns / future use.
-func apply_knockback_from(origin: Vector3) -> void:
-	var direction: Vector3 = global_position - origin
-	direction.y = 0.0
-	if direction.length_squared() <= 0.001:
-		direction = global_transform.basis.z
-		direction.y = 0.0
-	if direction.length_squared() <= 0.001:
-		direction = Vector3.BACK
-	direction = direction.normalized()
-	var knockback: float = brain.get_shuffle_knockback_distance() if brain != null else 0.0
-	global_position += direction * knockback
 
 
 func _update_knockdown_recovery(delta: float) -> void:
@@ -1195,10 +1203,14 @@ func _fail_subway_shuffle() -> void:
 	# Engine.time_scale + _shuffle_approach_speed cleanup runs in
 	# _set_locomotion's SHUFFLING-exit branch (triggered below by
 	# knock_down_from_shuffle → _set_locomotion(KNOCKED_DOWN)).
+	# Knockback displacement is owned end-to-end by MetroMovement: each
+	# knock_down_from_shuffle emits `knocked_down` synchronously, MetroMovement
+	# chain-rewinds both pawns via `_on_runner_knocked_down → _rewind_runner`,
+	# and KNOCKBACK_REAR_BUFFER clamps rear separation so they don't end up
+	# coincident.
 	run_speed = brain.get_start_speed() if brain != null else 0.0
 	var other: Pawn = shuffle.other
 	if other != null:
-		other.apply_knockback_from(global_position)
 		other.knock_down_from_shuffle()
 		set_shuffle_ignored(other)
 	shuffle = null

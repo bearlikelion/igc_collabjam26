@@ -34,4 +34,8 @@ extends Resource
 ## gate `pawn.start_shuffle(other)` on `distance <= inner_shuffle_radius`.
 ## Outside the radius the encounter signal still fires and may drive run-up
 ## tells (AIBrain), but no shuffle begins yet. Should be < `encounter_lookahead`.
-@export_range(0.1, 5.0, 0.05) var inner_shuffle_radius: float = 0.8
+## Should also be > Pawn collider footprint + buffer (see `_SHUFFLE_MIN_SEPARATION`
+## in pawn.gd, ≈ 0.95m) so the slow-approach math has room to produce visible
+## closing — values at or below the safe cap freeze the pawns in place during
+## the window without jitter.
+@export_range(0.1, 5.0, 0.05) var inner_shuffle_radius: float = 1.5
