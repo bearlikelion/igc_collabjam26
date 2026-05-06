@@ -12,26 +12,26 @@
 [ext_resource type="Script" uid="uid://cwu5cf7a0awcd" path="res://addons/func_godot/src/map/func_godot_map.gd" id="6_b3fhr"]
 [ext_resource type="PackedScene" uid="uid://qgcyfnbot8ap" path="res://Scenes/Characters/NPCs/Male/Salaryman.tscn" id="6_gy5qg"]
 [ext_resource type="Resource" uid="uid://bkhxcqsquw1yg" path="res://addons/func_godot/func_godot_default_map_settings.tres" id="7_cyw2y"]
-[ext_resource type="PackedScene" uid="uid://cfbedqf0p215d" path="res://Scenes/Characters/Pawn.tscn" id="8_svs80"]
+[ext_resource type="PackedScene" path="res://Scenes/Characters/Pawn.tscn" id="8_svs80"]
 [ext_resource type="ArrayMesh" uid="uid://dgtirktt1xuok" path="res://Assets/Models/Metro/Meshes/Metro_subway_car.res" id="9_rrdri"]
 [ext_resource type="PackedScene" uid="uid://v4iekc8b5cgx" path="res://Scenes/Game/Props/three_chair_bench.tscn" id="10_cfpln"]
 [ext_resource type="Material" uid="uid://c02p7shc1fy7o" path="res://Assets/Textures/dev/wall.tres" id="10_lnewu"]
 [ext_resource type="AudioStream" uid="uid://bpi1lxlloups3" path="res://Assets/Audio/Music/Los Del Rios - Macarena (8 Bit Raxlen Slice Chiptune Remix).mp3" id="10_sryx3"]
-[ext_resource type="Material" uid="uid://5ssmlxlgt8oq" path="res://Assets/Textures/dev/track_wall.tres" id="11_h2wfe"]
+[ext_resource type="Material" path="res://Assets/Textures/dev/track_wall.tres" id="11_h2wfe"]
 [ext_resource type="PackedScene" uid="uid://by5hvbonr0euy" path="res://Scenes/Game/Props/oh_light.tscn" id="11_hwpev"]
-[ext_resource type="Material" uid="uid://4e1hv1pmwgp5" path="res://Assets/Textures/dev/tracks.tres" id="12_agc11"]
+[ext_resource type="Material" path="res://Assets/Textures/dev/tracks.tres" id="12_agc11"]
 [ext_resource type="Script" uid="uid://dwoxgkhyvb4q0" path="res://Scenes/Characters/Brains/player_brain.gd" id="12_pbrn"]
 [ext_resource type="Script" uid="uid://b0kdqdyh2br7w" path="res://Scenes/Game/Maps/Metro1/end_camera.gd" id="13_akkrs"]
 [ext_resource type="Material" uid="uid://c0nfc87pvu6h0" path="res://Assets/Textures/dev/floor.tres" id="13_oyv7b"]
 [ext_resource type="Shader" uid="uid://t6b0t5n4jabv" path="res://Shaders/cctv.gdshader" id="14_0rra6"]
-[ext_resource type="Material" uid="uid://bmti88ony01qi" path="res://Assets/Textures/dev/bumps.tres" id="14_h1b0k"]
+[ext_resource type="Material" path="res://Assets/Textures/dev/bumps.tres" id="14_h1b0k"]
 [ext_resource type="Texture2D" uid="uid://cyg2snr1w5xw5" path="res://addons/func_godot/textures/default_texture.png" id="15_0ynle"]
-[ext_resource type="Material" uid="uid://doyt74p2tw1sq" path="res://Assets/Textures/dev/roof.tres" id="16_0ynle"]
+[ext_resource type="Material" path="res://Assets/Textures/dev/roof.tres" id="16_0ynle"]
 [ext_resource type="Script" uid="uid://c7ob6aflnt2jl" path="res://Scenes/Characters/pawn_camera.gd" id="20_pcam"]
 [ext_resource type="Resource" uid="uid://b0u5cgxlaxnpc" path="res://Resources/Brains/DefaultPlayer.tres" id="21_plycfg"]
 [ext_resource type="Shader" uid="uid://ca6h0hj5fdy7x" path="res://Shaders/psx.gdshader" id="22_3q7nn"]
 [ext_resource type="ArrayOccluder3D" uid="uid://dx2q14chba8o8" path="res://Scenes/Game/Maps/Metro1/metro_1.occ" id="23_p3hvv"]
-[ext_resource type="Script" uid="uid://df06w8c228ef6" path="res://Scenes/Game/Maps/Metro1/psx_shuffle_effect.gd" id="24_psxfx"]
+[ext_resource type="Script" path="res://Scenes/Game/Maps/Metro1/psx_shuffle_effect.gd" id="24_psxfx"]
 
 [sub_resource type="AudioStreamRandomizer" id="AudioStreamRandomizer_et2qy"]
 streams_count = 3
@@ -567,11 +567,9 @@ update_scale = false
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 1.711, -1)
 spring_length = 0.0
 script = ExtResource("20_pcam")
-shuffle_fov_reduction = null
-shuffle_fov_speed = null
 
 [node name="Camera3D" type="Camera3D" parent="NavigationRegion3D/PlayerCamera" unique_id=1179018285]
-fov = 38.8
+fov = 60.0
 
 [node name="PSXShader" type="MeshInstance3D" parent="NavigationRegion3D/PlayerCamera/Camera3D" unique_id=773972041]
 transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, -0.100000024)

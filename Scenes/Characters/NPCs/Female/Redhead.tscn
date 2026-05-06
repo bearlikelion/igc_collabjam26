@@ -67,6 +67,7 @@ script = ExtResource("1_ugk5y")
 skeleton = NodePath("ModelRoot/Redhead/Scene/root/Skeleton3D")
 animation_player = NodePath("ModelRoot/Redhead/AnimationPlayer")
 lean_ignore_time_scale = false
+spine_bone_name = "Chest"
 
 [node name="ModelRoot" type="Node3D" parent="CharacterVisual" unique_id=1016427824]
 transform = Transform3D(-2, 0, 3.019916e-07, 0, 2, 0, -3.019916e-07, 0, -2, 0, 0, 0)
