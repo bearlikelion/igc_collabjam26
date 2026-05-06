@@ -583,6 +583,20 @@ func _phase_name() -> String:
 	return "?"
 
 
+# --- Rail-coord delegators (Pawn-as-facade over MetroMovement scans) ------
+#
+# Contract: Brains call ONLY these helpers when they need rail-coord state
+# (lane clearance, peer detection, encounter-ignore mutations). Brains never
+# reach into Pawn's `_metro_movement` back-ref directly — this is what keeps
+# the brain layer decoupled from MetroMovement as a class (brains don't even
+# `class_name`-import it). The facade is the single auditable seam between
+# decision logic (Brain) and rail-coord storage (MetroMovement).
+#
+# Each helper guards the back-ref and returns a defensive default for
+# pre-registration / unit-test scenarios so callers can stay unconditional.
+# Adding a new rail-coord query? Add a thin delegator here, not a new field
+# read on the brain side.
+
 # Mark a Pawn as ignored for the rail-coord encounter scan until it drifts
 # past the hysteresis margin (see MetroMovement.ENCOUNTER_IGNORE_HYSTERESIS).
 # Used by PlayerBrain on same-direction-collision instant-knockdown so the
@@ -593,14 +607,6 @@ func set_shuffle_ignored(other: Pawn) -> void:
 		return
 	_metro_movement.set_runner_shuffle_ignored(self, other)
 
-
-# --- Rail-coord delegators (Pawn-as-facade over MetroMovement scans) ------
-#
-# Brains read these for lane-safety scoring, peer detection, and overtake
-# decisions. Routing through Pawn means brains don't reach into Pawn's
-# `_metro_movement` back-ref directly. Each helper guards the back-ref and
-# returns a defensive default for pre-registration / unit-test scenarios so
-# callers can stay unconditional.
 
 # True once MetroMovement has registered this Pawn as a runner. Brains can
 # guard expensive decisions (random-lane wander, overtake) on this so they
