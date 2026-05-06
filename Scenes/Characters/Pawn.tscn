@@ -26,6 +26,7 @@ shape = SubResource("BoxShape3D_pawn")
 [node name="CharacterVisual" parent="." unique_id=905364963 instance=ExtResource("2_visual")]
 playback_fade_time = 0.3
 torso_lean_amount = 0.45
+min_lean_radians = 0.15
 
 [node name="Skeleton3D" parent="CharacterVisual/ModelRoot/AuxScene/Scene/NPC1_standard_DEF_rig" parent_id_path=PackedInt32Array(905364963, 1374843997, 50584899) index="1" unique_id=1831316121]
 bones/1/rotation = Quaternion(0.970091, -4.7161875e-15, -3.654548e-15, 0.24274161)

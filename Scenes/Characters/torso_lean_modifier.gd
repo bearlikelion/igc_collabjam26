@@ -39,6 +39,14 @@ extends SkeletonModifier3D
 ## while the player's bullet-time is engaged.
 @export var ignore_time_scale: bool = true
 
+## Minimum visible lean (radians) when direction is non-zero. On commit, the
+## current lean is snapped to at least this magnitude so micro-leans can't
+## read as neutral — left/center/right stay unambiguously distinct. Center
+## (direction == 0) ignores the floor and lerps smoothly back to upright.
+## Clamped to lean_amount internally so a mistuning where floor > amount
+## doesn't produce a snap-then-drop. ~0.10 rad ≈ 5.7°.
+@export var min_lean_radians: float = 0.10
+
 ## When true, prints a [torso-lean] line on bone resolve and on disable.
 @export var debug_log: bool = false
 
@@ -88,6 +96,16 @@ func _process_modification() -> void:
 	_current_lean_radians = lerpf(_current_lean_radians, target_lean_radians, weight)
 	if absf(_current_lean_radians) < 0.001 and is_zero_approx(target_lean_radians):
 		_current_lean_radians = 0.0
+	# Telegraph floor: when committed to a non-zero direction, snap the current
+	# lean to at least min_lean_radians on the target side so micro-leans can't
+	# linger in the under-floor "is it leaning?" range. Release path (target
+	# == 0) bypasses this and lerps smoothly back to upright.
+	if not is_zero_approx(target_lean_radians):
+		var effective_floor: float = minf(min_lean_radians, lean_amount)
+		var target_sign: float = signf(target_lean_radians)
+		var current_sign: float = signf(_current_lean_radians)
+		if current_sign != target_sign or absf(_current_lean_radians) < effective_floor:
+			_current_lean_radians = target_sign * effective_floor
 	# Compose: animated pose * local-space z-rotation. Reading the post-
 	# AnimationTree pose this frame and post-multiplying applies the lean in
 	# the bone's local frame, so the chest follows whatever the clip is doing

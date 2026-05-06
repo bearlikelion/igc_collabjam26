@@ -40,6 +40,11 @@ const MOTION_STATES: Array[int] = [
 ## Lerp speed (radians/second-ish). Higher = snappier. 8.0 reaches ~95% of
 ## target in ~0.4s at 60fps.
 @export var torso_lean_speed: float = 8.0
+## Telegraph floor in radians: when the brain commits a non-zero lean
+## direction, the body snaps to at least this magnitude so micro-leans never
+## read as neutral. Center stays upright. ~0.10 rad ≈ 5.7° — visible but not
+## jarring. Player typically overrides higher (broadcast read-back matters more).
+@export var min_lean_radians: float = 0.10
 ## When true, lean ignores Engine.time_scale so it stays snappy during bullet-time.
 ## Set false on NPCs so their lean feels slow and dramatic in bullet-time.
 @export var lean_ignore_time_scale: bool = true
@@ -305,6 +310,7 @@ func _install_lean_modifier() -> void:
 	_lean_modifier.spine_bone_name = spine_bone_name
 	_lean_modifier.lean_amount = torso_lean_amount
 	_lean_modifier.lean_speed = torso_lean_speed
+	_lean_modifier.min_lean_radians = min_lean_radians
 	_lean_modifier.ignore_time_scale = lean_ignore_time_scale
 	skeleton.add_child(_lean_modifier)
 
