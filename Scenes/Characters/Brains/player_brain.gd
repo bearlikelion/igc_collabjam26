@@ -100,11 +100,11 @@ func get_end_of_rail_action() -> int:
 # ahead in the same lane (cap at peer speed, no catch-up).
 func get_move_speed() -> float:
 	if _waiting_for != null:
-		# Clear the wait once the peer is shuffle-engageable again (RUNNING +
-		# lane-settled). A peer that's mid-tween is RUNNING but NOT engageable,
-		# so we keep halting until their tween completes — then the encounter
-		# scan's next tick fires `start_shuffle` from the encounter handler.
-		if not is_instance_valid(_waiting_for) or _waiting_for.is_shuffle_engageable():
+		# Clear the wait once the peer is RUNNING + lane-settled. A peer
+		# mid-tween isn't engageable yet, so we keep halting until their tween
+		# completes — then the encounter scan's next tick fires `start_shuffle`
+		# from the encounter handler.
+		if not is_instance_valid(_waiting_for) or _waiting_for.is_lane_settled():
 			_waiting_for = null
 		else:
 			return 0.0
@@ -175,11 +175,13 @@ func _on_encounter_detected(other: Pawn, distance: float) -> void:
 	# every frame, so we engage the moment we're inside.
 	if distance > config.inner_shuffle_radius:
 		return
-	# Inside the zone with an opposing RUNNING pawn — start the shuffle in
-	# the encounter lane. `force=true` cancels any in-flight tween or held
-	# lean on either side and snaps both pawns upright in their origin
-	# lanes before the choice window opens.
-	pawn.start_shuffle(other, distance, true)
+	# Inside the zone with an opposing RUNNING pawn in the same physical lane.
+	# `start_shuffle` no-ops if either side is mid-tween — the encounter scan
+	# re-fires every frame, so the next tick after both settle engages
+	# naturally. The scan reads physical lane (rounded `_lane_position`), so a
+	# pawn swerving away is dropped from this signal once they've crossed
+	# half the lane width.
+	pawn.start_shuffle(other, distance)
 
 
 # Press handler — set lane intent. Cancels intent if both keys are now held.

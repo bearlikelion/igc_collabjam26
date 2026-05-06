@@ -64,8 +64,9 @@ class RailProjection:
 class EncounterSnap:
 	var runner: Runner
 	var centerline: float = 0.0
-	# Physical (world-side-consistent) lane — see _runner_physical_lane.
-	# NOT the runner's direction-relative get_current_lane().
+	# Physical (world-side-consistent) lane — see _runner_physical_lane_now.
+	# Rounded `_lane_position` (current body overlap), NOT the target lane,
+	# so a tweening pawn isn't pre-claimed at the destination.
 	var lane: int = 0
 	var lookahead: float = 0.0  # 0 = does not initiate scans (paused / no brain)
 
@@ -864,13 +865,33 @@ func _advance_runner(runner: Runner, delta: float) -> void:
 # Convert a runner's direction-relative lane index to a world-side-consistent
 # physical lane. FORWARD runners use the index as-is; REVERSE runners get the
 # index flipped to match the FORWARD frame (mirrors the flip in
-# _runner_lane_segment_start). Encounter scan compares THIS, not raw
-# get_current_lane(), so a FORWARD lane 2 and a REVERSE lane 2 don't falsely
-# match — they're on opposite physical sides of the rail.
+# _runner_lane_segment_start). Lane-occupancy queries (clearance, spawn, queue
+# avoidance) compare THIS so a FORWARD lane 2 and a REVERSE lane 2 don't
+# falsely match — they're on opposite physical sides of the rail. Reads the
+# pawn's TARGET lane (`get_current_lane`) — a tweening pawn is treated as
+# already owning the destination for routing/queue purposes. The encounter
+# scan uses `_runner_physical_lane_now` instead so a swerver isn't pre-claimed
+# at the destination — a same-lane shuffle requires both bodies to actually
+# overlap, not just intend to.
 func _runner_physical_lane(runner: Runner) -> int:
 	if runner.toward_finish:
 		return runner.node.get_current_lane()
 	return (Pawn.LANE_COUNT - 1) - runner.node.get_current_lane()
+
+
+# Encounter-scan-only physical lane: rounds `_lane_position` (the tweened
+# scalar) to the nearest integer, then mirrors the FORWARD/REVERSE flip from
+# `_runner_physical_lane`. A pawn mid-tween is read as being in the lane its
+# body currently overlaps — once they've crossed half the lane width they
+# count as "in" the destination, before that they still count as "in" the
+# source. Combined with the mid-tween engagement gate in `Pawn.start_shuffle`,
+# this means a swerver and an opposing pawn can pass through the same target
+# lane without locking into a shuffle as long as the swerver is still moving.
+func _runner_physical_lane_now(runner: Runner) -> int:
+	var raw: int = runner.node.get_physical_lane()
+	if runner.toward_finish:
+		return raw
+	return (Pawn.LANE_COUNT - 1) - raw
 
 
 # Length of the runner's current segment. Lane-independent now that lane
@@ -1003,10 +1024,12 @@ func _scan_encounters_for_all_runners() -> void:
 		var snap: EncounterSnap = EncounterSnap.new()
 		snap.runner = runner
 		snap.centerline = _runner_centerline_position(runner)
-		# Physical (world-side) lane — see _runner_physical_lane. Required so
-		# FORWARD vs REVERSE comparisons aren't false-matched by inverted
-		# direction-relative indices.
-		snap.lane = _runner_physical_lane(runner)
+		# Physical lane based on rounded `_lane_position` — see
+		# `_runner_physical_lane_now`. Tweening pawns count as occupying the
+		# lane their body actually overlaps right now (not the target lane);
+		# the engagement rule waits until both pawns settle before locking
+		# into a shuffle.
+		snap.lane = _runner_physical_lane_now(runner)
 		# Only RUNNING pawns initiate scans. Paused / knocked-down / disabled
 		# runners stay in the snapshot list as candidate "others" but won't
 		# emit encounter_detected themselves.
