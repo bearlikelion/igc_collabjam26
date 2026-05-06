@@ -433,9 +433,10 @@ func _try_commit_queued_lane_change() -> void:
 
 # Returns true when the runner-coord scan reports `target_lane` clear of
 # same-direction peers within `min_peer_gap` ahead AND no `obstacle` group
-# node within the same window. Defensive defaults: no MetroMovement back-ref
-# (pre-registration / unit-test scenarios) → assume safe so brains can drive
-# tween tests without a registry. Same-lane request → trivially safe.
+# node within the same window. Defensive default: no MetroMovement back-ref
+# (pre-registration window during nav-mesh bake — see facade docstring) →
+# assume safe so AIBrain's `_tick_random_lane` can request lane changes
+# during startup without crashing. Same-lane request → trivially safe.
 func _is_lane_change_safe(target_lane: int) -> bool:
 	if target_lane == _target_lane:
 		return true
@@ -592,10 +593,17 @@ func _phase_name() -> String:
 # `class_name`-import it). The facade is the single auditable seam between
 # decision logic (Brain) and rail-coord storage (MetroMovement).
 #
-# Each helper guards the back-ref and returns a defensive default for
-# pre-registration / unit-test scenarios so callers can stay unconditional.
-# Adding a new rail-coord query? Add a thin delegator here, not a new field
-# read on the brain side.
+# The `_metro_movement == null` guards in each helper are LOAD-BEARING, not
+# vestigial. `MetroMovement._wait_for_nav` is `call_deferred`-d from `_ready`
+# and `await`s `physics_frame` until the navigation map produces a path —
+# typically several physics frames during nav-mesh bake. During that window
+# `AIBrain.physics_tick` is firing (`_tick_random_lane` / `_tick_overtake`
+# both query the facade), so the helpers MUST tolerate a null back-ref and
+# return defensive defaults — INF for clearance, null for peer-ahead, [] for
+# nearby. Replacing with `assert` would crash on every level load.
+#
+# Adding a new rail-coord query? Add a thin delegator here with the same
+# guard + defensive-default pattern, not a new field read on the brain side.
 
 # Mark a Pawn as ignored for the rail-coord encounter scan until it drifts
 # past the hysteresis margin (see MetroMovement.ENCOUNTER_IGNORE_HYSTERESIS).
