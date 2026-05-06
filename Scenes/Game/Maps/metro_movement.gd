@@ -1249,6 +1249,41 @@ func get_lane_clearance(querier: Pawn, lane: int, lookahead: float) -> float:
 	)
 
 
+# True iff `pawn` is within `margin` rail-meters of an INTERIOR corner — an
+# actual turn — and not just the start (`corners[0]`) or finish
+# (`corners[size-1]`), which never snap. Used by AIBrain to suppress overtake
+# and random-lane-change near corners, where the perpendicular lane offset
+# re-bases against the new segment direction (~sqrt(2)*lane_offset world-space
+# snap for 90° turns); initiating a tween across that boundary cascades into
+# traffic jams as multiple peers all re-rank lanes post-snap and converge on
+# the same "safer" slot. Obstacle dodge and shuffle stance are NOT gated on
+# this — both remain ungated in their respective handlers.
+#
+# Direction-agnostic: `runner.segment_index` is direction-relative (init param,
+# advances on every segment cross regardless of FORWARD/REVERSE), so a single
+# pair of bounds checks covers both travel directions. Returns false when
+# `margin <= 0` (caller-side disable), the pawn is unregistered, or no
+# interior corner is within range.
+func is_runner_near_corner(pawn: Pawn, margin: float) -> bool:
+	if margin <= 0.0:
+		return false
+	var runner: Runner = _find_runner_for(pawn)
+	if runner == null:
+		return false
+	# Approaching an interior corner ahead. Last segment ends at the finish
+	# (`corners[size-1]`) which is not a turn — exclude.
+	if runner.segment_index < _corners.size() - 2:
+		var seg_length: float = _runner_segment_length(runner)
+		if seg_length - runner.distance_along < margin:
+			return true
+	# Just past an interior corner behind. Segment 0 starts at the rail start
+	# (`corners[0]`) which is not a turn — exclude.
+	if runner.segment_index > 0:
+		if runner.distance_along < margin:
+			return true
+	return false
+
+
 # Convert a runner's direction-relative lane index to physical (world-side).
 # Symmetric inverse of _runner_target_lane. Pulled out so external queries
 # can pass direction-relative lanes without knowing the runner's orientation.
@@ -1342,10 +1377,31 @@ func _apply_runner_yaw_instant(runner: Runner) -> void:
 	runner.node.rotation.y = _runner_segment_yaw(runner)
 
 
-# Yaw direction the runner should face in its current segment. Lane-independent
+# Yaw direction the runner should face right now.
+#
+# Default: rail forward in the runner's current segment. Lane-independent
 # (see _runner_segment_length). Returns pawn's current yaw on a degenerate
 # segment so lerp_angle doesn't snap.
+#
+# Override during SHUFFLING: face the shuffle opponent directly, ignoring the
+# rail. On corners the rail forward kinks but the encounter geometry (the two
+# bodies closing on each other) doesn't — so we orient toward the peer
+# instead. The PlayerCamera tracks `target_pawn.rotation.y` every frame
+# (`pawn_camera.gd:124`), so the player view inherits this without any
+# camera-side change. After resolution: winner returns to RUNNING and
+# `_apply_runner_yaw`'s lerp glides yaw back to rail forward (TURN_WEIGHT
+# time-constant ~100 ms wall-clock, ~500 ms during bullet-time which only
+# matters mid-shuffle anyway). Loser is KNOCKED_DOWN — `is_advancing_paused`
+# excludes them from `_advance_runner`, so their yaw freezes facing the
+# winner as they fall, which reads cinematically.
 func _runner_segment_yaw(runner: Runner) -> float:
+	if runner.node.locomotion == Pawn.LocomotionState.SHUFFLING:
+		var other: Pawn = runner.node.get_shuffle_other()
+		if other != null:
+			var to_other: Vector3 = other.global_position - runner.node.global_position
+			to_other.y = 0.0
+			if to_other.length_squared() > 0.001:
+				return atan2(-to_other.x, -to_other.z)
 	var seg_start: Vector3 = _runner_lane_segment_start(runner.segment_index, 0, runner.toward_finish)
 	var seg_end: Vector3 = _runner_lane_segment_end(runner.segment_index, 0, runner.toward_finish)
 	var fwd: Vector3 = seg_end - seg_start

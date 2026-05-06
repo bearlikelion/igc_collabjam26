@@ -32,6 +32,14 @@ extends BrainConfig
 ## Defaults to one comfort gap so we only swap when the new lane is at
 ## least one peer-spacing roomier.
 @export_range(0.0, 5.0, 0.1) var overtake_clearance_margin: float = 1.0
+## Rail-meters of suppression window on either side of an interior corner.
+## Inside this window `_tick_overtake` and `_tick_random_lane` skip — neither
+## initiates a lane change. Counters the ~sqrt(2)*lane_offset world-space
+## snap that hits non-center lanes at every 90° turn (see
+## `MetroMovement._get_lane_segment_start` and the file header). Obstacle
+## dodge and shuffle stance are NOT gated on this; they remain reactive at
+## corners. 0.0 disables the gate entirely (legacy behaviour).
+@export_range(0.0, 5.0, 0.1, "suffix:m") var corner_suppression_margin: float = 0.5
 
 @export_group("Encounters")
 ## Rail-meters of clearance penalty applied per peer who is leaning INTO a

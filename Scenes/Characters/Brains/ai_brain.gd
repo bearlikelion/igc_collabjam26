@@ -212,6 +212,13 @@ func _tick_random_lane() -> void:
 		return
 	if Time.get_ticks_msec() < _next_random_lane_msec:
 		return
+	# Suppress near rail corners. Lane offsets re-base against the new segment
+	# direction at each interior corner — a random-lane swerve initiated inside
+	# this window would tween across the snap and pile up against the
+	# post-corner cluster. Schedule is NOT reset here so the next attempt fires
+	# naturally once we're clear of the corner.
+	if pawn.is_near_corner(config.corner_suppression_margin):
+		return
 	var clear_lane: int = _pick_clear_lane(pawn.get_current_lane())
 	if clear_lane != pawn.get_current_lane():
 		_request_adjacent_lane_change(clear_lane)
@@ -242,6 +249,13 @@ func _tick_overtake() -> void:
 	if _runup != RunUpState.IDLE:
 		return
 	if Pawn.LANE_COUNT <= 1:
+		return
+	# Suppress near rail corners. Same rationale as `_tick_random_lane`: the
+	# perpendicular lane offset snap at interior corners (~sqrt(2)*lane_offset
+	# for 90° turns) cascades into traffic jams when multiple peers re-rank
+	# lanes post-snap and converge. The cooldown timer is NOT bumped — the
+	# next overtake attempt fires naturally once past the corner.
+	if pawn.is_near_corner(config.corner_suppression_margin):
 		return
 	var lookahead: float = config.encounter_lookahead
 	if lookahead <= 0.0:

@@ -648,6 +648,20 @@ func get_runners_near(lookahead: float) -> Array[Pawn]:
 	return _metro_movement.get_runners_near(self, lookahead)
 
 
+# True iff this Pawn is within `margin` rail-meters of an interior corner.
+# AIBrain uses this to suppress overtake / random-lane-change near corners,
+# where the perpendicular lane offset re-bases against the new segment
+# direction (~sqrt(2)*lane_offset world-space snap for 90° turns) — initiating
+# a lane-change tween across that boundary cascades into traffic jams as
+# multiple peers re-rank lanes post-snap and converge on the same slot.
+# Pre-registration → false (= unconstrained, matching every other facade
+# default — AI keeps ticking during nav-mesh bake).
+func is_near_corner(margin: float) -> bool:
+	if _metro_movement == null:
+		return false
+	return _metro_movement.is_runner_near_corner(self, margin)
+
+
 # THE canonical "is target_lane enterable right now?" predicate. Single source
 # of truth for every lane-change gate — `request_lane_change` queue gate, the
 # queue drain in `_try_commit_queued_lane_change`, AIBrain's stance roll
