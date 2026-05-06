@@ -444,7 +444,7 @@ func _is_lane_change_safe(target_lane: int) -> bool:
 # (a 2nd `begin_subway_shuffle` call on a busy callee would silently destroy
 # their existing shuffle bookkeeping).
 #
-# Engagement rule: same physical lane + opposing direction triggers the
+# Engagement rule: same occupied lane + opposing direction triggers the
 # shuffle regardless of either pawn's intent — EXCEPT when either pawn is
 # mid-tween. A swerver gets to finish their lane change; the encounter scan
 # re-fires every frame, so once both pawns settle the next tick engages.
@@ -705,12 +705,14 @@ func is_lane_settled() -> bool:
 	return locomotion == LocomotionState.RUNNING and _lane_tween_phase == LaneTweenPhase.IDLE
 
 
-# Physical lane index this pawn currently occupies — rounds `_lane_position`
-# (the tweened lane scalar) to the nearest integer. Used by the encounter
-# scan in MetroMovement so a pawn mid-lane-change is read as being in the
-# lane its body actually overlaps right now, not the target lane it's
-# heading toward. Settled pawns return their integer lane unchanged.
-func get_physical_lane() -> int:
+# Lane index this pawn currently occupies — rounds `_lane_position` (the
+# tweened lane scalar) to the nearest integer. Used by the encounter scan
+# in MetroMovement so a pawn mid-lane-change is read as being in the lane
+# its body actually overlaps right now, not the target lane it's heading
+# toward. Settled pawns return their integer lane unchanged. Returns a
+# direction-relative lane index — MetroMovement applies the FORWARD/REVERSE
+# flip via `_runner_occupied_lane` to compare across opposing runners.
+func get_occupied_lane() -> int:
 	return clampi(roundi(_lane_position), 0, LANE_COUNT - 1)
 
 

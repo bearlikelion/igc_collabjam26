@@ -232,10 +232,10 @@ func _on_encounter_detected(other: Pawn, distance: float) -> void:
 	# every frame, so we engage the moment we're inside.
 	if distance > config.inner_shuffle_radius:
 		return
-	# Inside the zone with an opposing RUNNING pawn in the same physical lane.
+	# Inside the zone with an opposing RUNNING pawn in the same occupied lane.
 	# `start_shuffle` no-ops if either side is mid-tween — the encounter scan
 	# re-fires every frame, so the next tick after both settle engages
-	# naturally. The scan reads physical lane (rounded `_lane_position`), so a
+	# naturally. The scan reads occupied lane (rounded `_lane_position`), so a
 	# pawn swerving away is dropped from this signal once they've crossed
 	# half the lane width.
 	pawn.start_shuffle(other, distance)

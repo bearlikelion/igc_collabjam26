@@ -64,7 +64,7 @@ class RailProjection:
 class EncounterSnap:
 	var runner: Runner
 	var centerline: float = 0.0
-	# Physical (world-side-consistent) lane — see _runner_physical_lane_now.
+	# Occupied lane (world-side-consistent) — see _runner_occupied_lane.
 	# Rounded `_lane_position` (current body overlap), NOT the target lane,
 	# so a tweening pawn isn't pre-claimed at the destination.
 	var lane: int = 0
@@ -314,7 +314,7 @@ func _pick_weighted_npc_scene() -> PackedScene:
 
 # Walk a freshly-spawned runner backward along its rail direction in
 # min_gap-sized steps until no other runner sits within `min_gap` rail-meters
-# in the same physical lane. Bounded iteration so a fully-packed start lane
+# in the same target lane. Bounded iteration so a fully-packed start lane
 # can't loop forever — clamps at segment 0, distance 0 and accepts the
 # remaining overlap. Distance comparison is signed centerline-based so it
 # works for both FORWARD and REVERSE runners.
@@ -339,15 +339,15 @@ func _destagger_runner_spawn(runner: Runner, min_gap: float) -> void:
 		return
 
 
-# Find another runner in the same physical lane whose centerline distance is
+# Find another runner in the same target lane whose centerline distance is
 # within `min_gap` of the spawning runner. Null = clear.
 func _spawn_overlap_pawn(runner: Runner, min_gap: float) -> Pawn:
-	var phys_lane: int = _runner_physical_lane(runner)
+	var target_lane: int = _runner_target_lane(runner)
 	var center: float = _runner_centerline_position(runner)
 	for other: Runner in _runners:
 		if other == runner or not is_instance_valid(other.node):
 			continue
-		if _runner_physical_lane(other) != phys_lane:
+		if _runner_target_lane(other) != target_lane:
 			continue
 		if absf(_runner_centerline_position(other) - center) < min_gap:
 			return other.node
@@ -886,25 +886,26 @@ func _advance_runner(runner: Runner, delta: float) -> void:
 # falsely match — they're on opposite physical sides of the rail. Reads the
 # pawn's TARGET lane (`get_current_lane`) — a tweening pawn is treated as
 # already owning the destination for routing/queue purposes. The encounter
-# scan uses `_runner_physical_lane_now` instead so a swerver isn't pre-claimed
+# scan uses `_runner_occupied_lane` instead so a swerver isn't pre-claimed
 # at the destination — a same-lane shuffle requires both bodies to actually
 # overlap, not just intend to.
-func _runner_physical_lane(runner: Runner) -> int:
+func _runner_target_lane(runner: Runner) -> int:
 	if runner.toward_finish:
 		return runner.node.get_current_lane()
 	return (Pawn.LANE_COUNT - 1) - runner.node.get_current_lane()
 
 
-# Encounter-scan-only physical lane: rounds `_lane_position` (the tweened
+# Encounter-scan-only occupied lane: rounds `_lane_position` (the tweened
 # scalar) to the nearest integer, then mirrors the FORWARD/REVERSE flip from
-# `_runner_physical_lane`. A pawn mid-tween is read as being in the lane its
+# `_runner_target_lane` (so the result is in the same world-side-consistent
+# coordinate frame). A pawn mid-tween is read as being in the lane its
 # body currently overlaps — once they've crossed half the lane width they
 # count as "in" the destination, before that they still count as "in" the
 # source. Combined with the mid-tween engagement gate in `Pawn.start_shuffle`,
 # this means a swerver and an opposing pawn can pass through the same target
 # lane without locking into a shuffle as long as the swerver is still moving.
-func _runner_physical_lane_now(runner: Runner) -> int:
-	var raw: int = runner.node.get_physical_lane()
+func _runner_occupied_lane(runner: Runner) -> int:
+	var raw: int = runner.node.get_occupied_lane()
 	if runner.toward_finish:
 		return raw
 	return (Pawn.LANE_COUNT - 1) - raw
@@ -1040,12 +1041,12 @@ func _scan_encounters_for_all_runners() -> void:
 		var snap: EncounterSnap = EncounterSnap.new()
 		snap.runner = runner
 		snap.centerline = _runner_centerline_position(runner)
-		# Physical lane based on rounded `_lane_position` — see
-		# `_runner_physical_lane_now`. Tweening pawns count as occupying the
+		# Occupied lane based on rounded `_lane_position` — see
+		# `_runner_occupied_lane`. Tweening pawns count as occupying the
 		# lane their body actually overlaps right now (not the target lane);
 		# the engagement rule waits until both pawns settle before locking
 		# into a shuffle.
-		snap.lane = _runner_physical_lane_now(runner)
+		snap.lane = _runner_occupied_lane(runner)
 		# Only RUNNING pawns initiate scans. Paused / knocked-down / disabled
 		# runners stay in the snapshot list as candidate "others" but won't
 		# emit encounter_detected themselves.
@@ -1164,7 +1165,7 @@ func find_lane_occupant_ahead(querier: Pawn, lane: int, lookahead: float) -> Paw
 			continue
 		if not is_instance_valid(other.node):
 			continue
-		if _runner_physical_lane(other) != query_physical_lane:
+		if _runner_target_lane(other) != query_physical_lane:
 			continue
 		var ahead: float = _signed_distance_ahead(
 			querier_centerline,
@@ -1203,7 +1204,7 @@ func rank_lanes_by_clearance(querier: Pawn, exclude_lane: int, lookahead: float)
 		)
 		if ahead <= 0.0 or ahead > lookahead:
 			continue
-		var phys: int = _runner_physical_lane(other)
+		var phys: int = _runner_target_lane(other)
 		var prev: float = occupants_by_physical_lane.get(phys, INF)
 		if ahead < prev:
 			occupants_by_physical_lane[phys] = ahead
@@ -1290,7 +1291,7 @@ func get_lane_clearance(querier: Pawn, lane: int, lookahead: float) -> float:
 
 
 # Convert a runner's direction-relative lane index to physical (world-side).
-# Symmetric inverse of _runner_physical_lane. Pulled out so external queries
+# Symmetric inverse of _runner_target_lane. Pulled out so external queries
 # can pass direction-relative lanes without knowing the runner's orientation.
 func _physical_lane_for(runner: Runner, direction_relative_lane: int) -> int:
 	if runner.toward_finish:
@@ -1392,7 +1393,7 @@ func _runner_segment_yaw(runner: Runner) -> float:
 # have different recoil tuning by swapping configs.
 #
 # Chain reaction: before we rewind, propagate the knockdown to any
-# same-direction peer behind us in the same physical lane within the requested
+# same-direction peer behind us in the same target lane within the requested
 # rewind distance. Their `knock_down_from_shuffle()` emits `knocked_down`
 # synchronously, which re-enters this handler for that pawn and cascades
 # until no further chain target exists. By the time our `_rewind_runner` runs,
@@ -1419,13 +1420,13 @@ func _propagate_knockback_chain(runner: Runner, distance: float) -> void:
 	rear.node.knock_down_from_shuffle()
 
 
-# Nearest same-direction, same-physical-lane peer behind `runner` within
+# Nearest same-direction, same-target-lane peer behind `runner` within
 # `distance` rail-meters that is in a state we can chain into (RUNNING or
 # SHUFFLING). Skips KNOCKED_DOWN / PARKED / FINISHED / DISABLED — those are
 # either already part of an active chain or shouldn't be disturbed. Returns
 # the Runner or null if no chain target exists.
 func _find_chain_target(runner: Runner, distance: float) -> Runner:
-	var phys_lane: int = _runner_physical_lane(runner)
+	var target_lane: int = _runner_target_lane(runner)
 	var center: float = _runner_centerline_position(runner)
 	var nearest: Runner = null
 	var nearest_behind: float = INF
@@ -1434,7 +1435,7 @@ func _find_chain_target(runner: Runner, distance: float) -> Runner:
 			continue
 		if other.toward_finish != runner.toward_finish:
 			continue
-		if _runner_physical_lane(other) != phys_lane:
+		if _runner_target_lane(other) != target_lane:
 			continue
 		var loco: int = other.node.locomotion
 		if loco != Pawn.LocomotionState.RUNNING and loco != Pawn.LocomotionState.SHUFFLING:
@@ -1455,7 +1456,7 @@ func _find_chain_target(runner: Runner, distance: float) -> Runner:
 
 
 # Rewind a runner backward along the rail by the given distance, clamped so
-# we don't pass through (or land on top of) a same-physical-lane pawn behind
+# we don't pass through (or land on top of) a same-target-lane pawn behind
 # us. If a peer is closer behind than the requested rewind, the rewind is
 # capped at that peer's distance minus a small buffer (KNOCKBACK_REAR_BUFFER)
 # so the two pawns don't end up coincident and lock each other via mutual
@@ -1475,20 +1476,20 @@ func _rewind_runner(runner: Runner, distance: float) -> void:
 		runner.distance_along = _runner_segment_length(runner)
 
 
-# Clamp `distance` to the rail-distance to the nearest same-physical-lane
+# Clamp `distance` to the rail-distance to the nearest same-target-lane
 # pawn BEHIND `runner` (in runner's travel direction), minus
 # KNOCKBACK_REAR_BUFFER so the post-rewind position isn't coincident. Returns
 # `distance` unchanged when no rear pawn is within the requested rewind.
 func _clamp_rewind_to_rear_pawn(runner: Runner, distance: float) -> float:
 	if distance <= 0.0:
 		return 0.0
-	var phys_lane: int = _runner_physical_lane(runner)
+	var target_lane: int = _runner_target_lane(runner)
 	var center: float = _runner_centerline_position(runner)
 	var nearest_behind: float = INF
 	for other: Runner in _runners:
 		if other == runner or not is_instance_valid(other.node):
 			continue
-		if _runner_physical_lane(other) != phys_lane:
+		if _runner_target_lane(other) != target_lane:
 			continue
 		var ahead: float = _signed_distance_ahead(
 			center, _runner_centerline_position(other), runner.toward_finish

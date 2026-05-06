@@ -54,7 +54,7 @@ var _avoidance_until_msec: int = 0
 # `_set_stance`:
 #   - RUNNING / TRACKING → pure lean broadcast. Peers reading `lean_direction`
 #                          see the tell, but the body holds its lane — the
-#                          shuffle trigger is "same physical lane + opposing
+#                          shuffle trigger is "same occupied lane + opposing
 #                          pawn", and we don't want pre-shuffle swerves to
 #                          spend the engagement window mid-tween.
 #   - SHUFFLING / COMMITTING → locked into pawn.set_shuffle_telegraph for the
