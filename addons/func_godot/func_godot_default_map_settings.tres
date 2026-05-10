@@ -8,7 +8,7 @@
 [resource]
 script = ExtResource("1_dlf23")
 entity_fgd = ExtResource("2_hf4oi")
-base_texture_dir = "res://Assets/textures"
+base_texture_dir = "res://Assets/Textures"
 clip_texture = "special/clip"
 skip_texture = "special/skip"
 origin_texture = "special/origin"

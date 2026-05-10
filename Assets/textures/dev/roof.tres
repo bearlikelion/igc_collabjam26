@@ -1,0 +1,8 @@
+[gd_resource type="StandardMaterial3D" format=3 uid="uid://dtk2blvrbfmly"]
+
+[ext_resource type="Texture2D" uid="uid://d1vhhnyb782ai" path="res://Assets/Textures/dev/roof.png" id="1_sfppa"]
+
+[resource]
+albedo_texture = ExtResource("1_sfppa")
+metallic_specular = 0.0
+texture_filter = 2

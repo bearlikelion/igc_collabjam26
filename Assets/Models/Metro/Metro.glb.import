@@ -38,6 +38,138 @@ materials/extract=0
 materials/extract_format=0
 materials/extract_path=""
 _subresources={
+"materials": {
+"Chair": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://Assets/Textures/metro/Chair.tres",
+"use_external/path": "uid://0llf1ki80f5c"
+},
+"ConcreteBare": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://Assets/Textures/metro/ConcreteBare.tres",
+"use_external/path": "uid://cw1ya0p5rkxfn"
+},
+"Door": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://Assets/Textures/metro/Door.tres",
+"use_external/path": "uid://dojpbguy5a66v"
+},
+"Door_01": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://Assets/Textures/metro/Door_01.tres",
+"use_external/path": "uid://dpjv6nt33man8"
+},
+"Floor": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://Assets/Textures/metro/Floor.tres",
+"use_external/path": "uid://dt62fldyjsdqc"
+},
+"Glass": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://Assets/Textures/metro/Glass.tres",
+"use_external/path": "uid://yjv3l3560li1"
+},
+"Posters": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://Assets/Textures/metro/Posters.tres",
+"use_external/path": "uid://c61mh6b76ypkg"
+},
+"TactilePaving": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://Assets/Textures/metro/TactilePaving.tres",
+"use_external/path": "uid://bvwmcsaj7ehig"
+},
+"Tiles": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://Assets/Textures/metro/Tiles.tres",
+"use_external/path": "uid://bn0n7chk5q0yr"
+},
+"Trains": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://Assets/Textures/metro/Trains.tres",
+"use_external/path": "uid://ddpmnc3m25hqy"
+},
+"Trains_01": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://Assets/Textures/metro/Trains_01.tres",
+"use_external/path": "uid://bpt5n6ftwhme1"
+},
+"Vending_machine": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://Assets/Textures/metro/Vending_machine.tres",
+"use_external/path": "uid://b0iuvaqh1cyq0"
+},
+"automatic_ticket_gate": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://Assets/Textures/metro/automatic_ticket_gate.tres",
+"use_external/path": "uid://dhcewjs3qd70h"
+},
+"light": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://Assets/Textures/metro/light.tres",
+"use_external/path": "uid://cx7t33gxfxyfh"
+},
+"metal": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://Assets/Textures/metro/metal.tres",
+"use_external/path": "uid://bm1jvhnyvgclf"
+},
+"metal_01": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://Assets/Textures/metro/metal_01.tres",
+"use_external/path": "uid://cso0joo2xippa"
+},
+"metal_02": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://Assets/Textures/metro/metal_02.tres",
+"use_external/path": "uid://6j1gd4ua6215"
+},
+"metal_03": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://Assets/Textures/metro/metal_03.tres",
+"use_external/path": "uid://c7kmm4mik570s"
+},
+"metal_04": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://Assets/Textures/metro/metal_04.tres",
+"use_external/path": "uid://6pwu25eyhgmk"
+},
+"metal_05": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://Assets/Textures/metro/metal_05.tres",
+"use_external/path": "uid://dq876nr1hwmue"
+},
+"metro_map": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://Assets/Textures/metro/metro_map.tres",
+"use_external/path": "uid://carmf22ho4uop"
+},
+"road_rails": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://Assets/Textures/metro/road_rails.tres",
+"use_external/path": "uid://c6oxm87hj1yy5"
+},
+"seats": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://Assets/Textures/metro/seats.tres",
+"use_external/path": "uid://biociogrftreo"
+},
+"ticket_machine": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://Assets/Textures/metro/ticket_machine.tres",
+"use_external/path": "uid://cpi8keepojmum"
+},
+"tile_tile": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://Assets/Textures/metro/tile_tile.tres",
+"use_external/path": "uid://b7scv4ndmg2mo"
+},
+"trash_can": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://Assets/Textures/metro/trash_can.tres",
+"use_external/path": "uid://cyajffj0iaqt1"
+}
+},
 "meshes": {
 "Metro_Chair": {
 "generate/lightmap_uv": 0,

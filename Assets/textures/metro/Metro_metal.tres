@@ -1,0 +1,8 @@
+[gd_resource type="StandardMaterial3D" format=3 uid="uid://buqap57vbkfbc"]
+
+[ext_resource type="Texture2D" uid="uid://c15xk6m40vpmf" path="res://Assets/Textures/metro/Metro_metal.jpg" id="1_c0o34"]
+
+[resource]
+albedo_texture = ExtResource("1_c0o34")
+metallic_specular = 0.0
+texture_filter = 2

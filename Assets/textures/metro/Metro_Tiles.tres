@@ -1,0 +1,8 @@
+[gd_resource type="StandardMaterial3D" format=3 uid="uid://csj6pbxbrckfx"]
+
+[ext_resource type="Texture2D" uid="uid://y2shpb26ougw" path="res://Assets/Textures/metro/Metro_Tiles.png" id="1_6rvwa"]
+
+[resource]
+albedo_texture = ExtResource("1_6rvwa")
+metallic_specular = 0.0
+texture_filter = 2

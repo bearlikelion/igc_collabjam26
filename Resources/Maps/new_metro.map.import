@@ -1,0 +1,14 @@
+[remap]
+
+importer="func_godot.map"
+type="Resource"
+uid="uid://ce2wprtbwmqsr"
+path="res://.godot/imported/new_metro.map-c8f39bccc786a9f7dcaf0d5ae653c795.tres"
+
+[deps]
+
+source_file="res://Resources/Maps/new_metro.map"
+dest_files=["res://.godot/imported/new_metro.map-c8f39bccc786a9f7dcaf0d5ae653c795.tres"]
+
+[params]
+

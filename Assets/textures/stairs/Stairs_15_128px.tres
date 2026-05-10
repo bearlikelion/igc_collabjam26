@@ -1,0 +1,8 @@
+[gd_resource type="StandardMaterial3D" format=3 uid="uid://mq07g4a6eyam"]
+
+[ext_resource type="Texture2D" uid="uid://b4opbjmiiuula" path="res://Assets/Textures/stairs/Stairs_15_128px.png" id="1_y6mh8"]
+
+[resource]
+albedo_texture = ExtResource("1_y6mh8")
+metallic_specular = 0.0
+texture_filter = 2

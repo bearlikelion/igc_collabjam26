@@ -1,0 +1,8 @@
+[gd_resource type="StandardMaterial3D" format=3 uid="uid://cn5mmdska1d8k"]
+
+[ext_resource type="Texture2D" uid="uid://du211a3o1hqgc" path="res://Assets/Textures/dev/track_line_blue.jpg" id="1_drcv7"]
+
+[resource]
+albedo_texture = ExtResource("1_drcv7")
+metallic_specular = 0.0
+texture_filter = 2

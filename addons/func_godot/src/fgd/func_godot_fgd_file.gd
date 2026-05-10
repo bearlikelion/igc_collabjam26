@@ -1,8 +1,8 @@
 @tool
 @icon("res://addons/func_godot/icons/icon_godot_ranger.svg")
 class_name FuncGodotFGDFile extends Resource
-## [Resource] file used to express a set of [FuncGodotFGDEntity] definitions. 
-## 
+## [Resource] file used to express a set of [FuncGodotFGDEntity] definitions.
+##
 ## Can be exported as an FGD file for use with a Quake or Hammer-based map editor. Used in conjunction with [FuncGodotMapSetting] to generate nodes in a [FuncGodotMap] node.
 ##
 ## @tutorial(Level Design Book FGD Chapter): https://book.leveldesignbook.com/appendix/resources/formats/fgd
@@ -31,34 +31,34 @@ func do_export_file(target_editor: FuncGodotTargetMapEditors = FuncGodotTargetMa
 
 	if fgd_name == "":
 		printerr("Skipping export: Empty FGD name")
-	
+
 	if not DirAccess.dir_exists_absolute(fgd_output_folder):
 		if DirAccess.make_dir_recursive_absolute(fgd_output_folder) != OK:
 			printerr("Skipping export: Failed to create directory")
 			return
 
 	var fgd_file = fgd_output_folder.path_join(fgd_name + ".fgd")
-	
+
 	var file_obj := FileAccess.open(fgd_file, FileAccess.WRITE)
 	if not file_obj:
 		printerr("Failed to open file for writing: ", fgd_file)
 		return
-	
+
 	print("Exporting FGD to ", fgd_file)
 	file_obj.store_string(build_class_text(target_editor))
 	file_obj.close()
 
 @export_group("Map Editor")
 
-## Some map editors do not support the features found in others 
-## (ex: TrenchBroom supports the "model" key word while others require "studio", 
-## J.A.C.K. uses the "shader" key word while others use "material", etc...). 
-## If you get errors in your map editor, try changing this setting and re-exporting. 
+## Some map editors do not support the features found in others
+## (ex: TrenchBroom supports the "model" key word while others require "studio",
+## J.A.C.K. uses the "shader" key word while others use "material", etc...).
+## If you get errors in your map editor, try changing this setting and re-exporting.
 ## This setting is overridden when the FGD is built via the Game Config resource.
 @export var target_map_editor: FuncGodotTargetMapEditors = FuncGodotTargetMapEditors.TRENCHBROOM
 
-# Some map editors do not support the "model" key word and require the "studio" key word instead. 
-# If you get errors in your map editor, try changing this setting. 
+# Some map editors do not support the "model" key word and require the "studio" key word instead.
+# If you get errors in your map editor, try changing this setting.
 # This setting is overridden when the FGD is built via the Game Config resource.
 #@export var model_key_word_supported: bool = true
 
@@ -84,7 +84,7 @@ func build_class_text(target_editor: FuncGodotTargetMapEditors = FuncGodotTarget
 			res += base_fgd.build_class_text(target_editor)
 		else:
 			printerr("Base Fgd Files contains incorrect resource type! Should only be type FuncGodotFGDFile.")
-	
+
 	var entities = get_fgd_classes()
 	for ent in entities:
 		if not ent is FuncGodotFGDEntityClass:
@@ -93,7 +93,7 @@ func build_class_text(target_editor: FuncGodotTargetMapEditors = FuncGodotTarget
 			continue
 		if ent is FuncGodotFGDModelPointClass:
 			ent._model_generation_enabled = generate_model_point_class_models
-		
+
 		var ent_text = ent.build_def_text(target_editor)
 		res += ent_text
 		if ent != entities[-1]:
@@ -126,7 +126,7 @@ func get_entity_definitions() -> Dictionary[String, FuncGodotFGDEntityClass]:
 		if ent.classname.replace(" ","") == "":
 			printerr("Skipping " + ent.get_path() + ": Empty classname")
 			continue
-		
+
 		if ent is FuncGodotFGDPointClass or ent is FuncGodotFGDSolidClass:
 			var entity_def = ent.duplicate()
 			var meta_properties: Dictionary[String, Variant] = {}
