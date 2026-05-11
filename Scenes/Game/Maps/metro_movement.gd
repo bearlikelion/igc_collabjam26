@@ -27,11 +27,11 @@ const CORNER_ANGLE_THRESHOLD: float = 0.95
 const DIAGONAL_TURN_RATIO: float = 0.35
 const MIN_SEGMENT_LENGTH: float = 2.0
 const MERGE_DISTANCE: float = 1.5
-const CENTER_SAMPLE_DISTANCE: float = 2.0
-const MIN_CENTER_SAMPLE_DISTANCE: float = 0.25
 const CENTER_WALK_STEP: float = 0.1
 const CENTER_MAX_WALK: float = 8.0
 const CENTER_TOLERANCE: float = 0.05
+const ROUTE_SAMPLE_STEP: float = 0.5
+const ROUTE_NAV_TOLERANCE: float = 0.1
 const TURN_WEIGHT: float = 10.0
 const OBSTACLE_STOP_DISTANCE: float = 0.75
 const OBSTACLE_RAY_HEIGHT: float = 0.6
@@ -175,6 +175,7 @@ func _wait_for_nav() -> void:
 	while true:
 		await get_tree().physics_frame
 		params.map = map_rid
+		params.path_postprocessing = NavigationPathQueryParameters3D.PATH_POSTPROCESSING_EDGECENTERED
 		params.start_position = _player.global_position
 		params.target_position = _finish.global_position
 		NavigationServer3D.query_path(params, result)
@@ -513,13 +514,13 @@ func _make_line(from: Vector3, to: Vector3, color: Color) -> MeshInstance3D:
 # Run the nav path through all cleanup passes.
 func _build_corners(path: PackedVector3Array, start_position: Vector3, finish_position: Vector3, map_rid: RID) -> Array[Vector3]:
 	var corners: Array[Vector3] = _simplify_path(path)
-	corners = _snap_to_axes(corners)
+	corners = _snap_to_axes(corners, map_rid)
 	corners = _collapse_short_segments(corners)
-	corners = _center_corners_on_corridor(corners, map_rid)
-	corners = _snap_to_axes(corners)
+	corners = _center_segments_on_corridor(corners, map_rid)
+	corners = _snap_to_axes(corners, map_rid)
 	corners = _merge_close_corners(corners)
 	corners = _pin_path_endpoints(corners, start_position, finish_position)
-	return _orthogonalize_preserving_endpoints(corners)
+	return _orthogonalize_preserving_endpoints(corners, map_rid)
 
 
 # Print the processed corner list.
@@ -533,7 +534,7 @@ func _print_corners(label: String) -> void:
 # When a raw segment changes BOTH X and Z significantly, it's an L-bend the nav
 # took diagonally — we insert an intermediate corner to make two axis-aligned
 # segments instead.
-func _snap_to_axes(corners: Array[Vector3]) -> Array[Vector3]:
+func _snap_to_axes(corners: Array[Vector3], map_rid: RID) -> Array[Vector3]:
 	if corners.size() < 2:
 		return corners
 	var result: Array[Vector3] = []
@@ -552,14 +553,7 @@ func _snap_to_axes(corners: Array[Vector3]) -> Array[Vector3]:
 
 		if dx > AXIS_TOLERANCE and dz > AXIS_TOLERANCE and diagonal_ratio >= DIAGONAL_TURN_RATIO:
 			# Balanced diagonal segment — insert an L-bend corner.
-			# Choose the dominant axis to travel first along.
-			var bend: Vector3
-			if dz > dx:
-				# Travel along Z first, then X.
-				bend = Vector3(prev.x, prev.y, curr.z)
-			else:
-				# Travel along X first, then Z.
-				bend = Vector3(curr.x, prev.y, prev.z)
+			var bend: Vector3 = _choose_axis_bend(result, curr, map_rid)
 			result.append(bend)
 			# Only add the curr point if it's meaningfully past the bend.
 			if (curr - bend).length() > AXIS_TOLERANCE:
@@ -617,54 +611,38 @@ func _collapse_short_segments(corners: Array[Vector3]) -> Array[Vector3]:
 	return result
 
 
-# Shift each interior corner toward the corridor center.
-# The nav mesh path hugs inner walls; we want corners at the M (center) tile.
-# Algorithm: at each corner, walk perpendicular to BOTH segments (the bisector
-# of their two right-vectors) and find the corridor centerline using the
-# navigation map's polygon edges via map_get_closest_point.
-func _center_corners_on_corridor(corners: Array[Vector3], map_rid: RID) -> Array[Vector3]:
+# Recenter each rail segment from its midpoint, then intersect segment
+# centerlines to place turns in the middle lane.
+func _center_segments_on_corridor(corners: Array[Vector3], map_rid: RID) -> Array[Vector3]:
 	if corners.size() < 3:
 		return corners
-	var result: Array[Vector3] = []
-	result.append(corners[0])
-
-	for i: int in range(1, corners.size() - 1):
-		var prev: Vector3 = corners[i - 1]
-		var curr: Vector3 = corners[i]
-		var nxt: Vector3 = corners[i + 1]
-
-		var in_dir: Vector3 = curr - prev
-		var out_dir: Vector3 = nxt - curr
-		in_dir.y = 0.0
-		out_dir.y = 0.0
-		var in_length: float = in_dir.length()
-		var out_length: float = out_dir.length()
-		if in_length < 0.001 or out_length < 0.001:
-			result.append(curr)
+	var line_points: Array[Vector3] = []
+	var line_dirs: Array[Vector3] = []
+	for i: int in range(corners.size() - 1):
+		var seg_start: Vector3 = corners[i]
+		var seg_end: Vector3 = corners[i + 1]
+		var seg_dir: Vector3 = seg_end - seg_start
+		seg_dir.y = 0.0
+		if seg_dir.length_squared() < 0.001:
+			line_points.append(seg_start)
+			line_dirs.append(Vector3.RIGHT)
 			continue
-		in_dir = in_dir.normalized()
-		out_dir = out_dir.normalized()
+		seg_dir = seg_dir.normalized()
+		var seg_perp: Vector3 = seg_dir.cross(Vector3.UP).normalized()
+		var segment_midpoint: Vector3 = (seg_start + seg_end) * 0.5
+		line_points.append(_center_on_axis(segment_midpoint, seg_perp, map_rid))
+		line_dirs.append(seg_dir)
 
-		var in_perp: Vector3 = in_dir.cross(Vector3.UP).normalized()
-		var out_perp: Vector3 = out_dir.cross(Vector3.UP).normalized()
-
-		# Sample inside each neighboring segment. Short final legs can be less than
-		# 2m, so clamp the sample distance to avoid centering from outside the corridor.
-		var in_sample_distance: float = min(CENTER_SAMPLE_DISTANCE, max(MIN_CENTER_SAMPLE_DISTANCE, in_length * 0.5))
-		var out_sample_distance: float = min(CENTER_SAMPLE_DISTANCE, max(MIN_CENTER_SAMPLE_DISTANCE, out_length * 0.5))
-		var in_sample: Vector3 = curr - in_dir * in_sample_distance
-		var in_centered: Vector3 = _center_on_axis(in_sample, in_perp, map_rid)
-		var out_sample: Vector3 = curr + out_dir * out_sample_distance
-		var out_centered: Vector3 = _center_on_axis(out_sample, out_perp, map_rid)
-
-		# Corner is the intersection of the two centerlines.
-		# Incoming centerline = in_centered + t * in_dir
-		# Outgoing centerline = out_centered + s * out_dir
-		# Solve for the intersection in XZ plane.
-		var centered: Vector3 = _intersect_lines_xz(in_centered, in_dir, out_centered, out_dir)
-		centered.y = curr.y
+	var result: Array[Vector3] = [corners[0]]
+	for i: int in range(1, corners.size() - 1):
+		var centered: Vector3 = _intersect_lines_xz(
+			line_points[i - 1],
+			line_dirs[i - 1],
+			line_points[i],
+			line_dirs[i]
+		)
+		centered.y = corners[i].y
 		result.append(centered)
-
 	result.append(corners[corners.size() - 1])
 	return result
 
@@ -741,6 +719,7 @@ func _editor_rebuild_debug() -> void:
 
 	var params: NavigationPathQueryParameters3D = NavigationPathQueryParameters3D.new()
 	params.map = map_rid
+	params.path_postprocessing = NavigationPathQueryParameters3D.PATH_POSTPROCESSING_EDGECENTERED
 	params.start_position = player_node.global_position
 	params.target_position = finish_node.global_position
 	var result: NavigationPathQueryResult3D = NavigationPathQueryResult3D.new()
@@ -772,7 +751,7 @@ func _pin_path_endpoints(corners: Array[Vector3], start_position: Vector3, finis
 
 
 # Insert bends for any remaining diagonal segments without moving endpoints.
-func _orthogonalize_preserving_endpoints(corners: Array[Vector3]) -> Array[Vector3]:
+func _orthogonalize_preserving_endpoints(corners: Array[Vector3], map_rid: RID) -> Array[Vector3]:
 	if corners.size() < 2:
 		return corners
 	var result: Array[Vector3] = [corners[0]]
@@ -788,7 +767,7 @@ func _orthogonalize_preserving_endpoints(corners: Array[Vector3]) -> Array[Vecto
 			result.append(curr)
 			continue
 
-		var bend: Vector3 = _choose_axis_bend(result, curr)
+		var bend: Vector3 = _choose_axis_bend(result, curr, map_rid)
 		if prev.distance_to(bend) > AXIS_TOLERANCE:
 			result.append(bend)
 		result.append(curr)
@@ -796,21 +775,52 @@ func _orthogonalize_preserving_endpoints(corners: Array[Vector3]) -> Array[Vecto
 	return result
 
 
-# Pick the bend that continues the previous travel axis before turning.
-func _choose_axis_bend(result: Array[Vector3], curr: Vector3) -> Vector3:
+# Pick the bend that best stays on the navigation mesh.
+func _choose_axis_bend(result: Array[Vector3], curr: Vector3, map_rid: RID) -> Vector3:
 	var prev: Vector3 = result[result.size() - 1]
+	var z_first: Vector3 = Vector3(prev.x, prev.y, curr.z)
+	var x_first: Vector3 = Vector3(curr.x, prev.y, prev.z)
+	var z_first_score: float = _score_axis_route_on_navmesh(prev, z_first, curr, map_rid)
+	var x_first_score: float = _score_axis_route_on_navmesh(prev, x_first, curr, map_rid)
+	if absf(z_first_score - x_first_score) > 0.01:
+		return z_first if z_first_score > x_first_score else x_first
+
 	if result.size() >= 2:
 		var before: Vector3 = prev - result[result.size() - 2]
 		before.y = 0.0
 		if abs(before.z) >= abs(before.x):
-			return Vector3(prev.x, prev.y, curr.z)
-		return Vector3(curr.x, prev.y, prev.z)
+			return z_first
+		return x_first
 
 	var dx: float = abs(curr.x - prev.x)
 	var dz: float = abs(curr.z - prev.z)
 	if dz > dx:
-		return Vector3(prev.x, prev.y, curr.z)
-	return Vector3(curr.x, prev.y, prev.z)
+		return z_first
+	return x_first
+
+
+# Score an L-shaped route by how closely its samples remain on the navmesh.
+func _score_axis_route_on_navmesh(from: Vector3, bend: Vector3, to: Vector3, map_rid: RID) -> float:
+	return _score_navmesh_segment(from, bend, map_rid) + _score_navmesh_segment(bend, to, map_rid)
+
+
+# Score one axis-aligned segment against the navigation map.
+func _score_navmesh_segment(from: Vector3, to: Vector3, map_rid: RID) -> float:
+	var length: float = from.distance_to(to)
+	if length <= 0.001:
+		return 0.0
+	var sample_count: int = maxi(1, ceili(length / ROUTE_SAMPLE_STEP))
+	var score: float = 0.0
+	for i: int in range(sample_count + 1):
+		var weight: float = float(i) / float(sample_count)
+		var sample: Vector3 = from.lerp(to, weight)
+		var closest: Vector3 = NavigationServer3D.map_get_closest_point(map_rid, sample)
+		var distance: float = closest.distance_to(sample)
+		if distance <= ROUTE_NAV_TOLERANCE:
+			score += 1.0
+		else:
+			score -= minf(distance, 1.0)
+	return score
 
 
 func _on_runner_lane_change_started(_from_lane: int, _to_lane: int, runner: Runner) -> void:

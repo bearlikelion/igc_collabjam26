@@ -569,12 +569,9 @@ func get_encounter_lookahead() -> float:
 	return config.encounter_lookahead
 
 
-# Forward NPCs (destination = "finish") park as greeters at the end of the
-# rail. Reverse NPCs (destination = "player" or anything else) loop back to
-# the start so a fresh oncoming runner appears.
+# NPCs loop back to the start at the end of the rail so the finish area
+# doesn't accumulate parked characters.
 func get_end_of_rail_action() -> int:
-	if config.destination_group == &"finish":
-		return EndOfRailAction.PARK
 	return EndOfRailAction.RESPAWN
 
 
