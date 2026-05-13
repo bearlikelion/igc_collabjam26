@@ -35,12 +35,6 @@ const ROUTE_NAV_TOLERANCE: float = 0.1
 const TURN_WEIGHT: float = 10.0
 const OBSTACLE_STOP_DISTANCE: float = 0.75
 const OBSTACLE_RAY_HEIGHT: float = 0.6
-## Lateral spacing between parked NPCs at the finish.
-const NPC_PARK_LATERAL_STEP: float = 0.9
-## Distance backward (away from the finish marker, into the train) between rows.
-const NPC_PARK_DEPTH_STEP: float = 1.1
-## Slots per row before wrapping into the next row deeper into the train.
-const NPC_PARK_SLOTS_PER_ROW: int = 4
 ## Max distance spread when a reverse NPC respawns so they don't pile up.
 const NPC_RESPAWN_STAGGER: float = 10.0
 ## Extra rail-meters past `encounter_lookahead` before clearing a runner's
@@ -146,7 +140,6 @@ var _start_position: Vector3 = Vector3.ZERO
 var _finish_position: Vector3 = Vector3.ZERO
 
 var _runners: Array[Runner] = []
-var _parked_npc_count: int = 0
 # Resolved during _wait_for_nav by querying the "player" group, which
 # PlayerBrain populates at bind time. Used only to anchor the rail and seed
 # the first runner — every other Pawn (player or NPC) flows through the same
@@ -266,6 +259,17 @@ func _spawn_starting_npcs() -> void:
 		total_rail_length += _corners[i].distance_to(_corners[i + 1])
 	var player_runner: Runner = _find_runner_for(_player)
 	var player_centerline: float = player_runner.distance_along if player_runner != null else 0.0
+	# Forward-direction (toward-finish) NPCs are capped by the train's slot
+	# count — late arrivals can't board, and we don't fan-out on the platform
+	# any more. Any spawn that rolls forward past the cap is forced reverse so
+	# total spawn count stays at `starting_npc_count`. Player isn't counted
+	# here: race-for-a-seat semantics let greeters legitimately fill every
+	# slot before the player arrives.
+	var train: Train = get_tree().get_first_node_in_group("train") as Train
+	var forward_cap: int = train.get_slot_count() if train != null else starting_npc_count
+	if train != null and starting_npc_count > forward_cap * 2:
+		push_warning("MetroMovement: starting_npc_count (%d) more than 2x train slot_count (%d); reverse-direction spawns will dominate." % [starting_npc_count, forward_cap])
+	var forward_count: int = 0
 	for _i: int in range(starting_npc_count):
 		var scene: PackedScene = _pick_weighted_npc_scene()
 		if scene == null:
@@ -279,6 +283,10 @@ func _spawn_starting_npcs() -> void:
 		spawn_parent.add_child(npc, true)
 		var pawn: Pawn = npc as Pawn
 		var toward_finish: bool = randi() % 2 == 0
+		if toward_finish and forward_count >= forward_cap:
+			toward_finish = false
+		if toward_finish:
+			forward_count += 1
 		var chosen_dist: float = randf() * total_rail_length
 		var max_attempts: int = 20
 		for attempt: int in range(max_attempts):
@@ -1013,18 +1021,42 @@ func _handle_end_of_rail(runner: Runner) -> void:
 func _finish_runner_at_goal(runner: Runner) -> void:
 	runner.finished = true
 	print("REACHED DESTINATION at %s" % runner.node.global_position)
+	# Same-pool boarding: the player races the greeters for slots. Claim is
+	# optional — `reach_goal()` still fires the cinematic either way. Win
+	# vs fail is gated downstream on `train.is_boarded(player)`.
+	_try_board_train(runner)
 	runner.node.reach_goal()
 
 
+# End-of-rail handler for FORWARD pawns whose end action is PARK (greeters).
+# Boards if a slot is free; otherwise freezes at end of rail. The spawn cap
+# in `_spawn_starting_npcs` makes "no slot" a player-only edge in normal
+# play, since forward-NPC count is bounded by `train.slot_count`.
 func _park_runner_at_finish(runner: Runner) -> void:
 	runner.finished = true
 	runner.segment_index = _corners.size() - 2
 	runner.distance_along = _runner_segment_length(runner)
-	var slot: int = _parked_npc_count
-	_parked_npc_count += 1
-	runner.node.park_at_finish(_compute_park_offset(slot))
+	if _try_board_train(runner):
+		return
+	# Fallback: no train present, or all slots filled. Stop at end of rail.
+	runner.node.park_at_finish(Vector3.ZERO)
 	_apply_runner_position(runner)
 	_apply_runner_yaw_instant(runner)
+
+
+# Resolve the level's Train and claim a slot for `runner`. On success the
+# Pawn tweens onto the marker (Pawn.board) and reparents under it — train
+# motion then carries the pawn via tree-transform inheritance.
+# Returns true iff a slot was claimed.
+func _try_board_train(runner: Runner) -> bool:
+	var train: Train = get_tree().get_first_node_in_group("train") as Train
+	if train == null:
+		return false
+	var marker: Marker3D = train.claim_slot(runner.node)
+	if marker == null:
+		return false
+	runner.node.board(marker)
+	return true
 
 
 func _respawn_runner_at_start(runner: Runner) -> void:
@@ -1033,33 +1065,6 @@ func _respawn_runner_at_start(runner: Runner) -> void:
 	runner.node.set_current_lane(randi() % Pawn.LANE_COUNT)
 	_apply_runner_position(runner)
 	_apply_runner_yaw_instant(runner)
-
-
-# Pack parked NPCs into rows of slots that fan out laterally from the rail's
-# last segment, with each row sitting deeper into the train.
-func _compute_park_offset(slot: int) -> Vector3:
-	if _corners.size() < 2:
-		return Vector3.ZERO
-	var row: int = int(float(slot) / float(NPC_PARK_SLOTS_PER_ROW))
-	var slot_in_row: int = slot % NPC_PARK_SLOTS_PER_ROW
-	# Convert slot_in_row into an alternating offset: +1,-1,+2,-2,+3,-3,+4,...
-	# Slot 0 gets a non-zero lateral so the very first parked NPC steps off
-	# the player's lane line.
-	var alternating: int = int(float(slot_in_row) / 2.0) + 1
-	var sign_step: float = 1.0 if (slot_in_row % 2 == 0) else -1.0
-	var lateral_units: float = sign_step * float(alternating)
-
-	# Compute the rail's last forward + perpendicular vectors at the finish.
-	var last_forward: Vector3 = _corners[_corners.size() - 1] - _corners[_corners.size() - 2]
-	last_forward.y = 0.0
-	if last_forward.length_squared() < 0.001:
-		return Vector3.ZERO
-	last_forward = last_forward.normalized()
-	var perpendicular: Vector3 = last_forward.cross(Vector3.UP).normalized()
-
-	var lateral: Vector3 = perpendicular * lateral_units * NPC_PARK_LATERAL_STEP
-	var depth: Vector3 = -last_forward * float(row + 1) * NPC_PARK_DEPTH_STEP
-	return lateral + depth
 
 
 # Rail-coordinate encounter scan. Replaces the per-pawn forward RayCast3D that

@@ -264,7 +264,16 @@ var _recovery_time_left: float = 0.0
 var shuffle: Shuffle
 
 # Parking offset (applied by MetroMovement while locomotion == PARKED).
+# Only consulted on the fallback "no train / no free slot" parking path; the
+# train-boarding path reparents the pawn under a Marker3D and derives world
+# transform via tree inheritance instead.
 var _parked_offset: Vector3 = Vector3.ZERO
+
+# Marker3D this Pawn is currently boarded at. Non-null only after `board()`
+# completes — pawn is reparented under it so train motion carries the pawn
+# automatically. `_physics_process` early-returns when set so gravity / lane
+# tween / MetroMovement writes don't fight the inherited transform.
+var _boarded_marker: Marker3D = null
 
 # Rail direction — set by MetroMovement at registration based on destination
 # geometry. True = same direction as player (toward finish end of rail).
@@ -304,6 +313,12 @@ func _find_brain_child() -> Brain:
 
 
 func _physics_process(delta: float) -> void:
+	# Boarded pawns derive their world transform from the marker they're
+	# parented under — every per-frame system below (gravity, lane tween,
+	# visual speed, brain tick, move_and_slide) is a no-op or actively wrong
+	# while a train is carrying us. Bail before any of them can fire.
+	if _boarded_marker != null:
+		return
 	# DISABLED skips brain tick too — actor is dead, nothing should fire.
 	if locomotion == LocomotionState.DISABLED:
 		return
@@ -1045,6 +1060,43 @@ func park_at_finish(offset: Vector3) -> void:
 
 func get_parked_offset() -> Vector3:
 	return _parked_offset
+
+
+# Tween into a train marker over ~0.4 s, then reparent under it so train
+# motion carries the pawn automatically via tree-transform inheritance.
+# Called from MetroMovement once Train.claim_slot has handed back a marker.
+#
+# Locomotion flips to PARKED immediately (not after the tween) so the rail
+# advancer stops writing this pawn's position the same frame the boarding
+# starts. Visual animation is paused only at the end so the walk cycle plays
+# during the slide-in.
+func board(marker: Marker3D) -> void:
+	if marker == null:
+		push_error("Pawn.board: null marker")
+		return
+	_boarded_marker = marker
+	_set_locomotion(LocomotionState.PARKED)
+	var target_pos: Vector3 = marker.global_position
+	var target_yaw: float = marker.global_rotation.y
+	var start_yaw: float = rotation.y
+	var tween: Tween = create_tween().set_parallel(true)
+	tween.tween_property(self, "global_position", target_pos, 0.4) \
+		.set_trans(Tween.TRANS_SINE) \
+		.set_ease(Tween.EASE_OUT)
+	tween.tween_method(
+		func(t: float) -> void: rotation.y = lerp_angle(start_yaw, target_yaw, t),
+		0.0, 1.0, 0.4
+	).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	await tween.finished
+	if not is_inside_tree() or not marker.is_inside_tree():
+		return
+	if get_parent() != marker:
+		# reparent() preserves global_transform — the tween already placed us
+		# at marker.global_transform, so the resulting local transform is
+		# identity (modulo float noise) without an extra assignment.
+		reparent(marker)
+	if visual != null:
+		visual.pause_animation()
 
 
 # --- Knockdown lifecycle ---------------------------------------------------

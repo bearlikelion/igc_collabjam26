@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=4]
+
+[ext_resource type="Script" path="res://Scenes/Game/Maps/Metro1/clock_ticker.gd" id="1_script"]
+[ext_resource type="AudioStream" uid="uid://ciay5x57wjro7" path="res://Assets/Audio/SFX/clock-ticking-4.wav" id="2_stream"]
+
+[node name="ClockTicker" type="AudioStreamPlayer"]
+stream = ExtResource("2_stream")
+autoplay = true
+script = ExtResource("1_script")

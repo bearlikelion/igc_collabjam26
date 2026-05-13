@@ -1,0 +1,72 @@
+[gd_scene format=3 uid="uid://eqhfaq0gc7oe"]
+
+[ext_resource type="Script" uid="uid://dv1sihqygwdlx" path="res://Scenes/Game/Maps/Metro1/train.gd" id="1_script"]
+[ext_resource type="ArrayMesh" uid="uid://dgtirktt1xuok" path="res://Assets/Models/Metro/Meshes/Metro_subway_car.res" id="2_mesh"]
+[ext_resource type="AudioStream" uid="uid://bpi1lxlloups3" path="res://Assets/Audio/Music/Los Del Rios - Macarena (8 Bit Raxlen Slice Chiptune Remix).mp3" id="3_endsong"]
+[ext_resource type="AudioStream" uid="uid://dmijihwubpwat" path="res://Assets/Audio/SFX/Steam Blast,Tube or Pipe,Distant.wav" id="4_depart"]
+[ext_resource type="AudioStream" uid="uid://0a0o5q6l1ok1" path="res://Assets/Audio/Music/bensound-sadday.mp3" id="5_nurn1"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_train"]
+size = Vector3(12, 2, 2)
+
+[node name="Train" type="Node3D" unique_id=437876698]
+transform = Transform3D(-1.3113416e-07, 0, -3, 0, 3, 0, 3, 0, -1.3113416e-07, 0, 0, 0)
+script = ExtResource("1_script")
+
+[node name="Mesh" type="MeshInstance3D" parent="." unique_id=93746569]
+mesh = ExtResource("2_mesh")
+
+[node name="StaticBody3D" type="StaticBody3D" parent="." unique_id=1916879894]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="StaticBody3D" unique_id=529524012]
+shape = SubResource("BoxShape3D_train")
+
+[node name="EndSong" type="AudioStreamPlayer3D" parent="." unique_id=1226838857]
+transform = Transform3D(-1.4570462e-08, 0, 0.33333334, 0, 0.33333334, 0, -0.33333334, 0, -1.4570462e-08, 0, 0, 0)
+stream = ExtResource("3_endsong")
+
+[node name="DepartSound" type="AudioStreamPlayer3D" parent="." unique_id=1956321479]
+transform = Transform3D(-1.4570462e-08, 0, 0.33333334, 0, 0.33333334, 0, -0.33333334, 0, -1.4570462e-08, 0, 0, 0)
+stream = ExtResource("4_depart")
+
+[node name="FailSound" type="AudioStreamPlayer" parent="." unique_id=710077138]
+stream = ExtResource("5_nurn1")
+
+[node name="Markers" type="Node3D" parent="." unique_id=1729200812]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.7682516, 0)
+
+[node name="Slot1" type="Marker3D" parent="Markers" unique_id=281882250]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.5, 0, -0.6719528)
+
+[node name="Slot2" type="Marker3D" parent="Markers" unique_id=131565743]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 0, -0.67195284)
+
+[node name="Slot3" type="Marker3D" parent="Markers" unique_id=778510068]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0, -0.67195284)
+
+[node name="Slot4" type="Marker3D" parent="Markers" unique_id=1784988189]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.49999997, 0, -0.67195284)
+
+[node name="Slot5" type="Marker3D" parent="Markers" unique_id=1869826387]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.5, 0, -0.6719528)
+
+[node name="Slot6" type="Marker3D" parent="Markers" unique_id=863543013]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 0, -0.67195284)
+
+[node name="Slot7" type="Marker3D" parent="Markers" unique_id=48406877]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.5, 0, 0.57577753)
+
+[node name="Slot8" type="Marker3D" parent="Markers" unique_id=1235331390]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 0, 0.57577735)
+
+[node name="Slot9" type="Marker3D" parent="Markers" unique_id=188903328]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.49999994, 0, 0.5757774)
+
+[node name="Slot10" type="Marker3D" parent="Markers" unique_id=67005465]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, 0, 0.5757774)
+
+[node name="Slot11" type="Marker3D" parent="Markers" unique_id=1546110608]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.5, 0, 0.5757775)
+
+[node name="Slot12" type="Marker3D" parent="Markers" unique_id=210096276]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 0, 0.57577735)

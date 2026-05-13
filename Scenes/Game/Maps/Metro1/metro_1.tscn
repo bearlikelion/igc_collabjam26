@@ -30,6 +30,7 @@
 [ext_resource type="Material" uid="uid://dbfs70lstxo43" path="res://Assets/Textures/dev/track_line_green.tres" id="23_ilanp"]
 [ext_resource type="Material" uid="uid://64ak6iy271qu" path="res://Assets/Textures/dev/track_line_yellow.tres" id="24_gy5qg"]
 [ext_resource type="Script" uid="uid://df06w8c228ef6" path="res://Scenes/Game/Maps/Metro1/psx_shuffle_effect.gd" id="24_psxfx"]
+[ext_resource type="PackedScene" path="res://Scenes/Game/Maps/Metro1/ClockTicker.tscn" id="25_clock"]
 
 [sub_resource type="AudioStreamRandomizer" id="AudioStreamRandomizer_et2qy"]
 streams_count = 3
@@ -560,6 +561,8 @@ stream = SubResource("AudioStreamRandomizer_et2qy")
 volume_db = -15.0
 autoplay = true
 script = ExtResource("5_ug0ud")
+
+[node name="ClockTicker" parent="." instance=ExtResource("25_clock")]
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=122084999]
 environment = SubResource("Environment_ddw0b")

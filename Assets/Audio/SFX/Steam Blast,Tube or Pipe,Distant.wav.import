@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://dmijihwubpwat"
+path="res://.godot/imported/Steam Blast,Tube or Pipe,Distant.wav-1684f2662a6300246255121735a5c59c.sample"
+
+[deps]
+
+source_file="res://Assets/Audio/SFX/Steam Blast,Tube or Pipe,Distant.wav"
+dest_files=["res://.godot/imported/Steam Blast,Tube or Pipe,Distant.wav-1684f2662a6300246255121735a5c59c.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2
