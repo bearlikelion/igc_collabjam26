@@ -73,10 +73,10 @@ enum LocomotionState {
 enum KnockdownPhase { DOWN, RECOVERING }
 
 
-# Shuffle bookkeeping. Lives only while locomotion == SHUFFLING; instantiated on
-# entry (start_shuffle / begin_subway_shuffle), nulled on exit (resolve, knock
-# down, stop). Initiator owns the deadline timer + resolver; callee just picks
-# a telegraph and waits for the initiator to call back into it.
+# Shuffle bookkeeping. Lives while SHUFFLING; nulled on exit (resolve, knock
+# down, stop). Initiator owns the deadline timer + resolver. Both sides emit
+# `shuffle_resolved` on exit so each Brain's FSM (notably AIBrain's `_runup`)
+# returns to IDLE.
 class Shuffle:
 	var is_initiator: bool = false
 	var other: Pawn
@@ -84,13 +84,11 @@ class Shuffle:
 	var time_left: float = 0.0
 	var my_telegraph: int = 0       # this Pawn's chosen side (-1, 0, +1)
 	var their_telegraph: int = 0    # the other Pawn's last-seen telegraph
-	# Rail speed used by MetroMovement while locomotion == SHUFFLING. Computed
-	# on shuffle entry from the entry-time gap so combined closing across the
-	# choice window equals `gap × shuffle_approach_factor` (capped by
-	# `_SHUFFLE_MIN_SEPARATION` to avoid collider overlap), regardless of
-	# bullet-time. Lifecycle-bound to this Shuffle instance — naturally cleared
-	# when `pawn.shuffle` is nulled on exit.
-	var approach_speed: float = 0.0
+	# Rail-distance at shuffle entry. `get_rail_speed` recomputes slow-approach
+	# speed live from this each tick, so a mid-window Engine.time_scale change
+	# (player's shuffle resolves while AI-vs-AI pair is mid-window) doesn't fork
+	# closing rates. See `_compute_shuffle_speed`.
+	var entry_gap: float = 0.0
 	# Engine.time_scale snapshot lives on PlayerBrain — only PlayerBrain mutates
 	# it, and PlayerBrain.on_shuffle_exited restores it. NPCs never touch
 	# bullet-time so this struct doesn't need a snapshot field.
@@ -342,16 +340,20 @@ func _physics_process(delta: float) -> void:
 	_update_visual_speed()
 	if brain != null:
 		brain.physics_tick(delta)
+	# Skip gravity + move_and_slide during SHUFFLING. MetroMovement owns position
+	# end-to-end during the mini-game; running the collision response causes the
+	# two shuffle partners' boxes to push each other along the rail, MetroMovement
+	# re-writes from `distance_along` next frame, and the visible result is
+	# forward/backward judder at the closing distance.
+	if locomotion == LocomotionState.SHUFFLING:
+		return
 	if not is_on_floor():
 		velocity.y -= ProjectSettings.get_setting("physics/3d/default_gravity") * delta
 	else:
 		velocity.y = 0.0
-	# MetroMovement owns XZ via global_position writes. Zero XZ each tick
-	# because move_and_slide writes back to `velocity` after slide-collision
-	# response — without this, residual horizontal velocity accumulates and
-	# move_and_slide nudges the body sideways between MetroMovement's
-	# corrections, producing visible jitter (especially during bullet-time
-	# SHUFFLING where slow per-tick advance amplifies the residual).
+	# MetroMovement owns XZ via global_position writes. Zero XZ each tick so
+	# residual horizontal velocity from move_and_slide collision response
+	# doesn't accumulate.
 	velocity.x = 0.0
 	velocity.z = 0.0
 	move_and_slide()
@@ -382,9 +384,9 @@ func _tick_running(delta: float) -> void:
 #
 # Note SHUFFLING's divergence from `get_rail_speed`: the pawn does advance
 # on the rail during the choice window (slow-approach), so MetroMovement
-# reads `shuffle.approach_speed` from `get_rail_speed`. The visual reads 0
-# instead so the body squares up rather than walk-cycling-on-the-spot
-# inside bullet-time.
+# reads a live-recomputed slow-approach speed from `get_rail_speed`. The
+# visual reads 0 instead so the body squares up rather than walk-cycling-on-
+# the-spot inside bullet-time.
 func _update_visual_speed() -> void:
 	if visual == null:
 		return
@@ -537,9 +539,11 @@ func start_shuffle(other: Pawn, gap: float) -> void:
 	# reads the post-mutation time_scale — both initiator and callee compute
 	# against the same effective wall-clock window.
 	_set_locomotion(LocomotionState.SHUFFLING)
-	shuffle.approach_speed = _compute_shuffle_speed(gap)
-	# Pass `gap` so callee computes its own approach speed against the same
-	# `Engine.time_scale` (PlayerBrain.on_shuffle_entered already mutated it).
+	shuffle.entry_gap = gap
+	# Pass `gap` so the callee stores its own `entry_gap`. Both sides recompute
+	# their approach speed live in `get_rail_speed()` against the *current*
+	# `Engine.time_scale`, so a mid-window change to bullet-time (e.g. another
+	# pair's resolve) doesn't fork the two sides into different closing rates.
 	shuffle.their_telegraph = other.begin_subway_shuffle(self, shuffle.deadline_msec, gap)
 	if shuffle_debug_enabled:
 		print("[shuffle-entry] %s target=%d pos=%.3f tween=%s | %s target=%d pos=%.3f tween=%s | gap=%.3f" % [
@@ -640,11 +644,10 @@ func _apply_visual_lean() -> void:
 # Adding a new rail-coord query? Add a thin delegator here with the same
 # guard + defensive-default pattern, not a new field read on the brain side.
 
-# Mark a Pawn as ignored for the rail-coord encounter scan until it drifts
-# past the hysteresis margin (see MetroMovement.ENCOUNTER_IGNORE_HYSTERESIS).
-# Used by PlayerBrain on same-direction-collision instant-knockdown so the
-# scan doesn't re-trigger the same encounter on recovery. Cleared by
-# MetroMovement._maybe_clear_runner_ignore.
+# Mark a Pawn as ignored for the encounter scan until it drifts past the
+# hysteresis margin. Called from `_complete_subway_shuffle` on the initiator
+# so the resolver doesn't re-engage the same callee next scan. Cleared by
+# `MetroMovement._maybe_clear_runner_ignore`.
 func set_shuffle_ignored(other: Pawn) -> void:
 	if _metro_movement == null:
 		return
@@ -669,13 +672,28 @@ func get_lane_clearance(lane: int, lookahead: float) -> float:
 	return _metro_movement.get_lane_clearance(self, lane, lookahead)
 
 
-# Same-direction Pawn ahead of this Pawn in `lane` within `lookahead` rail-meters,
-# or null if none. Used for overtake decisions and same-direction speed
-# modulation. Pre-registration → null.
+# Same-direction Pawn ahead in `lane` within `lookahead`, keyed on TARGET lane
+# (lane-reservation semantics). For compression checks use
+# `find_lane_occupant_ahead_compression` instead. Pre-registration → null.
 func find_lane_occupant_ahead(lane: int, lookahead: float) -> Pawn:
 	if _metro_movement == null:
 		return null
 	return _metro_movement.find_lane_occupant_ahead(self, lane, lookahead)
+
+
+# Like above but matches by TARGET or OCCUPIED lane — catches mid-tween peers.
+func find_lane_occupant_ahead_compression(lane: int, lookahead: float) -> Pawn:
+	if _metro_movement == null:
+		return null
+	return _metro_movement.find_lane_occupant_ahead_compression(self, lane, lookahead)
+
+
+# Signed rail-distance from self to `peer` in our travel direction. INF if
+# unregistered.
+func get_rail_distance_to_peer(peer: Pawn) -> float:
+	if _metro_movement == null:
+		return INF
+	return _metro_movement.get_rail_distance_to_peer(self, peer)
 
 
 # Pawns within `lookahead` rail-meters of this Pawn (any lane). Used for
@@ -739,13 +757,22 @@ func begin_subway_shuffle(from: Pawn, deadline_msec: int, gap: float) -> int:
 	# mutated `Engine.time_scale` before calling here, so the slow-approach
 	# math reads the same post-mutation value the initiator did.
 	_set_locomotion(LocomotionState.SHUFFLING)
-	shuffle.approach_speed = _compute_shuffle_speed(gap)
+	shuffle.entry_gap = gap
 	shuffle_began.emit(from, 0, deadline_msec)
 	return shuffle.my_telegraph
 
 
 func end_subway_shuffle() -> void:
+	# Skip when not SHUFFLING — a chain knockdown can pop us out before the
+	# initiator's deadline expires, and force-recovering here would snap a
+	# KNOCKED_DOWN callee upright mid-fall.
+	if locomotion != LocomotionState.SHUFFLING:
+		if shuffle_debug_enabled:
+			print("[shuffle-exit] end_subway_shuffle SKIPPED %s loco=%s" % [name, LocomotionState.keys()[locomotion]])
+		return
 	var direction: int = shuffle.my_telegraph if shuffle != null else 0
+	if shuffle_debug_enabled:
+		print("[shuffle-exit] end_subway_shuffle %s mytell=%d loco=%s" % [name, direction, LocomotionState.keys()[locomotion]])
 	shuffle = null
 	# `_set_locomotion(RUNNING)` below fires `brain.on_shuffle_exited()`
 	# (PlayerBrain only — disengages camera shuffle tilt, restores time_scale).
@@ -768,13 +795,19 @@ func end_subway_shuffle() -> void:
 		# Skip the telegraph prefix — the shuffle window itself was the
 		# telegraph, so the resolution should snap directly into the swerve.
 		request_lane_change(_target_lane + direction, 0.0)
+	# Callee-side resolve emit so AIBrain's `_runup` returns to IDLE.
+	shuffle_resolved.emit(true, direction)
 
 
 func stop_subway_shuffle() -> void:
+	if shuffle_debug_enabled:
+		var mytell: int = shuffle.my_telegraph if shuffle != null else 0
+		print("[shuffle-exit] stop_subway_shuffle %s mytell=%d" % [name, mytell])
 	shuffle = null
 	# `_set_locomotion(RUNNING)` fires `brain.on_shuffle_exited()`
 	# (PlayerBrain disengages tilt + restores time_scale).
 	_set_locomotion(LocomotionState.RUNNING)
+	shuffle_resolved.emit(false, 0)
 
 
 # --- Public API: queries --------------------------------------------------
@@ -860,7 +893,10 @@ func _get_shuffle_bullet_time_scale() -> float:
 #
 # Clamped to brain.get_max_speed() defensively — entry is bounded by
 # `inner_shuffle_radius` upstream, but we don't trust unbounded gaps to
-# produce sane speeds.
+# produce sane speeds. Called live each tick from `get_rail_speed` during
+# SHUFFLING so mid-window time_scale changes adjust closing rate. Total
+# distance closed across the window is conserved regardless of time_scale
+# variation (speed ∝ 1/time_scale, game-seconds ∝ time_scale).
 func _compute_shuffle_speed(gap: float) -> float:
 	var window: float = maxf(_get_shuffle_choice_time() * Engine.time_scale, 0.001)
 	var factor_budget: float = (gap * shuffle_approach_factor) / 2.0
@@ -877,14 +913,12 @@ func _compute_shuffle_speed(gap: float) -> float:
 
 
 # Current along-rail speed (m/s). MetroMovement queries this for every runner.
-# Player → PlayerBrain returns pawn.run_speed (the start_speed→max_speed curve).
+# Player → PlayerBrain returns pawn.run_speed (start_speed→max_speed curve).
 # NPC    → AIBrain returns its jittered _actual_move_speed.
-# SHUFFLING → `shuffle.approach_speed` (slow-approach), bypassing the brain
-#   so speed-modulation / waiting-for logic doesn't apply during the window.
-#   Null-guarded for the brief window between `_set_locomotion(SHUFFLING)` and
-#   the `shuffle.approach_speed = _compute_shuffle_speed(gap)` assignment in
-#   the caller — though MetroMovement doesn't tick mid-call, so production
-#   never observes the 0.0 fallback.
+# SHUFFLING → `_compute_shuffle_speed(shuffle.entry_gap)` recomputed live each
+#   tick so time_scale changes update closing rate. Bypasses brain speed
+#   modulation. Null-guarded for the one-call window between SHUFFLING entry
+#   and `entry_gap` assignment.
 # is_advancing_paused() → 0. Correctness fix for peer compression: a paused
 #   pawn's "current rail speed" is genuinely 0, but the brain's
 #   `_actual_move_speed` (NPC) and `run_speed` (player) aren't reset by
@@ -899,7 +933,7 @@ func get_rail_speed() -> float:
 	if is_advancing_paused():
 		return 0.0
 	if locomotion == LocomotionState.SHUFFLING:
-		return shuffle.approach_speed if shuffle != null else 0.0
+		return _compute_shuffle_speed(shuffle.entry_gap) if shuffle != null else 0.0
 	if brain == null:
 		return 0.0
 	return brain.get_move_speed() * _speed_boost_multiplier
@@ -1031,12 +1065,10 @@ func reach_goal() -> void:
 	goal_reached.emit()
 
 
-# Block external locomotion (e.g. cutscene, pre-goal pause). On entry, run_speed
-# is reset to start_speed so the post-unblock acceleration ramps from a known
-# floor rather than wherever the player happened to be.
-# NOTE: No call site enters BLOCKED in the current codebase — the state is
-# wired for future use (intros, cutscenes). MetroMovement's defensive
-# `set_movement_blocked(false)` calls are no-ops as a result.
+# Block external locomotion (cutscene, pre-goal pause). Resets run_speed to
+# start_speed on entry so post-unblock acceleration ramps from a known floor.
+# No production call site enters BLOCKED today; wired for future cutscenes.
+# `_advance_runner` defensively clears BLOCKED top-of-frame as a safety net.
 func set_movement_blocked(blocked: bool) -> void:
 	if blocked:
 		if locomotion == LocomotionState.BLOCKED:
@@ -1170,6 +1202,8 @@ func _set_locomotion(new_state: int) -> void:
 		return
 	var old_state: int = locomotion
 	locomotion = new_state
+	if shuffle_debug_enabled:
+		print("[loco] %s %s → %s" % [name, LocomotionState.keys()[old_state], LocomotionState.keys()[new_state]])
 	locomotion_changed.emit(old_state, new_state)
 	# Reset lean_direction when exiting an active-intent state into RUNNING so
 	# the broadcast stays in sync with what the body is actually doing. Without
@@ -1193,12 +1227,12 @@ func _set_locomotion(new_state: int) -> void:
 		_tween_elapsed = 0.0
 		# Push visual lean back to brain intent now that the tween is gone.
 		_apply_visual_lean()
-	# Shuffle-driven rail speed (`shuffle.approach_speed`) is lifecycle-bound to
-	# the Shuffle instance — exit paths (end_subway_shuffle, _complete_subway_shuffle,
-	# _fail_subway_shuffle) null `shuffle` so the per-shuffle field naturally
-	# clears. `get_rail_speed` falls back to brain.get_move_speed() once
-	# locomotion leaves SHUFFLING, so even unusual exit paths can't leak the
-	# stale value.
+	# Shuffle-driven rail speed is recomputed live from `shuffle.entry_gap` in
+	# `get_rail_speed`. The struct is lifecycle-bound to the Shuffle instance
+	# — exit paths null `shuffle` so the per-shuffle state naturally clears.
+	# `get_rail_speed`'s SHUFFLING branch is gated on `locomotion ==
+	# LocomotionState.SHUFFLING`, so once we leave that state the live recompute
+	# stops being consulted regardless of `shuffle`'s ref count.
 	# Brain hooks for transitions — dispatched AFTER internal cleanup so the
 	# brain sees a consistent locomotion + lane state. Defaults are no-op on
 	# AIBrain; PlayerBrain overrides drive bullet-time, camera mode flips,
@@ -1349,11 +1383,17 @@ func _resolve_subway_shuffle() -> void:
 
 func _complete_subway_shuffle(direction: int) -> void:
 	# Engine.time_scale cleanup runs in PlayerBrain.on_shuffle_exited (fired
-	# from `_set_locomotion(RUNNING)` below). `shuffle.approach_speed` clears
-	# itself when `shuffle = null` runs below.
+	# from `_set_locomotion(RUNNING)` below). The live `_compute_shuffle_speed`
+	# path stops being consulted once `locomotion != SHUFFLING`.
+	if shuffle_debug_enabled:
+		var other_loco: String = LocomotionState.keys()[shuffle.other.locomotion] if shuffle != null and shuffle.other != null else "null"
+		print("[shuffle-exit] _complete_subway_shuffle %s mytell=%d other_loco=%s" % [name, direction, other_loco])
 	run_speed = brain.get_start_speed() if brain != null else 0.0
 	var other: Pawn = shuffle.other
-	if other != null:
+	# Skip callee touch-up if they're no longer SHUFFLING (chain knockdown
+	# popped them out). Lets a recovered callee re-engage us fresh instead
+	# of sitting on the ignore list.
+	if other != null and other.locomotion == LocomotionState.SHUFFLING:
 		other.end_subway_shuffle()
 		# One-sided ignore by design: only the initiator skips the callee on
 		# its next scan. The callee's scan stays live so a same-lane outcome
@@ -1379,13 +1419,16 @@ func _complete_subway_shuffle(direction: int) -> void:
 func _fail_subway_shuffle() -> void:
 	# Engine.time_scale cleanup runs in PlayerBrain.on_shuffle_exited (fired
 	# from the SHUFFLING → KNOCKED_DOWN transition below via
-	# knock_down_from_shuffle). `shuffle.approach_speed` clears itself when
-	# `shuffle = null` runs below.
+	# knock_down_from_shuffle). The live `_compute_shuffle_speed` path stops
+	# being consulted once `locomotion != SHUFFLING`.
 	# Knockback displacement is owned end-to-end by MetroMovement: each
 	# knock_down_from_shuffle emits `knocked_down` synchronously, MetroMovement
 	# chain-rewinds both pawns via `_on_runner_knocked_down → _rewind_runner`,
 	# and KNOCKBACK_REAR_BUFFER clamps rear separation so they don't end up
 	# coincident.
+	if shuffle_debug_enabled:
+		var mytell: int = shuffle.my_telegraph if shuffle != null else 0
+		print("[shuffle-exit] _fail_subway_shuffle %s mytell=%d" % [name, mytell])
 	run_speed = brain.get_start_speed() if brain != null else 0.0
 	var other: Pawn = shuffle.other
 	if other != null:

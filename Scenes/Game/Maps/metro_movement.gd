@@ -886,9 +886,10 @@ func _advance_runner(runner: Runner, delta: float) -> void:
 
 	# SHUFFLING falls through here. is_advancing_paused() excludes SHUFFLING
 	# by design (see Pawn.is_advancing_paused docstring) — the pawn closes
-	# the gap at shuffle.approach_speed during the choice window. Obstacle
-	# scanning is suppressed for SHUFFLING in Pawn.should_avoid_obstacles,
-	# so the block below is effectively a no-op for SHUFFLING.
+	# the gap at the slow-approach speed (computed live from shuffle.entry_gap
+	# in Pawn.get_rail_speed) during the choice window. Obstacle scanning is
+	# suppressed for SHUFFLING in Pawn.should_avoid_obstacles, so the block
+	# below is effectively a no-op for SHUFFLING.
 
 	# MetroMovement detects, Brain decides. The signal handler runs
 	# synchronously, so by the next line the pawn may be knocked down or
@@ -1063,6 +1064,10 @@ func _respawn_runner_at_start(runner: Runner) -> void:
 	runner.segment_index = 0
 	runner.distance_along = randf() * NPC_RESPAWN_STAGGER
 	runner.node.set_current_lane(randi() % Pawn.LANE_COUNT)
+	# Avoid landing on a same-lane peer near the spawn end (would mutual-lock
+	# via speed modulation). Same helper `_register_pawn` uses at startup.
+	var min_gap: float = runner.node.brain.get_min_peer_gap() if runner.node.brain != null else 1.0
+	_destagger_runner_spawn(runner, min_gap)
 	_apply_runner_position(runner)
 	_apply_runner_yaw_instant(runner)
 
@@ -1271,6 +1276,55 @@ func find_lane_occupant_ahead(querier: Pawn, lane: int, lookahead: float) -> Paw
 			nearest_distance = ahead
 			nearest = other.node
 	return nearest
+
+
+# Compression-scan sibling of `find_lane_occupant_ahead`: matches a peer whose
+# either TARGET or OCCUPIED lane equals `lane`. Catches mid-tween peers the
+# target-only scan misses (peer tweening OUT keeps their body in our lane for
+# ~0.3 s after their target flips). Lane-reservation queries still use the
+# target-only sibling — keep the split.
+func find_lane_occupant_ahead_compression(querier: Pawn, lane: int, lookahead: float) -> Pawn:
+	var querier_runner: Runner = _find_runner_for(querier)
+	if querier_runner == null:
+		return null
+	var query_physical_lane: int = _physical_lane_for(querier_runner, lane)
+	var querier_centerline: float = _runner_centerline_position(querier_runner)
+	var nearest: Pawn = null
+	var nearest_distance: float = INF
+	for other: Runner in _runners:
+		if other == querier_runner:
+			continue
+		if not is_instance_valid(other.node):
+			continue
+		var target_match: bool = _runner_target_lane(other) == query_physical_lane
+		var occupied_match: bool = _runner_occupied_lane(other) == query_physical_lane
+		if not target_match and not occupied_match:
+			continue
+		var ahead: float = _signed_distance_ahead(
+			querier_centerline,
+			_runner_centerline_position(other),
+			querier_runner.toward_finish
+		)
+		if ahead <= 0.0 or ahead > lookahead:
+			continue
+		if ahead < nearest_distance:
+			nearest_distance = ahead
+			nearest = other.node
+	return nearest
+
+
+# Signed rail-distance from `querier` to `peer` in querier's travel direction.
+# Positive = ahead; <= 0 = behind. INF if either is unregistered.
+func get_rail_distance_to_peer(querier: Pawn, peer: Pawn) -> float:
+	var querier_runner: Runner = _find_runner_for(querier)
+	var peer_runner: Runner = _find_runner_for(peer)
+	if querier_runner == null or peer_runner == null:
+		return INF
+	return _signed_distance_ahead(
+		_runner_centerline_position(querier_runner),
+		_runner_centerline_position(peer_runner),
+		querier_runner.toward_finish
+	)
 
 
 # Public: every RUNNING peer ahead of `querier` within `lookahead` rail-meters

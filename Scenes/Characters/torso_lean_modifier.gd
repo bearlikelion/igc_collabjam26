@@ -96,15 +96,17 @@ func _process_modification() -> void:
 	_current_lean_radians = lerpf(_current_lean_radians, target_lean_radians, weight)
 	if absf(_current_lean_radians) < 0.001 and is_zero_approx(target_lean_radians):
 		_current_lean_radians = 0.0
-	# Telegraph floor: when committed to a non-zero direction, snap the current
-	# lean to at least min_lean_radians on the target side so micro-leans can't
-	# linger in the under-floor "is it leaning?" range. Release path (target
-	# == 0) bypasses this and lerps smoothly back to upright.
+	# Telegraph floor: only snap when current is already on the target side
+	# (or at zero) and below the floor — prevents micro-lean ambiguity on a
+	# fresh commit from upright. Sign-flips (e.g. AI reroll switching left↔right
+	# mid-shuffle) skip the snap and lerp through 0 instead; otherwise the
+	# discrete jump produces a visible jitter every reroll cadence.
 	if not is_zero_approx(target_lean_radians):
 		var effective_floor: float = minf(min_lean_radians, lean_amount)
 		var target_sign: float = signf(target_lean_radians)
 		var current_sign: float = signf(_current_lean_radians)
-		if current_sign != target_sign or absf(_current_lean_radians) < effective_floor:
+		var same_side_or_zero: bool = current_sign == target_sign or current_sign == 0.0
+		if same_side_or_zero and absf(_current_lean_radians) < effective_floor:
 			_current_lean_radians = target_sign * effective_floor
 	# Compose: animated pose * local-space z-rotation. Reading the post-
 	# AnimationTree pose this frame and post-multiplying applies the lean in

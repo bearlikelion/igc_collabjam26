@@ -303,13 +303,15 @@ func modulate_for_same_direction_peer(raw: float) -> float:
 	if lookahead <= 0.0:
 		return raw
 	var current_lane: int = pawn.get_current_lane()
-	var peer: Pawn = pawn.find_lane_occupant_ahead(current_lane, lookahead)
+	# Compression scan keys on TARGET-or-OCCUPIED so mid-tween peers still cap
+	# our speed while their body overlaps our lane.
+	var peer: Pawn = pawn.find_lane_occupant_ahead_compression(current_lane, lookahead)
 	if peer == null:
 		return raw
 	if peer.is_routing_to_finish_point() != pawn.is_routing_to_finish_point():
 		return raw
 	var peer_speed: float = peer.get_rail_speed()
-	var distance: float = pawn.get_lane_clearance(current_lane, lookahead)
+	var distance: float = pawn.get_rail_distance_to_peer(peer)
 	var min_gap: float = get_min_peer_gap()
 	if distance >= min_gap:
 		# Far enough: match peer speed, hold the gap steady.

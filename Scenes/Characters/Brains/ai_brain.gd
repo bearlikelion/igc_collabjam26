@@ -119,6 +119,8 @@ func physics_tick(_delta: float) -> void:
 # fresh stance unless the stubbornness gate fires. The reroll loop in
 # `_tick_tracking` owns subsequent reconsiderations.
 func _enter_tracking(other: Pawn) -> void:
+	if pawn.shuffle_debug_enabled:
+		print("[runup] %s %s → TRACKING (other=%s)" % [pawn.name, RunUpState.keys()[_runup], other.name if other != null else "null"])
 	_runup = RunUpState.TRACKING
 	_runup_other = other
 	_runup_last_msec = Time.get_ticks_msec()
@@ -133,6 +135,8 @@ func _enter_tracking(other: Pawn) -> void:
 # defensively, but we issue lean(0) here too so the staleness path (RUNNING-
 # only) clears the body too.
 func _exit_runup() -> void:
+	if pawn.shuffle_debug_enabled:
+		print("[runup] %s %s → IDLE" % [pawn.name, RunUpState.keys()[_runup]])
 	_runup = RunUpState.IDLE
 	_runup_other = null
 	_runup_last_msec = 0
@@ -149,6 +153,8 @@ func _exit_runup() -> void:
 # full reaction window.
 func _advance_to_committing(other: Pawn) -> void:
 	var fresh_peer: bool = _runup_other != other
+	if pawn.shuffle_debug_enabled:
+		print("[runup] %s %s → COMMITTING (other=%s fresh=%s)" % [pawn.name, RunUpState.keys()[_runup], other.name if other != null else "null", fresh_peer])
 	_runup = RunUpState.COMMITTING
 	_runup_other = other
 	_runup_reaction_msec = Time.get_ticks_msec() + config.reaction_period_ms
@@ -209,6 +215,10 @@ func _maybe_reroll_stance(other: Pawn) -> void:
 # RunUpState dispatcher stays clean.
 func _tick_random_lane() -> void:
 	if not config.random_lane_changes:
+		return
+	# Skip while non-RUNNING — otherwise the timer bumps off-cadence during
+	# SHUFFLING / KD. Mirrors `_tick_overtake`'s top guard.
+	if pawn.locomotion != Pawn.LocomotionState.RUNNING:
 		return
 	if Time.get_ticks_msec() < _next_random_lane_msec:
 		return

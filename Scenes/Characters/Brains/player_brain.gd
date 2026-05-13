@@ -110,7 +110,9 @@ func get_shuffle_knockback_distance() -> float:
 
 
 func _on_obstacle_detected(_blocker: Node, _distance: float, _in_lane: int) -> void:
-	pawn.set_movement_blocked(true)
+	# Knock down on obstacle hit. `knock_down_from_shuffle` is the canonical KD
+	# entry — idempotent, so repeat obstacle emits during recovery no-op.
+	pawn.knock_down_from_shuffle()
 
 
 func get_end_of_rail_action() -> int:
@@ -139,6 +141,10 @@ func on_shuffle_entered() -> void:
 # fall.
 func on_shuffle_exited() -> void:
 	Engine.time_scale = _shuffle_previous_time_scale
+	# Symmetric stop for on_shuffle_entered's play() — covers chain-KD-during-
+	# shuffle and reset paths where the loop would otherwise linger.
+	if pawn.slow_sound != null and pawn.slow_sound.playing:
+		pawn.slow_sound.stop()
 	if pawn.camera_rig != null:
 		pawn.camera_rig.disengage_shuffle_tilt()
 
