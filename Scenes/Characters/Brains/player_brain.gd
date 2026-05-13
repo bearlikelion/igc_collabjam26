@@ -19,6 +19,9 @@ extends Brain
 ## falls back to PlayerBrainConfig.new() defaults with a push_error.
 @export var config: PlayerBrainConfig
 
+## One-shot SFX on near-miss boost trigger. Null = silent boost.
+@export var close_call_sound: AudioStream
+
 var _lane_intent: int = 0
 
 # Engine.time_scale snapshot taken on shuffle entry, restored on shuffle exit.
@@ -70,6 +73,14 @@ func get_encounter_lookahead() -> float:
 
 func get_swerve_safety_distance() -> float:
 	return config.swerve_safety_distance
+
+
+func get_pass_radius() -> float:
+	return config.encounter_lookahead
+
+
+func get_pass_qualify_radius() -> float:
+	return config.get_resolved_near_miss_radius()
 
 
 # Body feel-tunables — read from the shared BrainConfig fields.
@@ -149,6 +160,23 @@ func on_recovered() -> void:
 		pawn.camera_rig.apply_mode(PawnCamera.Mode.FIRST_PERSON)
 	if pawn.visual != null:
 		pawn.visual.hide()
+
+
+func _on_runner_passed(other: Pawn) -> void:
+	if other == null:
+		return
+	pawn.apply_close_call_boost()
+	_play_close_call_sound()
+
+
+func _play_close_call_sound() -> void:
+	if close_call_sound == null:
+		return
+	var stream_player: AudioStreamPlayer = AudioStreamPlayer.new()
+	stream_player.stream = close_call_sound
+	stream_player.finished.connect(stream_player.queue_free)
+	add_child(stream_player)
+	stream_player.play()
 
 
 # Player's current speed lives on Pawn (start_speed → max_speed acceleration

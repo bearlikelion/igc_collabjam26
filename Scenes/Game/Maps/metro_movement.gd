@@ -71,6 +71,15 @@ class EncounterSnap:
 	var lookahead: float = 0.0  # 0 = does not initiate scans (paused / no brain)
 
 
+# Per-pair near-miss state. Phase is monotonic; crossover emits
+# `runner_passed` only when QUALIFIED && had_input.
+class PassState:
+	enum Phase { TRACKED, QUALIFIED, TRIGGERED }
+	var phase: Phase = Phase.TRACKED
+	# Sticky-true once the scanning runner started a lane change while tracked.
+	var had_input: bool = false
+
+
 class Runner:
 	var node: Pawn
 	var segment_index: int = 0
@@ -82,6 +91,8 @@ class Runner:
 	# PlayerBrain on same-direction instant-knockdown so the scan doesn't
 	# re-trigger the same encounter on recovery. Cleared by the scan itself.
 	var shuffle_ignored: Pawn
+	# Opposing pawns currently within ±pass_radius ahead. Empty if opted out.
+	var tracked_passes: Dictionary[Pawn, PassState] = {}
 
 	func _init(p_node: Pawn, p_segment_index: int, p_distance_along: float, p_toward_finish: bool) -> void:
 		node = p_node
@@ -360,6 +371,7 @@ func _spawn_overlap_pawn(runner: Runner, min_gap: float) -> Pawn:
 func _wire_runner_signals(runner: Runner) -> void:
 	runner.node.lane_change_started.connect(_on_runner_lane_change_started.bind(runner))
 	runner.node.knocked_down.connect(_on_runner_knocked_down.bind(runner))
+	runner.node.shuffle_began.connect(_on_runner_shuffle_began.bind(runner))
 
 
 # Public accessors for the shuffle timing exports. Pawn calls these via its
@@ -825,6 +837,22 @@ func _score_navmesh_segment(from: Vector3, to: Vector3, map_rid: RID) -> float:
 
 func _on_runner_lane_change_started(_from_lane: int, _to_lane: int, runner: Runner) -> void:
 	_apply_runner_position(runner)
+	# Credit every in-flight encounter with the input action.
+	for state: PassState in runner.tracked_passes.values():
+		state.had_input = true
+
+
+# Mark the pair TRIGGERED so the post-shuffle crossover silent-drops.
+func _on_runner_shuffle_began(other: Pawn, _other_telegraph: int, _deadline_msec: int, runner: Runner) -> void:
+	if runner.node.get_pass_radius() <= 0.0:
+		return
+	if runner.tracked_passes.has(other):
+		runner.tracked_passes[other].phase = PassState.Phase.TRIGGERED
+	else:
+		# Seed TRIGGERED for pairs that engaged without prior tracking.
+		var state: PassState = PassState.new()
+		state.phase = PassState.Phase.TRIGGERED
+		runner.tracked_passes[other] = state
 
 
 func _physics_process(delta: float) -> void:
@@ -1095,6 +1123,50 @@ func _scan_encounters_for_all_runners() -> void:
 			if nearest_other != null:
 				self_snap.runner.node.encounter_detected.emit(nearest_other.runner.node, nearest_distance)
 		_maybe_clear_runner_ignore(self_snap, snaps)
+
+	# Pass-detection second-pass: per-pair PassState phase machine + input gate.
+	for self_snap: EncounterSnap in snaps:
+		var self_pawn: Pawn = self_snap.runner.node
+		var radius: float = self_pawn.get_pass_radius()
+		if radius <= 0.0:
+			self_snap.runner.tracked_passes.clear()
+			continue
+		if not self_pawn.is_running():
+			# Preserve dict across SHUFFLING so TRIGGERED phase survives.
+			continue
+		var qualify_radius: float = self_pawn.get_pass_qualify_radius()
+		var new_tracked: Dictionary[Pawn, PassState] = {}
+		for other_snap: EncounterSnap in snaps:
+			if other_snap == self_snap:
+				continue
+			if other_snap.runner.toward_finish == self_snap.runner.toward_finish:
+				continue
+			var other_node: Pawn = other_snap.runner.node
+			var ahead: float = _signed_distance_ahead(
+				self_snap.centerline,
+				other_snap.centerline,
+				self_snap.runner.toward_finish
+			)
+			if ahead > 0.0 and ahead <= radius:
+				var state: PassState
+				if self_snap.runner.tracked_passes.has(other_node):
+					state = self_snap.runner.tracked_passes[other_node]
+				else:
+					state = PassState.new()
+				if state.phase == PassState.Phase.TRACKED:
+					var threat_now: bool = (
+						qualify_radius <= 0.0
+						or (other_snap.lane == self_snap.lane and ahead <= qualify_radius)
+					)
+					if threat_now:
+						state.phase = PassState.Phase.QUALIFIED
+				new_tracked[other_node] = state
+			elif ahead <= 0.0 and ahead >= -radius:
+				if self_snap.runner.tracked_passes.has(other_node):
+					var existing: PassState = self_snap.runner.tracked_passes[other_node]
+					if existing.phase == PassState.Phase.QUALIFIED and existing.had_input:
+						self_pawn.runner_passed.emit(other_node)
+		self_snap.runner.tracked_passes = new_tracked
 
 
 # Distance from `self_pos` to `other_pos` along the runner's travel direction.

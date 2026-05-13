@@ -5,6 +5,7 @@
 [ext_resource type="AudioStream" uid="uid://c8by13377tqbj" path="res://Assets/Audio/SFX/quick-zoom-slow-down.ogg" id="3_xv1kb"]
 [ext_resource type="Script" uid="uid://dwoxgkhyvb4q0" path="res://Scenes/Characters/Brains/player_brain.gd" id="4_eg12w"]
 [ext_resource type="Resource" uid="uid://b0u5cgxlaxnpc" path="res://Resources/Brains/DefaultPlayer.tres" id="5_j5umu"]
+[ext_resource type="AudioStream" uid="uid://doto1p4opa60" path="res://Assets/Audio/SFX/517877__the_real_not_important__swoosh_low.mp3" id="6_swoosh"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_pawn"]
 size = Vector3(0.813, 1.5, 0.813)
@@ -17,6 +18,7 @@ visual = NodePath("CharacterVisual")
 [node name="PlayerBrain" type="Node" parent="." unique_id=2049795291]
 script = ExtResource("4_eg12w")
 config = ExtResource("5_j5umu")
+close_call_sound = ExtResource("6_swoosh")
 metadata/_custom_type_script = "uid://dwoxgkhyvb4q0"
 
 [node name="Collision" type="CollisionShape3D" parent="." unique_id=184064025]

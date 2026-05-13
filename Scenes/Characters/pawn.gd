@@ -113,6 +113,9 @@ signal lean_changed(direction: int)
 
 # Encounter events.
 signal encounter_detected(other: Pawn, distance: float)
+# Near-miss crossover (QUALIFIED PassState). Mutually exclusive with
+# `shuffle_began` per pair — TRIGGERED pairs never emit this.
+signal runner_passed(other: Pawn)
 signal shuffle_began(other: Pawn, other_telegraph: int, deadline_msec: int)
 signal shuffle_telegraph_changed(direction: int)
 signal shuffle_resolved(succeeded: bool, direction: int)
@@ -190,6 +193,13 @@ const _SHUFFLE_MIN_SEPARATION: float = 0.95
 @export_group("Visual")
 @export var visual: CharacterVisual
 
+@export_group("Close Call Boost")
+## Stack increment per near-miss. First hit lands at this value; subsequent
+## stacks add `(value - 1.0)` to the current multiplier.
+@export var close_call_boost_multiplier: float = 1.35
+## Decay window (seconds). Refreshed on every stack.
+@export var close_call_boost_duration: float = 2.0
+
 
 # The camera rig — singleton, lives at level scene root in group "player_camera".
 # PlayerBrain resolves it on bind and assigns it here. Stays null on NPCs.
@@ -265,6 +275,10 @@ var _is_forward_runner: bool = true
 
 var slow_sound: AudioStreamPlayer
 
+# Close-call boost state; reset to 1.0 / 0.0 on expiry.
+var _speed_boost_multiplier: float = 1.0
+var _speed_boost_time_left: float = 0.0
+
 func _ready() -> void:
 	if Engine.is_editor_hint():
 		return
@@ -293,6 +307,7 @@ func _physics_process(delta: float) -> void:
 	# DISABLED skips brain tick too — actor is dead, nothing should fire.
 	if locomotion == LocomotionState.DISABLED:
 		return
+	_update_speed_boost(delta)
 	match locomotion:
 		LocomotionState.KNOCKED_DOWN:
 			_tick_knockdown(delta)
@@ -872,7 +887,7 @@ func get_rail_speed() -> float:
 		return shuffle.approach_speed if shuffle != null else 0.0
 	if brain == null:
 		return 0.0
-	return brain.get_move_speed()
+	return brain.get_move_speed() * _speed_boost_multiplier
 
 
 # Read the player's start_speed→max_speed accelerator curve. PlayerBrain reads
@@ -888,6 +903,30 @@ func get_run_speed() -> float:
 # `config.start_speed` for "restart from idle").
 func set_run_speed(value: float) -> void:
 	run_speed = maxf(value, 0.0)
+
+
+# Stack additively; refresh decay window; punch FOV back to peak.
+func apply_close_call_boost() -> void:
+	_speed_boost_multiplier += close_call_boost_multiplier - 1.0
+	_speed_boost_time_left = close_call_boost_duration
+	if camera_rig != null:
+		camera_rig.set_boost_progress(0.0)
+
+
+func _update_speed_boost(delta: float) -> void:
+	if _speed_boost_time_left <= 0.0:
+		return
+	_speed_boost_time_left -= delta
+	if _speed_boost_time_left <= 0.0:
+		_speed_boost_multiplier = 1.0
+		_speed_boost_time_left = 0.0
+		if camera_rig != null:
+			camera_rig.set_boost_progress(-1.0)
+		return
+	if camera_rig != null:
+		var duration: float = maxf(close_call_boost_duration, 0.001)
+		var progress: float = 1.0 - (_speed_boost_time_left / duration)
+		camera_rig.set_boost_progress(progress)
 
 
 # The peer this Pawn is currently shuffling with, or null if no shuffle is
@@ -955,6 +994,18 @@ func get_encounter_lookahead() -> float:
 	if brain == null:
 		return 0.0
 	return brain.get_encounter_lookahead()
+
+
+func get_pass_radius() -> float:
+	if brain == null:
+		return 0.0
+	return brain.get_pass_radius()
+
+
+func get_pass_qualify_radius() -> float:
+	if brain == null:
+		return 0.0
+	return brain.get_pass_qualify_radius()
 
 
 func reach_goal() -> void:

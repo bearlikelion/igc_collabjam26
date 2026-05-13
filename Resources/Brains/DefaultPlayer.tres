@@ -4,7 +4,7 @@
 
 [resource]
 script = ExtResource("1_plycfg")
-start_speed = 1.0
-acceleration_time = 0.5
+start_speed = 2.0
 shuffle_knockback_distance = 1.5
 obstacle_lookahead = 0.75
+near_miss_radius = 2.0

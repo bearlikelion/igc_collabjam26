@@ -54,6 +54,7 @@ func bind(p: Pawn) -> void:
 	pawn.lane_change_completed.connect(_on_lane_change_completed)
 	pawn.lane_change_canceled.connect(_on_lane_change_canceled)
 	pawn.encounter_detected.connect(_on_encounter_detected)
+	pawn.runner_passed.connect(_on_runner_passed)
 	pawn.shuffle_began.connect(_on_shuffle_began)
 	pawn.shuffle_telegraph_changed.connect(_on_shuffle_telegraph_changed)
 	pawn.shuffle_resolved.connect(_on_shuffle_resolved)
@@ -96,6 +97,11 @@ func _on_lane_change_canceled() -> void:
 
 
 func _on_encounter_detected(_other: Pawn, _distance: float) -> void:
+	pass
+
+
+# Override in PlayerBrain to handle near-miss boost; NPCs no-op.
+func _on_runner_passed(_other: Pawn) -> void:
 	pass
 
 
@@ -197,6 +203,16 @@ func get_obstacle_lookahead() -> float:
 # rail. MetroMovement scans for other runners ahead in this pawn's lane within
 # this distance and emits encounter_detected. 0.0 disables.
 func get_encounter_lookahead() -> float:
+	return 0.0
+
+
+# Tracking range for the pass scan. 0.0 disables tracking on this runner.
+func get_pass_radius() -> float:
+	return 0.0
+
+
+# Qualifier distance — same-lane within this radius flips TRACKED → QUALIFIED.
+func get_pass_qualify_radius() -> float:
 	return 0.0
 
 

@@ -66,6 +66,12 @@ const PITCH_LIMIT_DEG: float = 89.0
 ## Speed at which FOV lerps to the shuffle target and back (degrees per second, wall-clock).
 @export_range(0.1, 60.0, 0.1) var shuffle_fov_speed: float = 12.0
 
+@export_group("Boost FOV")
+## Max FOV widening at curve peak (degrees). 0 or null curve disables.
+@export_range(0.0, 60.0, 0.1, "suffix:deg") var boost_fov_max_widening: float = 42.0
+## Maps boost elapsed-fraction [0..1] to widening factor [0..1].
+@export var boost_fov_curve: Curve
+
 
 signal mode_changed(mode: int)
 
@@ -95,6 +101,9 @@ var _tween_progress: float = 0.0
 # Shuffle progress (0.0 = just started, 1.0 = deadline imminent).
 # Set by Pawn._process each frame. Used for dynamic tilt/FOV escalation.
 var _shuffle_progress: float = 0.0
+
+# -1.0 = inactive; 0..1 = boost elapsed-fraction.
+var _boost_progress: float = -1.0
 
 
 @onready var camera: Camera3D = _find_camera()
@@ -127,7 +136,7 @@ func _process(delta: float) -> void:
 	if target_pawn != null:
 		rotation.y = target_pawn.rotation.y
 	_update_headbob(delta)
-	_update_shuffle_fov(delta)
+	_update_fov(delta)
 	if _shuffle_tilt_active:
 		_update_shuffle_tilt(delta)
 		# Drain lane-lean velocity so the spring doesn't pop when we
@@ -197,6 +206,11 @@ func set_shuffle_progress(progress: float) -> void:
 	_shuffle_progress = progress
 
 
+# [0..1] = elapsed-fraction while active; negative = inactive (clear).
+func set_boost_progress(progress: float) -> void:
+	_boost_progress = progress
+
+
 # Apply mouse pitch input. Yaw is owned by MetroMovement's rail-following
 # lerp; this handles pitch (X rotation) only.
 func apply_pitch_input(relative_y: float) -> void:
@@ -249,25 +263,23 @@ func _update_headbob(delta: float) -> void:
 		camera.position.y = _headbob_offset
 
 
-# Lerp camera FOV toward its target. Wall-clock aware so the zoom feels the
-# same speed regardless of bullet-time. During active shuffle the target is
-# dynamic — ramping from neutral to full reduction as deadline approaches,
-# with an extra spike in the final 15% for tension.
-func _update_shuffle_fov(delta: float) -> void:
+# Shuffle narrowing (priority) composes with boost widening; wall-clock aware.
+func _update_fov(delta: float) -> void:
 	if camera == null:
 		return
 	var fov_delta: float = delta / maxf(Engine.time_scale, 0.001)
+	var target: float = _fov_default
 	if _shuffle_tilt_active:
-		# Dynamic FOV target during shuffle: ramp reduction by progress.
 		var reduction: float = shuffle_fov_reduction * clampf(_shuffle_progress * 1.2, 0.0, 1.0)
-		# Extra 2° spike in the last 15% for deadline tension.
 		if _shuffle_progress > 0.85:
 			var sp: float = (_shuffle_progress - 0.85) / 0.15
 			reduction += 2.0 * sp
-		var dynamic_target: float = _fov_default - reduction
-		camera.fov = move_toward(camera.fov, dynamic_target, shuffle_fov_speed * fov_delta)
-	elif camera.fov != _fov_default:
-		camera.fov = move_toward(camera.fov, _fov_default, shuffle_fov_speed * fov_delta)
+		target = _fov_default - reduction
+	elif _boost_progress >= 0.0 and boost_fov_curve != null:
+		var sample: float = boost_fov_curve.sample(_boost_progress)
+		target = _fov_default + sample * boost_fov_max_widening
+	if not is_equal_approx(camera.fov, target):
+		camera.fov = move_toward(camera.fov, target, shuffle_fov_speed * fov_delta)
 
 
 # Lerp rotation.z toward the shuffle-tilt target. Time-scale aware so the
