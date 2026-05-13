@@ -6,6 +6,7 @@
 [ext_resource type="PackedScene" uid="uid://csm24sanerou1" path="res://Scenes/Characters/NPCs/Male/Doctor.tscn" id="4_vwlou"]
 [ext_resource type="PackedScene" uid="uid://brd7cen16a17a" path="res://Scenes/Characters/NPCs/Male/Hoodie.tscn" id="5_ea0b7"]
 [ext_resource type="PackedScene" uid="uid://qgcyfnbot8ap" path="res://Scenes/Characters/NPCs/Male/Salaryman.tscn" id="6_3xe04"]
+[ext_resource type="AudioStream" uid="uid://ciay5x57wjro7" path="res://Assets/Audio/SFX/clock-ticking-4.wav" id="7_aqjkp"]
 [ext_resource type="AudioStream" uid="uid://vaa12nlltq67" path="res://Assets/Audio/SFX/Metro/363737__alexanderche__ambience-metro-wagon-train-interior-city-moscow.ogg" id="7_kyjem"]
 [ext_resource type="AudioStream" uid="uid://b58q66c6lsxhf" path="res://Assets/Audio/SFX/Metro/430986__be_a_hero_not_a_patriot__metro-ext-warszawa-2017-train-type-81-russian-door-close-take-off-centrum-station-ambience-poland.ogg" id="8_086s4"]
 [ext_resource type="AudioStream" uid="uid://d3eum4cf3d2fw" path="res://Assets/Audio/SFX/Metro/727842__alexanderche__ambience-city-metro-preobrazhenskaya-ploshad-subway-moscow.ogg" id="9_h1nvd"]
@@ -478,6 +479,10 @@ npc_weights = Array[float]([0.1, 0.33, 0.33, 0.33, 0.33])
 starting_npc_count = 24
 safe_spawn_range = 15.0
 debug_show_corners = false
+
+[node name="Stresser" type="AudioStreamPlayer" parent="." unique_id=41658480]
+stream = ExtResource("7_aqjkp")
+autoplay = true
 
 [node name="Ambiance" type="AudioStreamPlayer" parent="." unique_id=1301785252]
 stream = SubResource("AudioStreamRandomizer_et2qy")
