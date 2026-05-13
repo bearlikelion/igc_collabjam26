@@ -49,7 +49,7 @@ const MOTION_STATES: Array[int] = [
 ## TorsoLeanModifier) rather than the whole rig at the feet — same number
 ## reads ~3× stronger at the head. ~0.30 rad (~17°) is the new sweet spot
 ## for NPCs; the player's Pawn.tscn overrides higher.
-@export var torso_lean_amount: float = 0.30
+@export var torso_lean_amount: float = 0.45
 ## Lerp speed (radians/second-ish). Higher = snappier. 8.0 reaches ~95% of
 ## target in ~0.4s at 60fps.
 @export var torso_lean_speed: float = 8.0

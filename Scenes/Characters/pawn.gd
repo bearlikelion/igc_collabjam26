@@ -389,6 +389,15 @@ func _process(_delta: float) -> void:
 	var effective_speed: float = run_speed if locomotion == LocomotionState.RUNNING else 0.0
 	camera_rig.set_speed(effective_speed)
 	camera_rig.set_tween_snapshot(is_tween_active(), _tween_from, float(_target_lane), get_tween_progress())
+	# Feed shuffle deadline progress for dynamic tilt/FOV escalation.
+	# Works for both initiator and callee — computes remaining from deadline.
+	if locomotion == LocomotionState.SHUFFLING and shuffle != null and shuffle.deadline_msec > 0:
+		var remaining: float = maxf(0.0, float(shuffle.deadline_msec - Time.get_ticks_msec()) / 1000.0)
+		var total: float = _get_shuffle_choice_time()
+		if total > 0.0:
+			camera_rig.set_shuffle_progress(clampf(1.0 - remaining / total, 0.0, 1.0))
+	elif locomotion != LocomotionState.SHUFFLING:
+		camera_rig.set_shuffle_progress(0.0)
 
 
 # Forward all input to the brain. Player-specific concerns (mouse pitch via

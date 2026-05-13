@@ -14,21 +14,21 @@
 [ext_resource type="Resource" uid="uid://bkhxcqsquw1yg" path="res://addons/func_godot/func_godot_default_map_settings.tres" id="7_cyw2y"]
 [ext_resource type="PackedScene" uid="uid://cfbedqf0p215d" path="res://Scenes/Characters/Pawn.tscn" id="8_svs80"]
 [ext_resource type="Script" uid="uid://dwoxgkhyvb4q0" path="res://Scenes/Characters/Brains/player_brain.gd" id="12_pbrn"]
-[ext_resource type="Material" uid="uid://d4c6mbsb2r6q7" path="res://Assets/textures/dev/wall.tres" id="13_0ynle"]
+[ext_resource type="Material" uid="uid://c02p7shc1fy7o" path="res://Assets/textures/dev/wall.tres" id="13_0ynle"]
 [ext_resource type="Texture2D" uid="uid://cyg2snr1w5xw5" path="res://addons/func_godot/textures/default_texture.png" id="14_3q7nn"]
-[ext_resource type="Material" uid="uid://c7wjowq8wdix5" path="res://Assets/textures/dev/floor.tres" id="16_lpghw"]
-[ext_resource type="Material" uid="uid://dtk2blvrbfmly" path="res://Assets/textures/dev/roof.tres" id="18_gy5qg"]
-[ext_resource type="Material" uid="uid://mq07g4a6eyam" path="res://Assets/textures/stairs/Stairs_15_128px.tres" id="19_3q7nn"]
-[ext_resource type="Material" uid="uid://b5vl5w7hiocew" path="res://Assets/textures/metro/Metro_metal_01.tres" id="19_cvsxa"]
+[ext_resource type="Material" uid="uid://c0nfc87pvu6h0" path="res://Assets/textures/dev/floor.tres" id="16_lpghw"]
+[ext_resource type="Material" uid="uid://doyt74p2tw1sq" path="res://Assets/textures/dev/roof.tres" id="18_gy5qg"]
+[ext_resource type="Material" uid="uid://mq07g4a6eyam" path="res://Assets/Textures/stairs/Stairs_15_128px.tres" id="19_3q7nn"]
+[ext_resource type="Material" uid="uid://b5vl5w7hiocew" path="res://Assets/Textures/metro/Metro_metal_01.tres" id="19_cvsxa"]
 [ext_resource type="Script" uid="uid://c7ob6aflnt2jl" path="res://Scenes/Characters/pawn_camera.gd" id="20_pcam"]
-[ext_resource type="Material" uid="uid://buqap57vbkfbc" path="res://Assets/textures/metro/Metro_metal.tres" id="21_ly6bk"]
-[ext_resource type="Material" uid="uid://utlyq4ntt671" path="res://Assets/textures/dev/track_line_red.tres" id="21_p3hvv"]
+[ext_resource type="Material" uid="uid://buqap57vbkfbc" path="res://Assets/Textures/metro/Metro_metal.tres" id="21_ly6bk"]
+[ext_resource type="Material" uid="uid://utlyq4ntt671" path="res://Assets/Textures/dev/track_line_red.tres" id="21_p3hvv"]
 [ext_resource type="Resource" uid="uid://b0u5cgxlaxnpc" path="res://Resources/Brains/DefaultPlayer.tres" id="21_plycfg"]
 [ext_resource type="Shader" uid="uid://ca6h0hj5fdy7x" path="res://Shaders/psx.gdshader" id="22_3q7nn"]
-[ext_resource type="Material" uid="uid://csj6pbxbrckfx" path="res://Assets/textures/metro/Metro_Tiles.tres" id="22_aita7"]
-[ext_resource type="Material" uid="uid://cn5mmdska1d8k" path="res://Assets/textures/dev/track_line_blue.tres" id="22_lpghw"]
-[ext_resource type="Material" uid="uid://dbfs70lstxo43" path="res://Assets/textures/dev/track_line_green.tres" id="23_ilanp"]
-[ext_resource type="Material" uid="uid://64ak6iy271qu" path="res://Assets/textures/dev/track_line_yellow.tres" id="24_gy5qg"]
+[ext_resource type="Material" uid="uid://csj6pbxbrckfx" path="res://Assets/Textures/metro/Metro_Tiles.tres" id="22_aita7"]
+[ext_resource type="Material" uid="uid://cn5mmdska1d8k" path="res://Assets/Textures/dev/track_line_blue.tres" id="22_lpghw"]
+[ext_resource type="Material" uid="uid://dbfs70lstxo43" path="res://Assets/Textures/dev/track_line_green.tres" id="23_ilanp"]
+[ext_resource type="Material" uid="uid://64ak6iy271qu" path="res://Assets/Textures/dev/track_line_yellow.tres" id="24_gy5qg"]
 [ext_resource type="Script" uid="uid://df06w8c228ef6" path="res://Scenes/Game/Maps/Metro1/psx_shuffle_effect.gd" id="24_psxfx"]
 
 [sub_resource type="AudioStreamRandomizer" id="AudioStreamRandomizer_et2qy"]
@@ -551,7 +551,7 @@ shader_parameter/tint_color = Color(1.05, 0.95, 0.88, 1)
 script = ExtResource("1_drku4")
 npc_scenes = Array[PackedScene]([ExtResource("2_3q7nn"), ExtResource("3_p3hvv"), ExtResource("4_lpghw"), ExtResource("5_ilanp"), ExtResource("6_gy5qg")])
 npc_weights = Array[float]([0.1, 0.33, 0.33, 0.33, 0.33])
-starting_npc_count = 12
+starting_npc_count = 24
 safe_spawn_range = 15.0
 debug_show_corners = false
 

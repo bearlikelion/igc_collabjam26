@@ -92,6 +92,10 @@ var _tween_from: float = 0.0
 var _tween_target: float = 0.0
 var _tween_progress: float = 0.0
 
+# Shuffle progress (0.0 = just started, 1.0 = deadline imminent).
+# Set by Pawn._process each frame. Used for dynamic tilt/FOV escalation.
+var _shuffle_progress: float = 0.0
+
 
 @onready var camera: Camera3D = _find_camera()
 
@@ -187,6 +191,12 @@ func set_tween_snapshot(active: bool, from_lane: float, to_lane: float, progress
 	_tween_progress = progress
 
 
+# Set shuffle deadline progress (0.0–1.0) for dynamic tilt/FOV escalation.
+# Called once per frame from Pawn._process during SHUFFLING.
+func set_shuffle_progress(progress: float) -> void:
+	_shuffle_progress = progress
+
+
 # Apply mouse pitch input. Yaw is owned by MetroMovement's rail-following
 # lerp; this handles pitch (X rotation) only.
 func apply_pitch_input(relative_y: float) -> void:
@@ -212,6 +222,7 @@ func apply_pitch_input(relative_y: float) -> void:
 func engage_shuffle_tilt(direction: int) -> void:
 	_shuffle_tilt_active = true
 	_shuffle_tilt_direction = direction
+	_shuffle_progress = 0.0
 	_fov_target = _fov_default - shuffle_fov_reduction
 
 
@@ -219,6 +230,7 @@ func engage_shuffle_tilt(direction: int) -> void:
 func disengage_shuffle_tilt() -> void:
 	_shuffle_tilt_active = false
 	_shuffle_tilt_direction = 0
+	_shuffle_progress = 0.0
 	_fov_target = _fov_default
 
 
@@ -238,24 +250,52 @@ func _update_headbob(delta: float) -> void:
 
 
 # Lerp camera FOV toward its target. Wall-clock aware so the zoom feels the
-# same speed regardless of bullet-time.
+# same speed regardless of bullet-time. During active shuffle the target is
+# dynamic — ramping from neutral to full reduction as deadline approaches,
+# with an extra spike in the final 15% for tension.
 func _update_shuffle_fov(delta: float) -> void:
-	if camera == null or camera.fov == _fov_target:
+	if camera == null:
 		return
 	var fov_delta: float = delta / maxf(Engine.time_scale, 0.001)
-	camera.fov = move_toward(camera.fov, _fov_target, shuffle_fov_speed * fov_delta)
+	if _shuffle_tilt_active:
+		# Dynamic FOV target during shuffle: ramp reduction by progress.
+		var reduction: float = shuffle_fov_reduction * clampf(_shuffle_progress * 1.2, 0.0, 1.0)
+		# Extra 2° spike in the last 15% for deadline tension.
+		if _shuffle_progress > 0.85:
+			var sp: float = (_shuffle_progress - 0.85) / 0.15
+			reduction += 2.0 * sp
+		var dynamic_target: float = _fov_default - reduction
+		camera.fov = move_toward(camera.fov, dynamic_target, shuffle_fov_speed * fov_delta)
+	elif camera.fov != _fov_default:
+		camera.fov = move_toward(camera.fov, _fov_default, shuffle_fov_speed * fov_delta)
 
 
 # Lerp rotation.z toward the shuffle-tilt target. Time-scale aware so the
-# tilt animates at wall-clock speed during bullet-time.
+# tilt animates at wall-clock speed during bullet-time. The target tilt is
+# multiplied by a dynamic tension ramp: gentle early, spiking near deadline.
 func _update_shuffle_tilt(delta: float) -> void:
-	var target_tilt: float = -deg_to_rad(shuffle_camera_tilt_degrees) * float(_shuffle_tilt_direction)
+	var tilt_multiplier: float = _get_shuffle_tilt_multiplier()
+	var target_tilt: float = -deg_to_rad(shuffle_camera_tilt_degrees) * float(_shuffle_tilt_direction) * tilt_multiplier
 	var tilt_delta: float = delta / maxf(Engine.time_scale, 0.001)
 	var weight: float = 1.0 if shuffle_camera_tilt_speed <= 0.0 \
 			else clamp(shuffle_camera_tilt_speed * tilt_delta, 0.0, 1.0)
 	rotation.z = lerp_angle(rotation.z, target_tilt, weight)
 	if abs(rotation.z) < 0.001 and is_zero_approx(target_tilt):
 		rotation.z = 0.0
+
+
+# Compute the dynamic tilt multiplier based on shuffle progress.
+# Early (0–0.3): ramp from 0.25× to 1.0× — gentle lean-in.
+# Mid (0.3–0.75): hold at 1.0× — standard lean.
+# Late (0.75–1.0): spike to 1.6× — tension peak before resolution.
+func _get_shuffle_tilt_multiplier() -> float:
+	if _shuffle_progress < 0.3:
+		return lerpf(0.25, 1.0, _shuffle_progress / 0.3)
+	elif _shuffle_progress < 0.75:
+		return 1.0
+	else:
+		var late_progress: float = (_shuffle_progress - 0.75) / 0.25
+		return lerpf(1.0, 1.6, late_progress)
 
 
 # Roll the camera toward the held lane intent, then decay through the body
