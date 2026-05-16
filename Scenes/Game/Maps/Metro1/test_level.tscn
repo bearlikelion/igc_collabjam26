@@ -421,7 +421,7 @@ shader_parameter/rec_dot_uv = Vector2(0.06, 0.06)
 script = ExtResource("1_aqjkp")
 npc_scenes = Array[PackedScene]([ExtResource("2_coogu"), ExtResource("3_w1y7a"), ExtResource("4_vwlou"), ExtResource("5_ea0b7"), ExtResource("6_3xe04")])
 npc_weights = Array[float]([0.1, 0.33, 0.33, 0.33, 0.33])
-starting_npc_count = 24
+starting_npc_count = 32
 safe_spawn_range = 15.0
 debug_show_corners = false
 
@@ -695,8 +695,8 @@ transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, -57.
 unique_name_in_owner = true
 transform = Transform3D(1.3113416e-07, 0, -1, 0, 1, 0, 1, 0, 1.3113416e-07, -57.1, 0.5, -24.300001)
 shuffle_debug_enabled = false
-close_call_boost_multiplier = 2.0
-close_call_boost_duration = 5.0
+close_call_boost_multiplier = 1.5
+close_call_boost_duration = 3.0
 
 [node name="Brain" type="Node" parent="NavigationRegion3D/Player" unique_id=436571780]
 script = ExtResource("25_1jjjw")
