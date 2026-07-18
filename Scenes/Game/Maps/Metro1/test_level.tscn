@@ -31,6 +31,7 @@
 [ext_resource type="Script" uid="uid://b0kdqdyh2br7w" path="res://Scenes/Game/Maps/Metro1/end_camera.gd" id="31_xoyyy"]
 [ext_resource type="Shader" uid="uid://t6b0t5n4jabv" path="res://Shaders/cctv.gdshader" id="32_u5tln"]
 [ext_resource type="PackedScene" path="res://Scenes/Game/Maps/Metro1/ClockTicker.tscn" id="33_clock_ticker"]
+[ext_resource type="PackedScene" path="res://Scenes/UI/GameMenu.tscn" id="34_gamemenu"]
 
 [sub_resource type="AudioStreamRandomizer" id="AudioStreamRandomizer_et2qy"]
 streams_count = 3
@@ -712,6 +713,8 @@ update_scale = false
 transform = Transform3D(1.3113416e-07, 0, -1, 0, 1, 0, 1, 0, 1.3113416e-07, -57.1, 2.211, -24.300001)
 spring_length = 0.0
 script = ExtResource("27_nsjaj")
+invert_stick_y = null
+stick_pitch_speed_degrees = null
 boost_fov_max_widening = 60.0
 boost_fov_curve = ExtResource("30_boostfov")
 
@@ -741,3 +744,5 @@ transform = Transform3D(1, 7.450581e-09, 0, 7.450581e-09, 1, 0, 2.9802322e-08, 0
 visibility_range_end = 1.0
 mesh = SubResource("QuadMesh_kvorr")
 surface_material_override/0 = SubResource("ShaderMaterial_7hrb6")
+
+[node name="GameMenu" parent="." instance=ExtResource("34_gamemenu")]

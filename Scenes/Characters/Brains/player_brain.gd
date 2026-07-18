@@ -47,8 +47,8 @@ func _on_bound() -> void:
 		rig.set_active(true)
 	else:
 		push_warning("PlayerBrain: no PawnCamera in group \"player_camera\" — camera intents will no-op.")
-	# Capture the mouse for first-person look. Toggled by ui_cancel in
-	# `process_input` below.
+	# Capture the mouse for first-person look. GameMenu takes over the mouse
+	# mode whenever a menu is open (visible in-menu, recaptured on close).
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	# Hide the Pawn's visual — first-person means the player's body is
 	# off-screen. Re-shown on knockdown (death anim), re-hidden on recovery
@@ -195,25 +195,34 @@ func get_move_speed() -> float:
 	return modulate_for_wait(modulate_for_same_direction_peer(pawn.get_run_speed()))
 
 
-# Called by Pawn._input for every input event. Handles three concerns:
-#   1. Mouse pitch — applied to the camera rig (gated by `can_look`).
-#   2. ui_cancel — toggle mouse capture so the user can interact with overlays.
-#   3. Lane input — left/right routed to shuffle telegraph (during SHUFFLING)
+# Poll right-stick camera pitch every physics frame. Stick look is rate-based
+# (unlike event-driven mouse motion), so it needs per-frame polling rather
+# than process_input. Same can_look gate as the mouse path; the rig itself
+# gates on mouse-capture so overlays pause look for both devices.
+func physics_tick(delta: float) -> void:
+	if pawn == null or pawn.camera_rig == null or not pawn.can_look():
+		return
+	var pitch_axis: float = Input.get_axis("look_up", "look_down")
+	if pitch_axis != 0.0:
+		pawn.camera_rig.apply_stick_pitch(pitch_axis, delta)
+
+
+# Called by Pawn._input for every input event. Handles two concerns:
+#   1. Mouse pitch, applied to the camera rig (gated by `can_look`).
+#   2. Lane input, left/right routed to shuffle telegraph (during SHUFFLING)
 #      or lane press/release intent (otherwise).
-# The mouse handling lived on Pawn pre-Stage-3; it's player-specific so it
-# moved here. NPCs use the default no-op `process_input` on Brain.
+# Mouse capture is owned by GameMenu (visible while a menu is open,
+# recaptured on close); the old ui_cancel toggle lived here pre-menu.
+# NPCs use the default no-op `process_input` on Brain.
 func process_input(event: InputEvent) -> void:
 	if pawn == null:
 		return
-	# Mouse pitch + ui_cancel toggle. Camera rig is null on NPCs but PlayerBrain
-	# only runs on the player Pawn, which always has it (post-bind).
+	# Mouse pitch. Camera rig is null on NPCs but PlayerBrain only runs on
+	# the player Pawn, which always has it (post-bind).
 	if pawn.camera_rig != null:
 		if pawn.can_look() and event is InputEventMouseMotion:
 			var motion: InputEventMouseMotion = event as InputEventMouseMotion
 			pawn.camera_rig.apply_pitch_input(motion.relative.y)
-		if event.is_action_pressed("ui_cancel"):
-			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
-					else Input.MOUSE_MODE_CAPTURED
 	if pawn.locomotion == Pawn.LocomotionState.SHUFFLING:
 		if event.is_action_pressed("left") or event.is_action_pressed("right") \
 				or event.is_action_released("left") or event.is_action_released("right"):
