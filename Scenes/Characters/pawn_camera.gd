@@ -43,6 +43,11 @@ const PITCH_LIMIT_DEG: float = 89.0
 ## Source-engine scale: degrees of view rotation per mouse "unit". 0.022 = Source default.
 @export var degrees_per_unit: float = 0.022
 
+@export_group("Controller")
+@export var invert_stick_y: bool = false
+## Pitch rate at full stick deflection (degrees per second, wall-clock).
+@export_range(10.0, 360.0, 1.0, "suffix:deg/s") var stick_pitch_speed_degrees: float = 120.0
+
 @export_group("Headbob")
 @export var enable_headbob: bool = true
 @export_range(0.0, 0.2, 0.001, "suffix:m") var headbob_amplitude: float = 0.025
@@ -218,7 +223,26 @@ func apply_pitch_input(relative_y: float) -> void:
 		return
 	var scaled: float = relative_y * mouse_sensitivity * deg_to_rad(degrees_per_unit)
 	var invert: float = -1.0 if invert_mouse_y else 1.0
-	rotate_object_local(Vector3.RIGHT, invert * -scaled)
+	_apply_pitch_radians(invert * -scaled)
+
+
+# Apply right-stick pitch input. `axis_value` is the stick's Y deflection
+# (-1..1, positive = pushed down, matching mouse-down-looks-down). Rate-based:
+# full deflection pitches at stick_pitch_speed_degrees per wall-clock second,
+# so bullet-time doesn't slow the look. Called every physics tick by
+# PlayerBrain while the stick is outside the deadzone.
+func apply_stick_pitch(axis_value: float, delta: float) -> void:
+	if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+		return
+	var wall_delta: float = delta / maxf(Engine.time_scale, 0.001)
+	var scaled: float = axis_value * deg_to_rad(stick_pitch_speed_degrees) * wall_delta
+	var invert: float = -1.0 if invert_stick_y else 1.0
+	_apply_pitch_radians(invert * -scaled)
+
+
+# Shared pitch rotation + clamp for mouse and stick paths.
+func _apply_pitch_radians(radians: float) -> void:
+	rotate_object_local(Vector3.RIGHT, radians)
 	rotation.x = clamp(
 		rotation.x,
 		deg_to_rad(-PITCH_LIMIT_DEG),

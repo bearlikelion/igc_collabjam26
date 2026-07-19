@@ -168,7 +168,6 @@ func _unhandled_input(event: InputEvent) -> void:
 
 # Wait for the navigation map, then cache the processed path.
 func _wait_for_nav() -> void:
-	print("Wait for nav")
 	_player = get_tree().get_first_node_in_group("player") as Pawn
 	if _player == null:
 		push_error("MetroMovement: no Pawn in group \"player\" — PlayerBrain.add_to_group must run before _wait_for_nav.")
@@ -188,8 +187,8 @@ func _wait_for_nav() -> void:
 	_start_position = _player.global_position
 	_finish_position = _finish.global_position
 	_corners = _build_corners(result.path, _start_position, _finish_position, map_rid)
-	_print_corners("===")
 	if debug_show_corners:
+		_print_corners("===")
 		_spawn_debug_markers()
 	# Player first (rail anchor), then NPCs by group. Single registration path
 	# for both — see `_register_pawn` below.
@@ -750,8 +749,8 @@ func _editor_rebuild_debug() -> void:
 		return
 
 	_corners = _build_corners(result.path, player_node.global_position, finish_node.global_position, map_rid)
-	_print_corners("[Editor]")
 	if debug_show_corners:
+		_print_corners("[Editor]")
 		_spawn_debug_markers()
 
 
@@ -1021,7 +1020,6 @@ func _handle_end_of_rail(runner: Runner) -> void:
 
 func _finish_runner_at_goal(runner: Runner) -> void:
 	runner.finished = true
-	print("REACHED DESTINATION at %s" % runner.node.global_position)
 	# Same-pool boarding: the player races the greeters for slots. Claim is
 	# optional — `reach_goal()` still fires the cinematic either way. Win
 	# vs fail is gated downstream on `train.is_boarded(player)`.
